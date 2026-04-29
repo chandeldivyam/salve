@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "tsx watch --env-file=.env src/server.ts",
     "build": "tsc -p tsconfig.json --noEmit",
     "type-check": "tsc -p tsconfig.json --noEmit",
     "format": "biome format --write .",
@@ -16,7 +16,12 @@
     "@opendesk/db": "workspace:*",
     "@opendesk/mutators": "workspace:*",
     "@opendesk/zero-schema": "workspace:*",
-    "hono": "4.12.15"
+    "better-auth": "1.6.9",
+    "drizzle-orm": "0.45.2",
+    "hono": "4.12.15",
+    "jose": "6.2.3",
+    "postgres": "3.4.9",
+    "zod": "4.4.1"
   },
   "devDependencies": {
     "tsx": "4.21.0"

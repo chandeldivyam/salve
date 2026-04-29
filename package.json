@@ -19,7 +19,11 @@
     "format": "biome format --write .",
     "format:check": "biome format .",
     "check": "biome check .",
-    "check:fix": "biome check --write ."
+    "check:fix": "biome check --write .",
+    "db:generate": "pnpm --filter @opendesk/db db:generate",
+    "db:migrate": "pnpm --filter @opendesk/db db:migrate",
+    "db:push": "pnpm --filter @opendesk/db db:push",
+    "db:studio": "pnpm --filter @opendesk/db db:studio"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.13",

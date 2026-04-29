@@ -12,11 +12,17 @@
     "check": "biome check ."
   },
   "dependencies": {
+    "@hookform/resolvers": "5.2.2",
+    "@opendesk/core": "workspace:^",
     "@opendesk/ui": "workspace:*",
     "@opendesk/zero-schema": "workspace:*",
     "@tanstack/react-router": "1.168.26",
+    "better-auth": "1.6.9",
     "react": "19.2.5",
-    "react-dom": "19.2.5"
+    "react-dom": "19.2.5",
+    "react-hook-form": "7.74.0",
+    "zod": "4.4.1",
+    "zustand": "5.0.12"
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.2.4",

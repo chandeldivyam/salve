@@ -1,4 +1,16 @@
 // @opendesk/ui — shadcn-derived components, design tokens.
-// Phase 0 placeholder: real components land progressively in Phase 2+.
 
 export const UI_PACKAGE = '@opendesk/ui' as const;
+
+export { Button, type ButtonProps, buttonVariants } from './button.js';
+export {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from './card.js';
+export { Input, type InputProps } from './input.js';
+export { Label } from './label.js';
+export { cn } from './utils.js';
