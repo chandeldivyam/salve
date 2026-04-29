@@ -1,0 +1,102 @@
+name: opendesk-dev
+
+networks:
+  opendesk_dev:
+    name: opendesk_dev
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: opendesk-postgres
+    restart: unless-stopped
+    networks: [opendesk_dev]
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_USER: opendesk
+      POSTGRES_PASSWORD: opendesk
+      POSTGRES_DB: opendesk
+    command: >
+      postgres
+      -c wal_level=logical
+      -c max_wal_senders=10
+      -c max_replication_slots=10
+      -c shared_preload_libraries=pg_stat_statements
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../scripts/init-db.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U opendesk -d opendesk']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: opendesk-redis
+    restart: unless-stopped
+    networks: [opendesk_dev]
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  inngest:
+    image: inngest/inngest:latest
+    container_name: opendesk-inngest
+    restart: unless-stopped
+    networks: [opendesk_dev]
+    ports:
+      - '8288:8288'
+    command: ['inngest', 'dev', '--no-discovery', '--host', '0.0.0.0', '--port', '8288']
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: opendesk-mailpit
+    restart: unless-stopped
+    networks: [opendesk_dev]
+    ports:
+      - '1025:1025'
+      - '8025:8025'
+
+  minio:
+    image: minio/minio:latest
+    container_name: opendesk-minio
+    restart: unless-stopped
+    networks: [opendesk_dev]
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    environment:
+      MINIO_ROOT_USER: opendesk
+      MINIO_ROOT_PASSWORD: opendeskdev
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:9000/minio/health/live']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  adminer:
+    image: adminer:latest
+    container_name: opendesk-adminer
+    restart: unless-stopped
+    networks: [opendesk_dev]
+    ports:
+      - '8080:8080'
+    depends_on:
+      postgres:
+        condition: service_healthy

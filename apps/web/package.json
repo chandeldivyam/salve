@@ -1,0 +1,30 @@
+{
+  "name": "@opendesk/web",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 5173",
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "preview": "vite preview --port 5173",
+    "type-check": "tsc -p tsconfig.json --noEmit",
+    "format": "biome format --write .",
+    "check": "biome check ."
+  },
+  "dependencies": {
+    "@opendesk/ui": "workspace:*",
+    "@opendesk/zero-schema": "workspace:*",
+    "@tanstack/react-router": "1.168.26",
+    "react": "19.2.5",
+    "react-dom": "19.2.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.2.4",
+    "@tanstack/router-plugin": "1.167.29",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.1",
+    "tailwindcss": "4.2.4",
+    "vite": "8.0.10"
+  }
+}

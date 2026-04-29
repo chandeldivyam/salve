@@ -1,0 +1,24 @@
+{
+  "name": "@opendesk/api",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json --noEmit",
+    "type-check": "tsc -p tsconfig.json --noEmit",
+    "format": "biome format --write .",
+    "check": "biome check ."
+  },
+  "dependencies": {
+    "@hono/node-server": "2.0.0",
+    "@opendesk/core": "workspace:*",
+    "@opendesk/db": "workspace:*",
+    "@opendesk/mutators": "workspace:*",
+    "@opendesk/zero-schema": "workspace:*",
+    "hono": "4.12.15"
+  },
+  "devDependencies": {
+    "tsx": "4.21.0"
+  }
+}

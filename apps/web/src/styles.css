@@ -1,0 +1,21 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-brand-50: oklch(0.97 0.02 230);
+  --color-brand-500: oklch(0.62 0.16 230);
+  --color-brand-600: oklch(0.55 0.18 230);
+  --color-brand-900: oklch(0.28 0.12 230);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  background-color: oklch(0.98 0.005 230);
+  color: oklch(0.18 0.02 230);
+}

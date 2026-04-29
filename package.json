@@ -1,0 +1,35 @@
+{
+  "name": "opendesk",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Salve — open-source Intercom/Zendesk alternative. Internal monorepo name: opendesk.",
+  "packageManager": "pnpm@10.33.2",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "turbo run dev --parallel",
+    "dev:docker:up": "docker compose -f docker/docker-compose.yml up -d",
+    "dev:docker:down": "docker compose -f docker/docker-compose.yml down",
+    "dev:docker:logs": "docker compose -f docker/docker-compose.yml logs -f",
+    "dev:clean": "docker compose -f docker/docker-compose.yml down -v && rm -f zero.db zero.db-* sync-replica.db sync-replica.db-*",
+    "build": "turbo run build",
+    "type-check": "turbo run type-check",
+    "test": "turbo run test",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "check": "biome check .",
+    "check:fix": "biome check --write ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.13",
+    "@types/node": "25.6.0",
+    "turbo": "2.9.6",
+    "typescript": "6.0.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}

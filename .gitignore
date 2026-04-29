@@ -1,0 +1,43 @@
+node_modules
+.pnpm-store
+dist
+build
+.turbo
+.cache
+*.log
+.DS_Store
+.env
+.env.local
+.env.*.local
+!.env.example
+.vite
+coverage
+.vitest
+.tsbuildinfo
+*.tsbuildinfo
+
+# zero-cache local replica
+zero.db
+zero.db-*
+sync-replica.db
+sync-replica.db-*
+
+# SST
+.sst
+.open-next
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea
+*.swp
+
+# TanStack Router generated
+**/routeTree.gen.ts
+
+# Claude Code transient state
+.claude/
+
+# Biome cache
+.biome
