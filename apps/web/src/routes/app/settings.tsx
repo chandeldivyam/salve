@@ -12,7 +12,7 @@ import {
   useLocation,
   useRouteContext,
 } from '@tanstack/react-router';
-import { ListChecks, Mail } from 'lucide-react';
+import { ListChecks, Mail, Settings2, Tags } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { AppHeader } from '@/components/app-header';
 import type { SessionData } from '@/lib/session-loader';
@@ -32,6 +32,8 @@ function SettingsLayout() {
     location.pathname.startsWith('/app/settings/channels/email') ||
     location.pathname.startsWith('/app/settings/email/domains');
   const isSetup = location.pathname.startsWith('/app/settings/setup');
+  const isTags = location.pathname.startsWith('/app/settings/tags');
+  const isCustomFields = location.pathname.startsWith('/app/settings/custom-fields');
 
   // Hide the Setup item only when the user finished and dismissed it.
   const showSetup = !(progress.dismissed && progress.isComplete);
@@ -58,6 +60,14 @@ function SettingsLayout() {
           <SettingsLink to="/app/settings/channels/email" active={isEmailChannel}>
             <Mail className="h-3.5 w-3.5" />
             <span className="flex-1">Email channel</span>
+          </SettingsLink>
+          <SettingsLink to="/app/settings/tags" active={isTags}>
+            <Tags className="h-3.5 w-3.5" />
+            <span className="flex-1">Tags</span>
+          </SettingsLink>
+          <SettingsLink to="/app/settings/custom-fields" active={isCustomFields}>
+            <Settings2 className="h-3.5 w-3.5" />
+            <span className="flex-1">Custom fields</span>
           </SettingsLink>
         </aside>
         <main className="flex min-w-0 flex-1 flex-col bg-background">

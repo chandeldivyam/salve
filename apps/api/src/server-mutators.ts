@@ -10,7 +10,13 @@
 // `tx.dbTransaction.wrappedTransaction` when `tx.location === 'server'`.
 
 import { randomUUID } from 'node:crypto';
-import { createTicketArgsSchema, mutators, sendMessageArgsSchema } from '@opendesk/mutators';
+import {
+  createTicketArgsSchema,
+  mutators,
+  sendMessageArgsSchema,
+  setCustomFieldValueOnCustomerArgsSchema,
+  setCustomFieldValueOnTicketArgsSchema,
+} from '@opendesk/mutators';
 import { builder } from '@opendesk/zero-schema';
 import { defineMutator, defineMutators, type Transaction } from '@rocicorp/zero';
 import type postgres from 'postgres';
@@ -90,6 +96,36 @@ export function createServerMutators(postCommitTasks: PostCommitTask[] = []) {
         });
       }),
     },
+
+    customField: {
+      setValueOnTicket: defineMutator(
+        setCustomFieldValueOnTicketArgsSchema,
+        async ({ tx, args, ctx: authData }) => {
+          if (authData?.workspaceID) {
+            await assertCustomFieldEntityRef(getWrappedTx(tx), {
+              workspaceID: authData.workspaceID,
+              fieldID: args.fieldID,
+              value: args.value,
+            });
+          }
+          await mutators.customField.setValueOnTicket.fn({ tx, args, ctx: authData });
+        },
+      ),
+
+      setValueOnCustomer: defineMutator(
+        setCustomFieldValueOnCustomerArgsSchema,
+        async ({ tx, args, ctx: authData }) => {
+          if (authData?.workspaceID) {
+            await assertCustomFieldEntityRef(getWrappedTx(tx), {
+              workspaceID: authData.workspaceID,
+              fieldID: args.fieldID,
+              value: args.value,
+            });
+          }
+          await mutators.customField.setValueOnCustomer.fn({ tx, args, ctx: authData });
+        },
+      ),
+    },
   });
 }
 
@@ -166,4 +202,52 @@ async function insertQueuedOutboundMessage(
       now()
     )
   `;
+}
+
+async function assertCustomFieldEntityRef(
+  sql: WrappedSql,
+  args: { workspaceID: string; fieldID: string; value: unknown },
+): Promise<void> {
+  const fieldRows = await sql<Array<{ type: string }>>`
+    SELECT type
+    FROM custom_field
+    WHERE id = ${args.fieldID}
+      AND workspace_id = ${args.workspaceID}
+    LIMIT 1
+  `;
+  const type = fieldRows[0]?.type;
+  if (!type || args.value === null) return;
+
+  if (type === 'agent' && typeof args.value === 'string') {
+    const rows = await sql<Array<{ id: string }>>`
+      SELECT id
+      FROM member
+      WHERE "userId" = ${args.value}
+        AND "organizationId" = ${args.workspaceID}
+      LIMIT 1
+    `;
+    if (!rows[0]) throw new Error('referenced agent not found in workspace');
+  }
+
+  if (type === 'customer' && typeof args.value === 'string') {
+    const rows = await sql<Array<{ id: string }>>`
+      SELECT id
+      FROM customer
+      WHERE id = ${args.value}
+        AND workspace_id = ${args.workspaceID}
+      LIMIT 1
+    `;
+    if (!rows[0]) throw new Error('referenced customer not found in workspace');
+  }
+
+  if (type === 'ticket' && typeof args.value === 'string') {
+    const rows = await sql<Array<{ id: string }>>`
+      SELECT id
+      FROM ticket
+      WHERE id = ${args.value}
+        AND workspace_id = ${args.workspaceID}
+      LIMIT 1
+    `;
+    if (!rows[0]) throw new Error('referenced ticket not found in workspace');
+  }
 }

@@ -43,6 +43,13 @@
       "when": 1777540237404,
       "tag": "0005_flippant_tinkerer",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1777579320946,
+      "tag": "0006_lyrical_moonstone",
+      "breakpoints": true
     }
   ]
 }

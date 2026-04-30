@@ -112,11 +112,121 @@ const auditEvent = table('auditEvent')
   .columns({
     id: string(),
     workspaceID: string().from('workspace_id'),
-    ticketID: string().from('ticket_id'),
+    ticketID: string().from('ticket_id').optional(),
+    customerID: string().from('customer_id').optional(),
     actorID: string().from('actor_id').optional(),
     kind: string(),
     payload: json().optional(),
     createdAt: number().from('created_at'),
+  })
+  .primaryKey('id');
+
+// ---------- Tags and custom fields
+
+const tagGroup = table('tagGroup')
+  .from('tag_group')
+  .columns({
+    id: string(),
+    workspaceID: string().from('workspace_id'),
+    label: string(),
+    color: string(),
+    sortOrder: number().from('sort_order'),
+    archivedAt: number().from('archived_at').optional(),
+    createdAt: number().from('created_at'),
+    updatedAt: number().from('updated_at'),
+  })
+  .primaryKey('id');
+
+const tag = table('tag')
+  .columns({
+    id: string(),
+    workspaceID: string().from('workspace_id'),
+    groupID: string().from('group_id').optional(),
+    label: string(),
+    color: string().optional(),
+    sortOrder: number().from('sort_order'),
+    archivedAt: number().from('archived_at').optional(),
+    createdAt: number().from('created_at'),
+    updatedAt: number().from('updated_at'),
+  })
+  .primaryKey('id');
+
+const ticketTag = table('ticketTag')
+  .from('ticket_tag')
+  .columns({
+    ticketID: string().from('ticket_id'),
+    tagID: string().from('tag_id'),
+    workspaceID: string().from('workspace_id'),
+    addedAt: number().from('added_at'),
+    addedByID: string().from('added_by_id').optional(),
+  })
+  .primaryKey('ticketID', 'tagID');
+
+const customerTag = table('customerTag')
+  .from('customer_tag')
+  .columns({
+    customerID: string().from('customer_id'),
+    tagID: string().from('tag_id'),
+    workspaceID: string().from('workspace_id'),
+    addedAt: number().from('added_at'),
+    addedByID: string().from('added_by_id').optional(),
+  })
+  .primaryKey('customerID', 'tagID');
+
+export type CustomFieldCategory = 'ticket' | 'customer';
+export type CustomFieldType =
+  | 'text'
+  | 'number'
+  | 'decimal'
+  | 'boolean'
+  | 'date'
+  | 'list'
+  | 'multi_select'
+  | 'agent'
+  | 'customer'
+  | 'ticket'
+  | 'url'
+  | 'address'
+  | 'dynamic_list'
+  | 'dynamic_multi_select';
+export type CustomFieldEditableBy = 'api' | 'admin' | 'agent' | 'sdk';
+
+const customField = table('customField')
+  .from('custom_field')
+  .columns({
+    id: string(),
+    workspaceID: string().from('workspace_id'),
+    key: string(),
+    displayName: string().from('display_name'),
+    description: string().optional(),
+    category: enumeration<CustomFieldCategory>(),
+    type: enumeration<CustomFieldType>(),
+    required: boolean(),
+    active: boolean(),
+    options: json<string[]>(),
+    dynamicConfig: json().from('dynamic_config').optional(),
+    defaultValue: json().from('default_value').optional(),
+    rules: json().optional(),
+    dependsOn: json<string[]>().from('depends_on'),
+    editableBy: json<CustomFieldEditableBy[]>().from('editable_by'),
+    sortOrder: number().from('sort_order'),
+    createdAt: number().from('created_at'),
+    updatedAt: number().from('updated_at'),
+  })
+  .primaryKey('id');
+
+const customFieldValue = table('customFieldValue')
+  .from('custom_field_value')
+  .columns({
+    id: string(),
+    fieldID: string().from('field_id'),
+    workspaceID: string().from('workspace_id'),
+    ticketID: string().from('ticket_id').optional(),
+    customerID: string().from('customer_id').optional(),
+    value: json().optional(),
+    updatedByID: string().from('updated_by_id').optional(),
+    createdAt: number().from('created_at'),
+    updatedAt: number().from('updated_at'),
   })
   .primaryKey('id');
 
@@ -356,6 +466,21 @@ const organizationRelationships = relationships(organization, ({ many }) => ({
     destField: ['workspaceID'],
     destSchema: customer,
   }),
+  tagGroups: many({
+    sourceField: ['id'],
+    destField: ['workspaceID'],
+    destSchema: tagGroup,
+  }),
+  tags: many({
+    sourceField: ['id'],
+    destField: ['workspaceID'],
+    destSchema: tag,
+  }),
+  customFields: many({
+    sourceField: ['id'],
+    destField: ['workspaceID'],
+    destSchema: customField,
+  }),
   channels: many({
     sourceField: ['id'],
     destField: ['workspaceID'],
@@ -391,6 +516,21 @@ const customerRelationships = relationships(customer, ({ many }) => ({
     sourceField: ['id'],
     destField: ['customerID'],
     destSchema: ticket,
+  }),
+  tags: many({
+    sourceField: ['id'],
+    destField: ['customerID'],
+    destSchema: customerTag,
+  }),
+  customFieldValues: many({
+    sourceField: ['id'],
+    destField: ['customerID'],
+    destSchema: customFieldValue,
+  }),
+  auditEvents: many({
+    sourceField: ['id'],
+    destField: ['customerID'],
+    destSchema: auditEvent,
   }),
   channelIdentities: many({
     sourceField: ['id'],
@@ -434,6 +574,16 @@ const ticketRelationships = relationships(ticket, ({ one, many }) => ({
     sourceField: ['id'],
     destField: ['ticketID'],
     destSchema: auditEvent,
+  }),
+  tags: many({
+    sourceField: ['id'],
+    destField: ['ticketID'],
+    destSchema: ticketTag,
+  }),
+  customFieldValues: many({
+    sourceField: ['id'],
+    destField: ['ticketID'],
+    destSchema: customFieldValue,
   }),
   outboundMessages: many({
     sourceField: ['id'],
@@ -494,8 +644,121 @@ const auditEventRelationships = relationships(auditEvent, ({ one }) => ({
     destField: ['id'],
     destSchema: ticket,
   }),
+  customer: one({
+    sourceField: ['customerID'],
+    destField: ['id'],
+    destSchema: customer,
+  }),
   actor: one({
     sourceField: ['actorID'],
+    destField: ['id'],
+    destSchema: user,
+  }),
+}));
+
+const tagGroupRelationships = relationships(tagGroup, ({ one, many }) => ({
+  workspace: one({
+    sourceField: ['workspaceID'],
+    destField: ['id'],
+    destSchema: organization,
+  }),
+  tags: many({
+    sourceField: ['id'],
+    destField: ['groupID'],
+    destSchema: tag,
+  }),
+}));
+
+const tagRelationships = relationships(tag, ({ one, many }) => ({
+  workspace: one({
+    sourceField: ['workspaceID'],
+    destField: ['id'],
+    destSchema: organization,
+  }),
+  group: one({
+    sourceField: ['groupID'],
+    destField: ['id'],
+    destSchema: tagGroup,
+  }),
+  ticketTags: many({
+    sourceField: ['id'],
+    destField: ['tagID'],
+    destSchema: ticketTag,
+  }),
+  customerTags: many({
+    sourceField: ['id'],
+    destField: ['tagID'],
+    destSchema: customerTag,
+  }),
+}));
+
+const ticketTagRelationships = relationships(ticketTag, ({ one }) => ({
+  ticket: one({
+    sourceField: ['ticketID'],
+    destField: ['id'],
+    destSchema: ticket,
+  }),
+  tag: one({
+    sourceField: ['tagID'],
+    destField: ['id'],
+    destSchema: tag,
+  }),
+  addedBy: one({
+    sourceField: ['addedByID'],
+    destField: ['id'],
+    destSchema: user,
+  }),
+}));
+
+const customerTagRelationships = relationships(customerTag, ({ one }) => ({
+  customer: one({
+    sourceField: ['customerID'],
+    destField: ['id'],
+    destSchema: customer,
+  }),
+  tag: one({
+    sourceField: ['tagID'],
+    destField: ['id'],
+    destSchema: tag,
+  }),
+  addedBy: one({
+    sourceField: ['addedByID'],
+    destField: ['id'],
+    destSchema: user,
+  }),
+}));
+
+const customFieldRelationships = relationships(customField, ({ one, many }) => ({
+  workspace: one({
+    sourceField: ['workspaceID'],
+    destField: ['id'],
+    destSchema: organization,
+  }),
+  values: many({
+    sourceField: ['id'],
+    destField: ['fieldID'],
+    destSchema: customFieldValue,
+  }),
+}));
+
+const customFieldValueRelationships = relationships(customFieldValue, ({ one }) => ({
+  field: one({
+    sourceField: ['fieldID'],
+    destField: ['id'],
+    destSchema: customField,
+  }),
+  ticket: one({
+    sourceField: ['ticketID'],
+    destField: ['id'],
+    destSchema: ticket,
+  }),
+  customer: one({
+    sourceField: ['customerID'],
+    destField: ['id'],
+    destSchema: customer,
+  }),
+  updatedBy: one({
+    sourceField: ['updatedByID'],
     destField: ['id'],
     destSchema: user,
   }),
@@ -708,6 +971,12 @@ export const schema = createSchema({
     message,
     attachment,
     auditEvent,
+    tagGroup,
+    tag,
+    ticketTag,
+    customerTag,
+    customField,
+    customFieldValue,
     channel,
     sendingDomain,
     emailChannel,
@@ -728,6 +997,12 @@ export const schema = createSchema({
     messageRelationships,
     attachmentRelationships,
     auditEventRelationships,
+    tagGroupRelationships,
+    tagRelationships,
+    ticketTagRelationships,
+    customerTagRelationships,
+    customFieldRelationships,
+    customFieldValueRelationships,
     channelRelationships,
     sendingDomainRelationships,
     emailChannelRelationships,
@@ -754,6 +1029,12 @@ export type Ticket = Row<typeof schema.tables.ticket>;
 export type Message = Row<typeof schema.tables.message>;
 export type Attachment = Row<typeof schema.tables.attachment>;
 export type AuditEvent = Row<typeof schema.tables.auditEvent>;
+export type TagGroup = Row<typeof schema.tables.tagGroup>;
+export type Tag = Row<typeof schema.tables.tag>;
+export type TicketTag = Row<typeof schema.tables.ticketTag>;
+export type CustomerTag = Row<typeof schema.tables.customerTag>;
+export type CustomField = Row<typeof schema.tables.customField>;
+export type CustomFieldValue = Row<typeof schema.tables.customFieldValue>;
 export type Channel = Row<typeof schema.tables.channel>;
 export type SendingDomain = Row<typeof schema.tables.sendingDomain>;
 export type EmailChannel = Row<typeof schema.tables.emailChannel>;

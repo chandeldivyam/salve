@@ -5,9 +5,9 @@
 // that every read in the app must funnel through.
 
 export const ZERO_SCHEMA_NAME = 'opendesk' as const;
-// Phase 3a replacement contract: polymorphic `channel` foundation plus
-// email-specific address/domain subtables and delivery event names.
-export const ZERO_SCHEMA_VERSION = 5 as const;
+// Tags, tag joins, custom field definitions, custom field values, and
+// customer-scoped audit events.
+export const ZERO_SCHEMA_VERSION = 6 as const;
 
 /**
  * Channel-agnostic event names. Server-side wrappers and Inngest functions use
@@ -43,6 +43,8 @@ export type ProviderEventName = (typeof PROVIDER_EVENT)[keyof typeof PROVIDER_EV
 export {
   applyTicketRead,
   applyWorkspaceScope,
+  type CustomFieldDefinitionRow,
+  type CustomFieldSettingsRow,
   type InboundMessageRow,
   type InboundRoutingRuleRow,
   type InboxRow,
@@ -55,6 +57,8 @@ export {
   type SendingDomainDetailRow,
   type SendingDomainRow,
   type SuppressionRow,
+  type TagGroupRow,
+  type TagRow,
   type TicketCountRow,
   type TicketDetailRow,
   type WorkspaceMemberRow,
@@ -67,6 +71,12 @@ export {
   type Channel,
   type Customer,
   type CustomerChannelIdentity,
+  type CustomerTag,
+  type CustomField,
+  type CustomFieldCategory,
+  type CustomFieldEditableBy,
+  type CustomFieldType,
+  type CustomFieldValue,
   type EmailAddress,
   type EmailChannel,
   type InboundMessageRaw,
@@ -79,7 +89,10 @@ export {
   type SendingDomain,
   type Suppression,
   schema,
+  type Tag,
+  type TagGroup,
   type Ticket,
+  type TicketTag,
   type User,
   type WebhookEvent,
 } from './schema.js';

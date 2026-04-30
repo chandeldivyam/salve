@@ -25,6 +25,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ArrowRight, Filter, Inbox, ListChecks, Search } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSetupProgress } from '@/lib/setup-progress';
+import { sortedTagsFromRelations, type TagRow, tagPillStyle } from '@/lib/support-metadata';
 import { useZero } from '@/lib/zero';
 
 type InboxFilter = 'all' | 'unassigned' | 'mine' | 'resolved';
@@ -36,7 +37,7 @@ interface InboxListProps {
 
 // `InboxRow` is `QueryResultType<typeof queries.inboxOpen>[number]` from
 // `@opendesk/zero-schema` — it carries the ticket columns plus the
-// `customer` and `assignee` relateds declared on `inboxOpen`.
+// `customer`, `assignee`, and tag relateds declared on `inboxOpen`.
 type TicketRow = InboxRow;
 
 const STATUS_LABEL: Record<Ticket['status'], string> = {
@@ -366,6 +367,7 @@ function InboxListRow({ ticket, isSelected }: { ticket: TicketRow; isSelected: b
   const isUrgent = ticket.priority === 'urgent' || ticket.priority === 'high';
   const customerLabel = ticket.customer?.name ?? ticket.customer?.email ?? 'No customer';
   const updated = new Date(ticket.updatedAt);
+  const rowTags = sortedTagsFromRelations((ticket as unknown as Record<string, unknown>).tags);
 
   return (
     <Link
@@ -404,9 +406,12 @@ function InboxListRow({ ticket, isSelected }: { ticket: TicketRow; isSelected: b
             >
               {customerLabel}
             </span>
-            <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
-              {formatDistanceToNow(updated, { addSuffix: false })}
-            </span>
+            <div className="flex min-w-0 shrink-0 items-center gap-1">
+              <InboxRowTags tags={rowTags} />
+              <span className="text-[11px] tabular-nums text-muted-foreground">
+                {formatDistanceToNow(updated, { addSuffix: false })}
+              </span>
+            </div>
           </div>
           <p
             className={cn(
@@ -451,5 +456,41 @@ function InboxListRow({ ticket, isSelected }: { ticket: TicketRow; isSelected: b
         </div>
       </div>
     </Link>
+  );
+}
+
+function InboxRowTags({ tags }: { tags: TagRow[] }) {
+  if (tags.length === 0) return null;
+  const shown = tags.slice(0, 3);
+  const hidden = tags.slice(3);
+
+  return (
+    <span className="hidden min-w-0 items-center gap-1 sm:inline-flex">
+      {shown.map((tag) => (
+        <span
+          key={tag.id}
+          className="inline-flex h-[18px] max-w-20 items-center rounded-full border px-1.5 text-[10px] font-medium leading-none"
+          style={tagPillStyle(tag)}
+          title={tag.group?.label ?? tag.label}
+        >
+          <span className="truncate">{tag.label}</span>
+        </span>
+      ))}
+      {hidden.length > 0 ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              className="inline-flex h-[18px] items-center rounded-full border border-border bg-muted px-1.5 text-[10px] font-medium leading-none text-muted-foreground"
+              aria-label={`${hidden.length} more tags`}
+              onClick={(event) => event.preventDefault()}
+            >
+              +{hidden.length}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>{hidden.map((tag) => tag.label).join(', ')}</TooltipContent>
+        </Tooltip>
+      ) : null}
+    </span>
   );
 }

@@ -18,6 +18,9 @@ import { builder } from './schema.js';
 
 type WorkspaceScopedTable =
   | 'ticket'
+  | 'tagGroup'
+  | 'tag'
+  | 'customField'
   | 'sendingDomain'
   | 'emailAddress'
   | 'suppression'
@@ -84,6 +87,9 @@ export function applyTicketRead<TQuery extends TicketQuery>(
 
 const idArg = z.object({ id: z.string() });
 const emptyArg = z.undefined();
+const customFieldCategoryArg = z.object({
+  category: z.enum(['ticket', 'customer']),
+});
 
 // ---------- Queries ----------
 
@@ -98,6 +104,16 @@ export const queries = defineQueries({
       .related('assignee')
       .related('createdBy')
       .related('closedBy')
+      .related('tags', (tt) =>
+        tt
+          .related('tag', (t) => t.related('group'))
+          .related('addedBy')
+          .orderBy('addedAt', 'desc')
+          .orderBy('tagID', 'asc'),
+      )
+      .related('customFieldValues', (v) =>
+        v.related('field').related('updatedBy').orderBy('updatedAt', 'desc').orderBy('id', 'asc'),
+      )
       .related('messages', (m) =>
         m
           .related('attachments')
@@ -133,8 +149,83 @@ export const queries = defineQueries({
     )
       .related('customer')
       .related('assignee')
+      .related('tags', (tt) =>
+        tt
+          .related('tag', (t) => t.related('group'))
+          .orderBy('addedAt', 'desc')
+          .orderBy('tagID', 'asc'),
+      )
       .orderBy('updatedAt', 'desc')
       .orderBy('id', 'desc'),
+  ),
+
+  /**
+   * Active tag groups for settings and grouped tag pickers.
+   */
+  tagGroups: defineQuery(emptyArg, ({ ctx: auth }) =>
+    applyWorkspaceScope(builder.tagGroup.where('archivedAt', 'IS', null), auth)
+      .orderBy('sortOrder', 'asc')
+      .orderBy('label', 'asc')
+      .orderBy('id', 'asc'),
+  ),
+
+  /**
+   * Settings view: include archived groups so admins can restore them.
+   */
+  tagGroupsForSettings: defineQuery(emptyArg, ({ ctx: auth }) =>
+    applyWorkspaceScope(builder.tagGroup, auth)
+      .orderBy('sortOrder', 'asc')
+      .orderBy('label', 'asc')
+      .orderBy('id', 'asc'),
+  ),
+
+  /**
+   * Active tags with optional group metadata.
+   */
+  tags: defineQuery(emptyArg, ({ ctx: auth }) =>
+    applyWorkspaceScope(builder.tag.where('archivedAt', 'IS', null), auth)
+      .related('group')
+      .orderBy('sortOrder', 'asc')
+      .orderBy('label', 'asc')
+      .orderBy('id', 'asc'),
+  ),
+
+  /**
+   * Settings view: include archived tags so admins can restore them.
+   */
+  tagsForSettings: defineQuery(emptyArg, ({ ctx: auth }) =>
+    applyWorkspaceScope(builder.tag, auth)
+      .related('group')
+      .orderBy('sortOrder', 'asc')
+      .orderBy('label', 'asc')
+      .orderBy('id', 'asc'),
+  ),
+
+  /**
+   * Active custom field definitions by entity category.
+   */
+  customFieldsByCategory: defineQuery(customFieldCategoryArg, ({ args: { category }, ctx: auth }) =>
+    applyWorkspaceScope(
+      builder.customField.where('category', '=', category).where('active', '=', true),
+      auth,
+    )
+      .orderBy('sortOrder', 'asc')
+      .orderBy('displayName', 'asc')
+      .orderBy('id', 'asc'),
+  ),
+
+  /**
+   * Settings view: include inactive definitions so admins can audit and restore
+   * archived custom fields without widening the agent sidebar query above.
+   */
+  customFieldsForSettings: defineQuery(
+    customFieldCategoryArg,
+    ({ args: { category }, ctx: auth }) =>
+      applyWorkspaceScope(builder.customField.where('category', '=', category), auth)
+        .orderBy('active', 'desc')
+        .orderBy('sortOrder', 'asc')
+        .orderBy('displayName', 'asc')
+        .orderBy('id', 'asc'),
   ),
 
   /**
@@ -302,6 +393,22 @@ export type MyTicketRow = QueryResultType<typeof queries.myTickets>[number];
 
 /** Raw ticket row (for client-side status counts). */
 export type TicketCountRow = QueryResultType<typeof queries.ticketCountByStatus>[number];
+
+/** Active tag group row. */
+export type TagGroupRow = QueryResultType<typeof queries.tagGroups>[number];
+
+/** Active tag row with optional group metadata. */
+export type TagRow = QueryResultType<typeof queries.tags>[number];
+
+/** Active custom field definition row. */
+export type CustomFieldDefinitionRow = QueryResultType<
+  typeof queries.customFieldsByCategory
+>[number];
+
+/** Custom field definition row for settings, including archived definitions. */
+export type CustomFieldSettingsRow = QueryResultType<
+  typeof queries.customFieldsForSettings
+>[number];
 
 /** Workspace member row, with the joined `user` mirror. */
 export type WorkspaceMemberRow = QueryResultType<typeof queries.workspaceMembers>[number];

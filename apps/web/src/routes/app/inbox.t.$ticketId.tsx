@@ -38,6 +38,8 @@ import {
   UserPlus,
 } from 'lucide-react';
 import { Composer, type ComposerEmailAddress, type ComposerSendArgs } from '@/components/composer';
+import { CustomFieldsBlock } from '@/components/conversation/custom-fields-block';
+import { TagsField } from '@/components/conversation/tags-field';
 import { useZero } from '@/lib/zero';
 
 export const Route = createFileRoute('/app/inbox/t/$ticketId')({
@@ -153,7 +155,7 @@ function TicketDetail() {
   };
   const currentUserID = session.user.id;
 
-  const [ticket, status] = useQuery(queries.ticketByID({ id: ticketId }));
+  const [ticket] = useQuery(queries.ticketByID({ id: ticketId }));
   const [members] = useQuery(queries.workspaceMembers());
   // Phase 3a: outbound delivery status per message. Empty until the
   // Post-commit Inngest delivery → mailpit/SES round-trip stamps a row.
@@ -163,14 +165,6 @@ function TicketDetail() {
   const deliveryByMessage = new Map<string, { status: string; error?: string | null }>();
   for (const r of outboundRows) {
     deliveryByMessage.set(r.messageID, { status: r.status, error: r.error });
-  }
-
-  if (status?.type === 'unknown') {
-    return (
-      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-        Loading…
-      </div>
-    );
   }
 
   if (!ticket) {
@@ -409,6 +403,8 @@ function TicketDetail() {
             </DropdownMenuContent>
           </DropdownMenu>
 
+          <TagsField ticketID={ticketId} ticket={ticket} />
+
           <div className="ml-auto text-[11px] text-muted-foreground">
             Updated {formatDistanceToNow(new Date(ticket.updatedAt), { addSuffix: true })}
           </div>
@@ -416,41 +412,63 @@ function TicketDetail() {
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col">
-        <ScrollArea className="flex-1">
-          <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-6 py-6">
-            {ticket.description ? (
-              <div className="rounded-lg border border-border bg-surface p-4 text-sm text-surface-foreground shadow-sm">
-                <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Original description
-                </p>
-                <p className="whitespace-pre-wrap text-[13.5px] leading-relaxed">
-                  {ticket.description}
-                </p>
-              </div>
-            ) : null}
-            {messages.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border bg-surface px-4 py-6 text-center text-xs text-muted-foreground">
-                No messages yet — write a reply or note below to get started.
-              </div>
-            ) : (
-              messages.map((m) => {
-                const isAgentMessage = m.authorType === 'agent' || m.authorType === 'system';
-                return (
-                  <MessageBubble
-                    key={m.id}
-                    message={m}
-                    isAgent={isAgentMessage}
-                    isSelf={m.authorUserID === currentUserID}
-                    delivery={deliveryByMessage.get(m.id) ?? null}
-                    inboundAuth={
-                      !isAgentMessage ? (inboundAuthByMessageID.get(m.id) ?? null) : null
-                    }
+        <div className="flex min-h-0 flex-1">
+          <ScrollArea className="flex-1">
+            <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-6 py-6">
+              <div className="grid gap-3 xl:hidden">
+                <CustomFieldsBlock entity="ticket" entityID={ticketId} record={ticket} />
+                {ticket.customer?.id ? (
+                  <CustomFieldsBlock
+                    entity="customer"
+                    entityID={ticket.customer.id}
+                    record={ticket.customer}
                   />
-                );
-              })
-            )}
-          </div>
-        </ScrollArea>
+                ) : null}
+              </div>
+              {ticket.description ? (
+                <div className="rounded-lg border border-border bg-surface p-4 text-sm text-surface-foreground shadow-sm">
+                  <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Original description
+                  </p>
+                  <p className="whitespace-pre-wrap text-[13.5px] leading-relaxed">
+                    {ticket.description}
+                  </p>
+                </div>
+              ) : null}
+              {messages.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border bg-surface px-4 py-6 text-center text-xs text-muted-foreground">
+                  No messages yet — write a reply or note below to get started.
+                </div>
+              ) : (
+                messages.map((m) => {
+                  const isAgentMessage = m.authorType === 'agent' || m.authorType === 'system';
+                  return (
+                    <MessageBubble
+                      key={m.id}
+                      message={m}
+                      isAgent={isAgentMessage}
+                      isSelf={m.authorUserID === currentUserID}
+                      delivery={deliveryByMessage.get(m.id) ?? null}
+                      inboundAuth={
+                        !isAgentMessage ? (inboundAuthByMessageID.get(m.id) ?? null) : null
+                      }
+                    />
+                  );
+                })
+              )}
+            </div>
+          </ScrollArea>
+          <aside className="hidden w-80 shrink-0 flex-col gap-3 overflow-y-auto border-l border-border bg-surface-muted/40 p-3 xl:flex">
+            <CustomFieldsBlock entity="ticket" entityID={ticketId} record={ticket} />
+            {ticket.customer?.id ? (
+              <CustomFieldsBlock
+                entity="customer"
+                entityID={ticket.customer.id}
+                record={ticket.customer}
+              />
+            ) : null}
+          </aside>
+        </div>
         <Separator />
         <div className="shrink-0">
           <Composer

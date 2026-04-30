@@ -21,7 +21,9 @@ import {
 } from '@rocicorp/zero';
 import { z } from 'zod';
 import { assertCanModifyTicket, assertHasWorkspace, type WorkspaceAuthData } from './auth.js';
+import { customFieldMutators } from './custom-field-mutators.js';
 import { MutationError, MutationErrorCode } from './error.js';
+import { tagGroupMutators, tagMutators } from './tag-mutators.js';
 
 // ---------- Argument schemas ----------
 
@@ -153,6 +155,10 @@ function newID(): string {
 // ---------- Mutators ----------
 
 export const mutators = defineMutators({
+  tagGroup: tagGroupMutators,
+  tag: tagMutators,
+  customField: customFieldMutators,
+
   ticket: {
     create: defineMutator(createTicketArgsSchema, async ({ tx, args, ctx: authData }) => {
       assertHasWorkspace(authData);
@@ -419,10 +425,45 @@ export type Mutators = typeof mutators;
 
 export {
   assertActorIsAgentInWorkspace,
+  assertCanModifyCustomer,
   assertCanModifyTicket,
+  assertCanReadCustomer,
   assertCanReadTicket,
   assertHasWorkspace,
   assertIsLoggedIn,
   type WorkspaceAuthData,
 } from './auth.js';
+export {
+  type ClearCustomFieldValueOnCustomerArgs,
+  type ClearCustomFieldValueOnTicketArgs,
+  type CreateCustomFieldArgs,
+  clearCustomFieldValueOnCustomerArgsSchema,
+  clearCustomFieldValueOnTicketArgsSchema,
+  createCustomFieldArgsSchema,
+  customFieldIDOnlyArgsSchema,
+  type SetCustomFieldValueOnCustomerArgs,
+  type SetCustomFieldValueOnTicketArgs,
+  setCustomFieldValueOnCustomerArgsSchema,
+  setCustomFieldValueOnTicketArgsSchema,
+  type UpdateCustomFieldArgs,
+  updateCustomFieldArgsSchema,
+  validateCustomFieldValue,
+} from './custom-field-mutators.js';
 export { MutationError, MutationErrorCode } from './error.js';
+export {
+  type CreateTagArgs,
+  type CreateTagGroupArgs,
+  type CustomerTagArgs,
+  createTagArgsSchema,
+  createTagGroupArgsSchema,
+  customerTagArgsSchema,
+  type ReplaceTicketTagsArgs,
+  replaceTicketTagsArgsSchema,
+  type TicketTagArgs,
+  tagIDOnlyArgsSchema,
+  ticketTagArgsSchema,
+  type UpdateTagArgs,
+  type UpdateTagGroupArgs,
+  updateTagArgsSchema,
+  updateTagGroupArgsSchema,
+} from './tag-mutators.js';

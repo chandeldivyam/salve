@@ -106,3 +106,35 @@ export async function assertCanModifyTicket<TTx extends Transaction>(
 ) {
   return assertCanReadTicket(tx, authData, ticketID);
 }
+
+/**
+ * Read-side assertion for customer rows. Mirrors `assertCanReadTicket`: fetch
+ * inside the transaction and compare the row's workspace to the JWT claim.
+ */
+export async function assertCanReadCustomer<TTx extends Transaction>(
+  tx: TTx,
+  authData: AuthData | undefined | null,
+  customerID: string,
+) {
+  assertHasWorkspace(authData);
+  const customer = await tx.run(builder.customer.where('id', customerID).one());
+  if (!customer) {
+    throw new MutationError('customer not found', MutationErrorCode.NOT_FOUND, customerID);
+  }
+  if (customer.workspaceID !== authData.workspaceID) {
+    throw new MutationError('customer not found', MutationErrorCode.CROSS_WORKSPACE, customerID);
+  }
+  return customer;
+}
+
+/**
+ * Write-side customer assertion. Any authenticated agent in the workspace can
+ * edit customer metadata; later roles can narrow here.
+ */
+export async function assertCanModifyCustomer<TTx extends Transaction>(
+  tx: TTx,
+  authData: AuthData | undefined | null,
+  customerID: string,
+) {
+  return assertCanReadCustomer(tx, authData, customerID);
+}

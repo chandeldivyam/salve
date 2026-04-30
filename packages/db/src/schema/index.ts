@@ -4,6 +4,8 @@
 //   - domain.ts : help-desk entities (Phase 2a — customer, ticket, message,
 //                 attachment, audit_event); all carry workspace_id.
 export * from './auth.js';
+export * from './custom-field.js';
 export * from './domain.js';
 export * from './email.js';
+export * from './tag.js';
 export * from './workspace.js';

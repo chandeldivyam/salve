@@ -166,9 +166,8 @@ export const auditEvent = pgTable(
     workspaceId: text('workspace_id')
       .notNull()
       .references(() => organization.id, { onDelete: 'cascade' }),
-    ticketId: uuid('ticket_id')
-      .notNull()
-      .references(() => ticket.id, { onDelete: 'cascade' }),
+    ticketId: uuid('ticket_id').references(() => ticket.id, { onDelete: 'cascade' }),
+    customerId: uuid('customer_id').references(() => customer.id, { onDelete: 'cascade' }),
     actorId: text('actor_id').references(() => user.id, { onDelete: 'set null' }),
     // Free-form text for forward-compat (don't promote to enum yet).
     kind: text('kind').notNull(),
@@ -177,6 +176,7 @@ export const auditEvent = pgTable(
   },
   (t) => ({
     ticketCreatedIdx: index('audit_event_ticket_created_idx').on(t.ticketId, t.createdAt),
+    customerCreatedIdx: index('audit_event_customer_created_idx').on(t.customerId, t.createdAt),
   }),
 );
 
