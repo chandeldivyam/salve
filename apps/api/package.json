@@ -25,12 +25,14 @@
     "hono": "4.12.15",
     "inngest": "4.2.6",
     "jose": "6.2.3",
+    "mailparser": "3.9.8",
     "nanoid": "5.1.9",
     "nodemailer": "8.0.7",
     "postgres": "3.4.9",
     "zod": "4.4.1"
   },
   "devDependencies": {
+    "@types/mailparser": "3.4.6",
     "@types/nodemailer": "8.0.0",
     "tsx": "4.21.0"
   }

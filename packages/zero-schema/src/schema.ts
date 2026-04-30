@@ -186,6 +186,7 @@ const emailAddress = table('emailAddress')
     canReceive: boolean().from('can_receive'),
     isDefault: boolean().from('is_default'),
     defaultTeamID: string().from('default_team_id').optional(),
+    signature: string().optional(),
     label: string().optional(),
     deletedAt: number().from('deleted_at').optional(),
     createdAt: number().from('created_at'),
@@ -217,6 +218,52 @@ const outboundMessage = table('outboundMessage')
     sentAt: number().from('sent_at').optional(),
     deliveredAt: number().from('delivered_at').optional(),
     providerMeta: json().from('provider_meta'),
+    createdAt: number().from('created_at'),
+    updatedAt: number().from('updated_at'),
+  })
+  .primaryKey('id');
+
+const inboundMessageRaw = table('inboundMessageRaw')
+  .from('inbound_message_raw')
+  .columns({
+    id: string(),
+    workspaceID: string().from('workspace_id'),
+    channelID: string().from('channel_id'),
+    providerMessageID: string().from('provider_message_id'),
+    rawBlobS3Key: string().from('raw_blob_s3_key'),
+    rawBlobSizeBytes: number().from('raw_blob_size_bytes').optional(),
+    receivedAt: number().from('received_at'),
+    processedAt: number().from('processed_at').optional(),
+    processedTicketID: string().from('processed_ticket_id').optional(),
+    processedMessageID: string().from('processed_message_id').optional(),
+    parseError: string().from('parse_error').optional(),
+    skipReason: string().from('skip_reason').optional(),
+    headers: json(),
+    envelopeTo: string().from('envelope_to').optional(),
+    destinationAddress: string().from('destination_address').optional(),
+    senderAddress: string().from('sender_address').optional(),
+    subject: string().optional(),
+    authenticationResults: json().from('authentication_results'),
+    providerMeta: json().from('provider_meta'),
+  })
+  .primaryKey('id');
+
+const inboundRoutingRule = table('inboundRoutingRule')
+  .from('inbound_routing_rule')
+  .columns({
+    id: string(),
+    workspaceID: string().from('workspace_id'),
+    channelID: string().from('channel_id'),
+    emailAddressID: string().from('email_address_id').optional(),
+    senderPattern: string().from('sender_pattern').optional(),
+    subjectPattern: string().from('subject_pattern').optional(),
+    assignTeamID: string().from('assign_team_id').optional(),
+    assignAgentID: string().from('assign_agent_id').optional(),
+    setPriority: enumeration<'low' | 'normal' | 'high' | 'urgent'>()
+      .from('set_priority')
+      .optional(),
+    priority: number(),
+    enabled: boolean(),
     createdAt: number().from('created_at'),
     updatedAt: number().from('updated_at'),
   })
@@ -281,6 +328,11 @@ const userRelationships = relationships(user, ({ many }) => ({
     destField: ['closedByID'],
     destSchema: ticket,
   }),
+  assignedInboundRoutingRules: many({
+    sourceField: ['id'],
+    destField: ['assignAgentID'],
+    destSchema: inboundRoutingRule,
+  }),
   memberships: many({
     sourceField: ['id'],
     destField: ['userId'],
@@ -308,6 +360,16 @@ const organizationRelationships = relationships(organization, ({ many }) => ({
     sourceField: ['id'],
     destField: ['workspaceID'],
     destSchema: channel,
+  }),
+  inboundMessages: many({
+    sourceField: ['id'],
+    destField: ['workspaceID'],
+    destSchema: inboundMessageRaw,
+  }),
+  inboundRoutingRules: many({
+    sourceField: ['id'],
+    destField: ['workspaceID'],
+    destSchema: inboundRoutingRule,
   }),
 }));
 
@@ -378,6 +440,11 @@ const ticketRelationships = relationships(ticket, ({ one, many }) => ({
     destField: ['ticketID'],
     destSchema: outboundMessage,
   }),
+  inboundMessages: many({
+    sourceField: ['id'],
+    destField: ['processedTicketID'],
+    destSchema: inboundMessageRaw,
+  }),
 }));
 
 const messageRelationships = relationships(message, ({ one, many }) => ({
@@ -405,6 +472,11 @@ const messageRelationships = relationships(message, ({ one, many }) => ({
     sourceField: ['id'],
     destField: ['messageID'],
     destSchema: outboundMessage,
+  }),
+  inboundMessages: many({
+    sourceField: ['id'],
+    destField: ['processedMessageID'],
+    destSchema: inboundMessageRaw,
   }),
 }));
 
@@ -449,6 +521,16 @@ const channelRelationships = relationships(channel, ({ one, many }) => ({
     sourceField: ['id'],
     destField: ['channelID'],
     destSchema: outboundMessage,
+  }),
+  inboundMessages: many({
+    sourceField: ['id'],
+    destField: ['channelID'],
+    destSchema: inboundMessageRaw,
+  }),
+  inboundRoutingRules: many({
+    sourceField: ['id'],
+    destField: ['channelID'],
+    destSchema: inboundRoutingRule,
   }),
   suppressions: many({
     sourceField: ['id'],
@@ -509,6 +591,11 @@ const emailAddressRelationships = relationships(emailAddress, ({ one, many }) =>
     destField: ['emailAddressID'],
     destSchema: outboundMessage,
   }),
+  inboundRoutingRules: many({
+    sourceField: ['id'],
+    destField: ['emailAddressID'],
+    destSchema: inboundRoutingRule,
+  }),
 }));
 
 const outboundMessageRelationships = relationships(outboundMessage, ({ one }) => ({
@@ -531,6 +618,52 @@ const outboundMessageRelationships = relationships(outboundMessage, ({ one }) =>
     sourceField: ['ticketID'],
     destField: ['id'],
     destSchema: ticket,
+  }),
+}));
+
+const inboundMessageRawRelationships = relationships(inboundMessageRaw, ({ one }) => ({
+  workspace: one({
+    sourceField: ['workspaceID'],
+    destField: ['id'],
+    destSchema: organization,
+  }),
+  channel: one({
+    sourceField: ['channelID'],
+    destField: ['id'],
+    destSchema: channel,
+  }),
+  processedTicket: one({
+    sourceField: ['processedTicketID'],
+    destField: ['id'],
+    destSchema: ticket,
+  }),
+  processedMessage: one({
+    sourceField: ['processedMessageID'],
+    destField: ['id'],
+    destSchema: message,
+  }),
+}));
+
+const inboundRoutingRuleRelationships = relationships(inboundRoutingRule, ({ one }) => ({
+  workspace: one({
+    sourceField: ['workspaceID'],
+    destField: ['id'],
+    destSchema: organization,
+  }),
+  channel: one({
+    sourceField: ['channelID'],
+    destField: ['id'],
+    destSchema: channel,
+  }),
+  emailAddress: one({
+    sourceField: ['emailAddressID'],
+    destField: ['id'],
+    destSchema: emailAddress,
+  }),
+  assignAgent: one({
+    sourceField: ['assignAgentID'],
+    destField: ['id'],
+    destSchema: user,
   }),
 }));
 
@@ -580,6 +713,8 @@ export const schema = createSchema({
     emailChannel,
     emailAddress,
     outboundMessage,
+    inboundMessageRaw,
+    inboundRoutingRule,
     suppression,
     webhookEvent,
     customerChannelIdentity,
@@ -598,6 +733,8 @@ export const schema = createSchema({
     emailChannelRelationships,
     emailAddressRelationships,
     outboundMessageRelationships,
+    inboundMessageRawRelationships,
+    inboundRoutingRuleRelationships,
     suppressionRelationships,
     webhookEventRelationships,
     customerChannelIdentityRelationships,
@@ -622,6 +759,8 @@ export type SendingDomain = Row<typeof schema.tables.sendingDomain>;
 export type EmailChannel = Row<typeof schema.tables.emailChannel>;
 export type EmailAddress = Row<typeof schema.tables.emailAddress>;
 export type OutboundMessage = Row<typeof schema.tables.outboundMessage>;
+export type InboundMessageRaw = Row<typeof schema.tables.inboundMessageRaw>;
+export type InboundRoutingRule = Row<typeof schema.tables.inboundRoutingRule>;
 export type Suppression = Row<typeof schema.tables.suppression>;
 export type WebhookEvent = Row<typeof schema.tables.webhookEvent>;
 export type CustomerChannelIdentity = Row<typeof schema.tables.customerChannelIdentity>;

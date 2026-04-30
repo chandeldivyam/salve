@@ -3,3 +3,5 @@
 
 export const SERVICE_NAME = 'opendesk' as const;
 export const PUBLIC_BRAND = 'Salve' as const;
+
+export * from './email/index.js';

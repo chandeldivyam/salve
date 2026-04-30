@@ -10,8 +10,19 @@ import { z } from 'zod';
 import type { AuthData } from './schema.js';
 import { builder } from './schema.js';
 
+type WorkspaceScopedTable =
+  | 'ticket'
+  | 'sendingDomain'
+  | 'emailAddress'
+  | 'suppression'
+  | 'outboundMessage'
+  | 'inboundMessageRaw'
+  | 'inboundRoutingRule';
+
 // `Query<table, schema, any>` mirrors zbugs's `IssueQuery` — `any` is required
 // in the helper's TReturn so the `.one()`/list cases unify.
+// biome-ignore lint/suspicious/noExplicitAny: matches zbugs queries.ts
+type WorkspaceQuery = Query<WorkspaceScopedTable, DefaultSchema, any>;
 // biome-ignore lint/suspicious/noExplicitAny: matches zbugs queries.ts
 type TicketQuery = Query<'ticket', DefaultSchema, any>;
 
@@ -25,7 +36,7 @@ type TicketQuery = Query<'ticket', DefaultSchema, any>;
  * When `auth` is missing the filter compares against a sentinel that never
  * matches a real workspace id — the query short-circuits to empty.
  */
-export function applyWorkspaceScope<TQuery extends TicketQuery>(
+export function applyWorkspaceScope<TQuery extends WorkspaceQuery>(
   q: TQuery,
   auth: AuthData | undefined | null,
 ): TQuery {
@@ -65,6 +76,7 @@ export const queries = defineQueries({
         m
           .related('attachments')
           .related('authorUser')
+          .related('authorCustomer')
           .related('outboundMessages', (o) =>
             o.related('channel').related('emailAddress').orderBy('createdAt', 'asc'),
           )
@@ -127,9 +139,7 @@ export const queries = defineQueries({
    * `/app/settings/email/domains`.
    */
   sendingDomains: defineQuery(emptyArg, ({ ctx: auth }) =>
-    builder.sendingDomain
-      .where('workspaceID', '=', auth?.workspaceID ?? '__no-workspace__')
-      .orderBy('createdAt', 'asc'),
+    applyWorkspaceScope(builder.sendingDomain, auth).orderBy('createdAt', 'asc'),
   ),
 
   /**
@@ -137,22 +147,19 @@ export const queries = defineQueries({
    * workspace. The detail page renders DKIM/MAIL FROM/DMARC records.
    */
   sendingDomainByID: defineQuery(idArg, ({ args: { id }, ctx: auth }) =>
-    builder.sendingDomain
-      .where('id', id)
-      .where('workspaceID', '=', auth?.workspaceID ?? '__no-workspace__')
-      .one(),
+    applyWorkspaceScope(builder.sendingDomain.where('id', id), auth).one(),
   ),
 
   /**
-   * Phase 3a: sendable email addresses for the reply composer from-picker.
-   * Address rows carry workspaceID directly; related channel/domain rows give
-   * the UI enough context to render labels and domain status.
+   * Phase 3a/3c: sendable email addresses for the reply composer from-picker.
+   * Address rows carry workspaceID directly and include per-address signature;
+   * related channel/domain rows render labels and domain status.
    */
   sendableEmailAddresses: defineQuery(emptyArg, ({ ctx: auth }) =>
-    builder.emailAddress
-      .where('workspaceID', '=', auth?.workspaceID ?? '__no-workspace__')
-      .where('canSend', '=', true)
-      .where('deletedAt', 'IS', null)
+    applyWorkspaceScope(
+      builder.emailAddress.where('canSend', '=', true).where('deletedAt', 'IS', null),
+      auth,
+    )
       .related('channel')
       .related('sendingDomain')
       .orderBy('isDefault', 'desc')
@@ -160,13 +167,38 @@ export const queries = defineQueries({
   ),
 
   /**
+   * Phase 3b: receivable addresses for inbound routing setup. These are the
+   * same per-workspace email address rows, filtered to active inbound-capable
+   * addresses.
+   */
+  receivableEmailAddresses: defineQuery(emptyArg, ({ ctx: auth }) =>
+    applyWorkspaceScope(
+      builder.emailAddress.where('canReceive', '=', true).where('deletedAt', 'IS', null),
+      auth,
+    )
+      .related('channel')
+      .related('sendingDomain')
+      .orderBy('isDefault', 'desc')
+      .orderBy('fullAddress', 'asc'),
+  ),
+
+  /**
+   * Phase 3b: declarative routing rules, already ordered in evaluation order.
+   */
+  inboundRoutingRules: defineQuery(emptyArg, ({ ctx: auth }) =>
+    applyWorkspaceScope(builder.inboundRoutingRule, auth)
+      .related('channel')
+      .related('emailAddress')
+      .related('assignAgent')
+      .orderBy('priority', 'asc')
+      .orderBy('createdAt', 'asc'),
+  ),
+
+  /**
    * Phase 3a: workspace suppression list, channel-optional by contract.
    */
   suppressions: defineQuery(emptyArg, ({ ctx: auth }) =>
-    builder.suppression
-      .where('workspaceID', '=', auth?.workspaceID ?? '__no-workspace__')
-      .related('channel')
-      .orderBy('createdAt', 'desc'),
+    applyWorkspaceScope(builder.suppression, auth).related('channel').orderBy('createdAt', 'desc'),
   ),
 
   /**
@@ -175,14 +207,24 @@ export const queries = defineQueries({
    * onto the message bubbles to render a delivery-status badge.
    */
   outboundMessagesByTicket: defineQuery(idArg, ({ args: { id }, ctx: auth }) =>
-    builder.outboundMessage
-      .where('workspaceID', '=', auth?.workspaceID ?? '__no-workspace__')
-      .where('ticketID', '=', id)
+    applyWorkspaceScope(builder.outboundMessage.where('ticketID', '=', id), auth)
       .related('channel')
       .related('emailAddress')
       .related('message')
       .related('ticket')
       .orderBy('createdAt', 'asc'),
+  ),
+
+  /**
+   * Phase 3b: raw inbound archive rows associated with a processed ticket.
+   * Used by ingestion/debug UI and by message-detail auth indicators later.
+   */
+  inboundMessagesByTicket: defineQuery(idArg, ({ args: { id }, ctx: auth }) =>
+    applyWorkspaceScope(builder.inboundMessageRaw.where('processedTicketID', '=', id), auth)
+      .related('channel')
+      .related('processedMessage')
+      .related('processedTicket')
+      .orderBy('receivedAt', 'asc'),
   ),
 });
 

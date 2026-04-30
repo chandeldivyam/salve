@@ -7,7 +7,7 @@
 export const ZERO_SCHEMA_NAME = 'opendesk' as const;
 // Phase 3a replacement contract: polymorphic `channel` foundation plus
 // email-specific address/domain subtables and delivery event names.
-export const ZERO_SCHEMA_VERSION = 4 as const;
+export const ZERO_SCHEMA_VERSION = 5 as const;
 
 /**
  * Channel-agnostic event names. Server-side wrappers and Inngest functions use
@@ -56,6 +56,8 @@ export {
   type CustomerChannelIdentity,
   type EmailAddress,
   type EmailChannel,
+  type InboundMessageRaw,
+  type InboundRoutingRule,
   type Member,
   type Message,
   type Organization,

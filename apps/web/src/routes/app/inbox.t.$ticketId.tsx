@@ -33,6 +33,7 @@ import {
   Lock,
   MoreHorizontal,
   Paperclip,
+  ShieldCheck,
   UserMinus,
   UserPlus,
 } from 'lucide-react';
@@ -65,12 +66,53 @@ const PRIORITY_OPTIONS: Array<{
 ];
 
 type Phase3EmailQueries = typeof queries & {
+  inboundMessagesByTicket?: (args: { id: string }) => ReturnType<typeof queries.sendingDomains>;
   sendableEmailAddresses: () => ReturnType<typeof queries.sendingDomains>;
 };
 
 type SendMessageWithEmailAddress = Parameters<typeof mutators.message.send>[0] & {
   emailAddressID?: string;
 };
+
+type AuthSignal =
+  | 'pass'
+  | 'fail'
+  | 'softfail'
+  | 'neutral'
+  | 'none'
+  | 'temperror'
+  | 'permerror'
+  | 'unknown';
+
+interface InboundAuthResults {
+  spf: AuthSignal;
+  dkim: AuthSignal;
+  dmarc: AuthSignal;
+}
+
+interface InboundMessageRow {
+  id: string;
+  messageID?: string | null;
+  messageId?: string | null;
+  processedMessageID?: string | null;
+  processedMessageId?: string | null;
+  message?: { id?: string | null } | null;
+  processedMessage?: { id?: string | null } | null;
+  emailAddressID?: string | null;
+  emailAddressId?: string | null;
+  addressID?: string | null;
+  addressId?: string | null;
+  emailAddress?: { id?: string | null; fullAddress?: string | null } | null;
+  destinationAddress?: string | null;
+  envelopeTo?: string | null;
+  recipientAddress?: string | null;
+  headers?: Record<string, unknown> | null;
+  authenticationResults?: unknown;
+  authResults?: unknown;
+  providerMeta?: Record<string, unknown> | null;
+  receivedAt?: number | null;
+  createdAt?: number | null;
+}
 
 function statusVariant(status: string): 'default' | 'success' | 'warning' | 'muted' {
   switch (status) {
@@ -104,6 +146,12 @@ function priorityVariant(p: string): 'default' | 'warning' | 'danger' | 'muted' 
 function TicketDetail() {
   const { ticketId } = Route.useParams();
   const z = useZero();
+  const emailQueries = queries as unknown as Phase3EmailQueries;
+  const hasInboundMessagesQuery = typeof emailQueries.inboundMessagesByTicket === 'function';
+  const inboundMessagesQuery =
+    hasInboundMessagesQuery && emailQueries.inboundMessagesByTicket
+      ? emailQueries.inboundMessagesByTicket({ id: ticketId })
+      : queries.sendingDomains();
   const { session } = Route.useRouteContext() as {
     session: { user: { id: string; name: string; email: string } };
   };
@@ -137,9 +185,14 @@ function TicketDetail() {
     }>,
     { type: string },
   ];
-  const [sendableEmailAddresses] = useQuery(
-    (queries as Phase3EmailQueries).sendableEmailAddresses(),
-  ) as unknown as [ComposerEmailAddress[], { type: string }];
+  const [sendableEmailAddresses] = useQuery(emailQueries.sendableEmailAddresses()) as unknown as [
+    ComposerEmailAddress[],
+    { type: string },
+  ];
+  const [inboundMessageRows] = useQuery(inboundMessagesQuery as never) as unknown as [
+    InboundMessageRow[],
+    { type: string },
+  ];
   const deliveryByMessage = new Map<string, { status: string; error?: string | null }>();
   for (const r of outboundRows) {
     deliveryByMessage.set(r.messageID, { status: r.status, error: r.error });
@@ -176,6 +229,12 @@ function TicketDetail() {
     authorUserID?: string | null;
     createdAt: number;
     authorUser?: { id: string; name?: string | null; email: string } | null;
+    authorCustomer?: {
+      id: string;
+      name?: string | null;
+      displayName?: string | null;
+      email: string;
+    } | null;
     attachments?: Array<{
       id: string;
       filename: string;
@@ -184,6 +243,14 @@ function TicketDetail() {
       s3Key: string;
     }>;
   }> = ticket.messages ?? [];
+  const inboundRows = hasInboundMessagesQuery ? inboundMessageRows : [];
+  const inboundAuthByMessageID = buildInboundAuthByMessageID(inboundRows);
+  const preferredEmailAddressID = preferredInboundEmailAddressID(
+    ticket,
+    inboundRows,
+    messages,
+    sendableEmailAddresses,
+  );
 
   const isClosed = ticket.status === 'closed';
   const isResolved = ticket.status === 'resolved';
@@ -396,15 +463,21 @@ function TicketDetail() {
                 No messages yet — write a reply or note below to get started.
               </div>
             ) : (
-              messages.map((m) => (
-                <MessageBubble
-                  key={m.id}
-                  message={m}
-                  isAgent={m.authorType === 'agent' || m.authorType === 'system'}
-                  isSelf={m.authorUserID === currentUserID}
-                  delivery={deliveryByMessage.get(m.id) ?? null}
-                />
-              ))
+              messages.map((m) => {
+                const isAgentMessage = m.authorType === 'agent' || m.authorType === 'system';
+                return (
+                  <MessageBubble
+                    key={m.id}
+                    message={m}
+                    isAgent={isAgentMessage}
+                    isSelf={m.authorUserID === currentUserID}
+                    delivery={deliveryByMessage.get(m.id) ?? null}
+                    inboundAuth={
+                      !isAgentMessage ? (inboundAuthByMessageID.get(m.id) ?? null) : null
+                    }
+                  />
+                );
+              })
             )}
           </div>
         </ScrollArea>
@@ -415,6 +488,7 @@ function TicketDetail() {
             disabled={isClosed}
             disabledReason="This ticket is closed. Reopen it to reply."
             emailAddresses={sendableEmailAddresses}
+            preferredEmailAddressID={preferredEmailAddressID}
             onSend={onSend}
           />
           {isClosed ? (
@@ -435,6 +509,7 @@ function MessageBubble({
   isAgent,
   isSelf,
   delivery,
+  inboundAuth,
 }: {
   message: {
     id: string;
@@ -443,6 +518,12 @@ function MessageBubble({
     isInternal: boolean;
     createdAt: number;
     authorUser?: { id: string; name?: string | null; email: string } | null;
+    authorCustomer?: {
+      id: string;
+      name?: string | null;
+      displayName?: string | null;
+      email: string;
+    } | null;
     attachments?: Array<{
       id: string;
       filename: string;
@@ -454,8 +535,10 @@ function MessageBubble({
   isAgent: boolean;
   isSelf: boolean;
   delivery: { status: string; error?: string | null } | null;
+  inboundAuth: InboundAuthResults | null;
 }) {
-  const author = message.authorUser;
+  const author = message.authorUser ?? message.authorCustomer;
+  const authorName = message.authorCustomer?.displayName ?? author?.name;
   const ts = new Date(message.createdAt);
   const internal = message.isInternal;
 
@@ -475,7 +558,7 @@ function MessageBubble({
         />
         <AttachmentList attachments={message.attachments} />
         <p className="mt-2 text-[11px] text-amber-800/70">
-          {author?.name ?? author?.email ?? 'Unknown'}
+          {authorName ?? author?.email ?? 'Unknown'}
         </p>
       </div>
     );
@@ -486,7 +569,7 @@ function MessageBubble({
     <div className={cn('flex flex-col gap-1', align)}>
       <div className={cn('flex w-full items-end gap-2', isAgent && 'flex-row-reverse')}>
         <Avatar size={28}>
-          <AvatarFallback>{initialsFromName(author?.name, author?.email)}</AvatarFallback>
+          <AvatarFallback>{initialsFromName(authorName, author?.email)}</AvatarFallback>
         </Avatar>
         <div
           className={cn(
@@ -506,20 +589,224 @@ function MessageBubble({
       </div>
       <p
         className={cn(
-          'flex items-center gap-1.5 px-10 text-[10.5px] text-slate-400',
+          'flex flex-wrap items-center gap-1.5 px-10 text-[10.5px] text-slate-400',
           isAgent ? 'self-end text-right' : 'self-start',
         )}
       >
         <span>
-          {author?.name ?? author?.email ?? 'Unknown'}
+          {authorName ?? author?.email ?? 'Unknown'}
           {isSelf ? ' (you)' : ''} · {format(ts, 'MMM d, h:mm a')}
         </span>
         {isAgent && delivery ? (
           <DeliveryBadge status={delivery.status} error={delivery.error} />
         ) : null}
+        {!isAgent && inboundAuth ? <AuthResultsBadges results={inboundAuth} /> : null}
       </p>
     </div>
   );
+}
+
+function AuthResultsBadges({ results }: { results: InboundAuthResults }) {
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1">
+      <ShieldCheck className="h-3 w-3 text-slate-400" />
+      <AuthBadge label="SPF" value={results.spf} />
+      <AuthBadge label="DKIM" value={results.dkim} />
+      <AuthBadge label="DMARC" value={results.dmarc} />
+    </span>
+  );
+}
+
+function AuthBadge({ label, value }: { label: string; value: AuthSignal }) {
+  return (
+    <Badge variant={authVariant(value)} title={`${label}: ${value}`}>
+      {label} {value}
+    </Badge>
+  );
+}
+
+function buildInboundAuthByMessageID(rows: InboundMessageRow[]): Map<string, InboundAuthResults> {
+  const byMessageID = new Map<string, InboundAuthResults>();
+  for (const row of rows) {
+    const messageID = inboundRowMessageID(row);
+    if (!messageID) continue;
+    byMessageID.set(messageID, authResultsFromInboundRow(row));
+  }
+  return byMessageID;
+}
+
+function preferredInboundEmailAddressID(
+  // biome-ignore lint/suspicious/noExplicitAny: ticket shape is projected from Zero related rows.
+  ticket: any,
+  inboundRows: InboundMessageRow[],
+  messages: Array<{ id: string }>,
+  sendableAddresses: ComposerEmailAddress[],
+): string | null {
+  const sendableIDs = new Set(sendableAddresses.map((address) => address.id));
+  const sendableByAddress = new Map(
+    sendableAddresses.map((address) => [address.fullAddress.toLowerCase(), address.id]),
+  );
+  const sortedInboundRows = [...inboundRows].sort(
+    (a, b) => inboundRowTimestamp(b) - inboundRowTimestamp(a),
+  );
+  const candidates = [
+    ...sortedInboundRows.map(inboundRowAddressID),
+    stringProperty(ticket, 'inboundEmailAddressID'),
+    stringProperty(ticket, 'inboundEmailAddressId'),
+    stringProperty(ticket, 'emailAddressID'),
+    stringProperty(ticket, 'emailAddressId'),
+    ...[...messages].reverse().map((message) => stringProperty(message, 'emailAddressID')),
+    ...[...messages].reverse().map((message) => stringProperty(message, 'emailAddressId')),
+  ];
+  const directID = candidates.find((id) => id && sendableIDs.has(id));
+  if (directID) return directID;
+
+  for (const row of sortedInboundRows) {
+    const destination = inboundRowDestinationAddress(row);
+    if (!destination) continue;
+    const id = sendableByAddress.get(destination.toLowerCase());
+    if (id) return id;
+  }
+
+  return null;
+}
+
+function inboundRowMessageID(row: InboundMessageRow): string | null {
+  return (
+    row.messageID ??
+    row.messageId ??
+    row.processedMessageID ??
+    row.processedMessageId ??
+    row.message?.id ??
+    row.processedMessage?.id ??
+    null
+  );
+}
+
+function inboundRowAddressID(row: InboundMessageRow): string | null {
+  return (
+    row.emailAddressID ??
+    row.emailAddressId ??
+    row.addressID ??
+    row.addressId ??
+    row.emailAddress?.id ??
+    null
+  );
+}
+
+function inboundRowTimestamp(row: InboundMessageRow): number {
+  return row.receivedAt ?? row.createdAt ?? 0;
+}
+
+function inboundRowDestinationAddress(row: InboundMessageRow): string | null {
+  return row.destinationAddress ?? row.envelopeTo ?? row.recipientAddress ?? null;
+}
+
+function authResultsFromInboundRow(row: InboundMessageRow): InboundAuthResults {
+  const objectSource =
+    authObject(row.authenticationResults) ??
+    authObject(row.authResults) ??
+    authObject(row.providerMeta?.authenticationResults) ??
+    authObject(row.providerMeta?.authResults);
+
+  const header = authHeader(row);
+
+  return {
+    spf: authSignalFor(objectSource, header, 'spf'),
+    dkim: authSignalFor(objectSource, header, 'dkim'),
+    dmarc: authSignalFor(objectSource, header, 'dmarc'),
+  };
+}
+
+function authObject(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function authHeader(row: InboundMessageRow): string | null {
+  if (typeof row.authenticationResults === 'string') return row.authenticationResults;
+  if (typeof row.authResults === 'string') return row.authResults;
+  const headers = row.headers;
+  if (!headers) return null;
+  const key = Object.keys(headers).find((name) => name.toLowerCase() === 'authentication-results');
+  const value = key ? headers[key] : null;
+  if (Array.isArray(value)) return value.join('; ');
+  return typeof value === 'string' ? value : null;
+}
+
+function authValueFromObject(
+  source: Record<string, unknown> | null,
+  key: 'spf' | 'dkim' | 'dmarc',
+): AuthSignal {
+  const value = source?.[key];
+  if (typeof value === 'string') return normalizeAuthSignal(value);
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const record = value as Record<string, unknown>;
+    const nested = record.result ?? record.status ?? record.value;
+    if (typeof nested === 'string') return normalizeAuthSignal(nested);
+  }
+  return 'unknown';
+}
+
+function authSignalFor(
+  source: Record<string, unknown> | null,
+  header: string | null,
+  key: 'spf' | 'dkim' | 'dmarc',
+): AuthSignal {
+  const fromObject = authValueFromObject(source, key);
+  return fromObject === 'unknown' ? authValueFromHeader(header, key) : fromObject;
+}
+
+function authValueFromHeader(header: string | null, key: 'spf' | 'dkim' | 'dmarc'): AuthSignal {
+  if (!header) return 'unknown';
+  const match = header.toLowerCase().match(new RegExp(`${key}=([a-z]+)`));
+  return normalizeAuthSignal(match?.[1]);
+}
+
+function normalizeAuthSignal(value: string | undefined): AuthSignal {
+  switch (value?.toLowerCase()) {
+    case 'pass':
+      return 'pass';
+    case 'fail':
+      return 'fail';
+    case 'softfail':
+      return 'softfail';
+    case 'neutral':
+      return 'neutral';
+    case 'none':
+      return 'none';
+    case 'temperror':
+      return 'temperror';
+    case 'permerror':
+      return 'permerror';
+    default:
+      return 'unknown';
+  }
+}
+
+function stringProperty(source: unknown, key: string) {
+  if (!source || typeof source !== 'object') return null;
+  const value = (source as Record<string, unknown>)[key];
+  return typeof value === 'string' && value ? value : null;
+}
+
+function authVariant(value: AuthSignal): 'default' | 'success' | 'warning' | 'danger' | 'muted' {
+  switch (value) {
+    case 'pass':
+      return 'success';
+    case 'fail':
+    case 'permerror':
+      return 'danger';
+    case 'softfail':
+    case 'temperror':
+      return 'warning';
+    case 'neutral':
+    case 'none':
+    case 'unknown':
+      return 'muted';
+    default:
+      return 'default';
+  }
 }
 
 function DeliveryBadge({ status, error }: { status: string; error?: string | null }) {

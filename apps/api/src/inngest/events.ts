@@ -14,6 +14,10 @@ export const DOMAIN_EVENT = {
   VERIFICATION_COMPLETED: 'domain/verification.completed',
 } as const;
 
+export const INBOUND_EVENT = {
+  MESSAGE_RECEIVED: 'inbound/message.received',
+} as const;
+
 export const PROVIDER_EVENT = {
   WEBHOOK_RECEIVED: 'provider/webhook.received',
 } as const;
@@ -79,6 +83,13 @@ export const domainVerificationCompletedDataSchema = z.object({
   status: z.enum(['pending', 'verified', 'failed']),
 });
 
+export const inboundMessageReceivedDataSchema = z.object({
+  workspaceID: z.string().min(1),
+  channelID: z.string().min(1),
+  rawID: z.string().min(1),
+  providerMessageID: z.string().min(1),
+});
+
 export const providerWebhookReceivedDataSchema = z.object({
   webhookEventID: z.string().min(1),
   source: z.string().min(1),
@@ -97,5 +108,6 @@ export const inngestEventSchemas = {
   [DOMAIN_EVENT.VERIFICATION_COMPLETED]: z.object({
     data: domainVerificationCompletedDataSchema,
   }),
+  [INBOUND_EVENT.MESSAGE_RECEIVED]: z.object({ data: inboundMessageReceivedDataSchema }),
   [PROVIDER_EVENT.WEBHOOK_RECEIVED]: z.object({ data: providerWebhookReceivedDataSchema }),
 } as const;

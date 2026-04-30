@@ -11,12 +11,14 @@ import { cors } from 'hono/cors';
 import { serve as inngestServe } from 'inngest/hono';
 import { auth } from './auth.js';
 import { handleGetSigned, handlePresign } from './files.js';
+import { handleDevInboundEmail, handleSesInboundEmail } from './inbound/email.js';
 import { inngest } from './inngest/client.js';
 import {
   bounceRateWatchdog,
   deliverMessage,
   deliverMessageRecovery,
   processProviderWebhook,
+  routeInboundMessage,
   verifyDomain,
 } from './inngest/functions/index.js';
 import { buildJwtCookieHeader, issueOpendeskJwt, readJwtCookie, verifyOpendeskJwt } from './jwt.js';
@@ -26,6 +28,7 @@ import {
   handleEmailAddressAdd,
   handleEmailDomainAdd,
   handleEmailDomainVerifyDev,
+  handleEmailRoutingRuleUpsert,
 } from './settings/email-domains.js';
 import { handleSesWebhook } from './webhooks/ses.js';
 
@@ -143,11 +146,19 @@ app.post(
 app.post('/api/settings/channels/email/domains', requireWorkspace, handleEmailDomainAdd);
 app.post('/api/settings/channels/email/addresses', requireWorkspace, handleEmailAddressAdd);
 app.post(
+  '/api/settings/channels/email/routing-rules',
+  requireWorkspace,
+  handleEmailRoutingRuleUpsert,
+);
+app.post('/api/settings/email/routing-rules', requireWorkspace, handleEmailRoutingRuleUpsert);
+app.post(
   '/api/settings/channels/email/domains/:id/verify-dev',
   requireWorkspace,
   handleEmailDomainVerifyDev,
 );
 
+app.post('/api/inbound/email/dev', handleDevInboundEmail);
+app.post('/api/inbound/email/ses', handleSesInboundEmail);
 app.post('/api/webhooks/ses', handleSesWebhook);
 
 // Inngest serve endpoint. The Inngest dev server (docker-compose) introspects
@@ -166,6 +177,7 @@ app.use(
     client: inngest,
     functions: [
       deliverMessage,
+      routeInboundMessage,
       verifyDomain,
       processProviderWebhook,
       deliverMessageRecovery,

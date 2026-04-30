@@ -18,7 +18,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { organization } from './auth.js';
+import { organization, user } from './auth.js';
 import { customer, message, ticket, ticketPriority } from './domain.js';
 
 // ---------- Enums ----------
@@ -167,6 +167,7 @@ export const emailAddress = pgTable(
     canReceive: boolean('can_receive').notNull().default(true),
     isDefault: boolean('is_default').notNull().default(false),
     defaultTeamId: text('default_team_id'),
+    signature: text('signature'),
     label: text('label'),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -219,6 +220,109 @@ export const outboundMessage = pgTable(
     ),
     ticketIdx: index('outbound_message_ticket_idx').on(t.workspaceId, t.ticketId, t.createdAt),
     statusIdx: index('outbound_message_status_idx').on(t.workspaceId, t.status, t.createdAt),
+  }),
+);
+
+export const inboundMessageRaw = pgTable(
+  'inbound_message_raw',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    channelId: uuid('channel_id')
+      .notNull()
+      .references(() => channel.id, { onDelete: 'cascade' }),
+    providerMessageId: text('provider_message_id').notNull(),
+    rawBlobS3Key: text('raw_blob_s3_key').notNull(),
+    rawBlobSizeBytes: integer('raw_blob_size_bytes'),
+    receivedAt: timestamp('received_at', { withTimezone: true }).notNull().defaultNow(),
+    processedAt: timestamp('processed_at', { withTimezone: true }),
+    processedTicketId: uuid('processed_ticket_id').references(() => ticket.id, {
+      onDelete: 'set null',
+    }),
+    processedMessageId: uuid('processed_message_id').references(() => message.id, {
+      onDelete: 'set null',
+    }),
+    parseError: text('parse_error'),
+    skipReason: text('skip_reason'),
+    headers: jsonb('headers').notNull().default(sql`'{}'::jsonb`),
+    envelopeTo: text('envelope_to'),
+    destinationAddress: text('destination_address'),
+    senderAddress: text('sender_address'),
+    subject: text('subject'),
+    authenticationResults: jsonb('authentication_results').notNull().default(sql`'{}'::jsonb`),
+    providerMeta: jsonb('provider_meta').notNull().default(sql`'{}'::jsonb`),
+  },
+  (t) => ({
+    workspaceProviderUnique: uniqueIndex('inbound_message_raw_workspace_provider_unique').on(
+      t.workspaceId,
+      t.providerMessageId,
+    ),
+    unprocessedIdx: index('inbound_message_raw_unprocessed_idx')
+      .on(t.workspaceId, t.receivedAt)
+      .where(sql`${t.processedAt} IS NULL`),
+    processedTicketIdx: index('inbound_message_raw_processed_ticket_idx').on(
+      t.workspaceId,
+      t.processedTicketId,
+      t.receivedAt,
+    ),
+    processedMessageIdx: index('inbound_message_raw_processed_message_idx').on(
+      t.workspaceId,
+      t.processedMessageId,
+    ),
+    channelReceivedIdx: index('inbound_message_raw_channel_received_idx').on(
+      t.workspaceId,
+      t.channelId,
+      t.receivedAt,
+    ),
+    destinationIdx: index('inbound_message_raw_destination_idx').on(
+      t.workspaceId,
+      t.destinationAddress,
+      t.receivedAt,
+    ),
+  }),
+);
+
+export const inboundRoutingRule = pgTable(
+  'inbound_routing_rule',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    channelId: uuid('channel_id')
+      .notNull()
+      .references(() => channel.id, { onDelete: 'cascade' }),
+    emailAddressId: uuid('email_address_id').references(() => emailAddress.id, {
+      onDelete: 'set null',
+    }),
+    senderPattern: text('sender_pattern'),
+    subjectPattern: text('subject_pattern'),
+    assignTeamId: text('assign_team_id'),
+    assignAgentId: text('assign_agent_id').references(() => user.id, { onDelete: 'set null' }),
+    setPriority: ticketPriority('set_priority'),
+    priority: integer('priority').notNull().default(100),
+    enabled: boolean('enabled').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    workspaceEvalIdx: index('inbound_routing_rule_workspace_eval_idx').on(
+      t.workspaceId,
+      t.channelId,
+      t.enabled,
+      t.priority,
+    ),
+    addressEvalIdx: index('inbound_routing_rule_address_eval_idx').on(
+      t.workspaceId,
+      t.emailAddressId,
+      t.priority,
+    ),
+    assignAgentIdx: index('inbound_routing_rule_assign_agent_idx').on(
+      t.workspaceId,
+      t.assignAgentId,
+    ),
   }),
 );
 

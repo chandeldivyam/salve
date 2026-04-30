@@ -36,6 +36,13 @@
       "when": 1777540000000,
       "tag": "0004_polymorphic_delivery_contract",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1777540237404,
+      "tag": "0005_flippant_tinkerer",
+      "breakpoints": true
     }
   ]
 }

@@ -33,10 +33,12 @@ import {
   List,
   ListOrdered,
   Lock,
+  MailCheck,
   MessageSquare,
   Paperclip,
   Quote,
   Send,
+  Signature,
   Underline as UnderlineIcon,
   X,
 } from 'lucide-react';
@@ -55,6 +57,9 @@ export interface ComposerEmailAddress {
   fullAddress: string;
   label?: string | null;
   isDefault?: boolean | null;
+  signatureHTML?: string | null;
+  signatureHtml?: string | null;
+  signature?: string | null;
   sendingDomain?: {
     id?: string;
     domain?: string | null;
@@ -75,6 +80,7 @@ interface ComposerProps {
   disabled?: boolean;
   disabledReason?: string;
   emailAddresses?: ComposerEmailAddress[];
+  preferredEmailAddressID?: string | null;
   onSend: (args: ComposerSendArgs) => Promise<void> | void;
 }
 
@@ -120,6 +126,7 @@ export function Composer({
   disabled,
   disabledReason,
   emailAddresses = [],
+  preferredEmailAddressID,
   onSend,
 }: ComposerProps) {
   const [tab, setTab] = useState<'reply' | 'note'>('reply');
@@ -129,8 +136,13 @@ export function Composer({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const dropRef = useRef<HTMLDivElement | null>(null);
 
-  const defaultEmailAddress =
+  const preferredEmailAddress =
+    (preferredEmailAddressID
+      ? emailAddresses.find((address) => address.id === preferredEmailAddressID)
+      : null) ?? null;
+  const fallbackEmailAddress =
     emailAddresses.find((address) => address.isDefault) ?? emailAddresses[0] ?? null;
+  const defaultEmailAddress = preferredEmailAddress ?? fallbackEmailAddress;
   const selectedEmailAddress =
     emailAddresses.find((address) => address.id === selectedEmailAddressID) ?? defaultEmailAddress;
 
@@ -170,11 +182,13 @@ export function Composer({
       return;
     }
     setSelectedEmailAddressID((current) =>
-      current && emailAddresses.some((address) => address.id === current)
-        ? current
-        : (defaultEmailAddress?.id ?? null),
+      preferredEmailAddress?.id
+        ? preferredEmailAddress.id
+        : current && emailAddresses.some((address) => address.id === current)
+          ? current
+          : (fallbackEmailAddress?.id ?? null),
     );
-  }, [emailAddresses, defaultEmailAddress?.id]);
+  }, [emailAddresses, fallbackEmailAddress?.id, preferredEmailAddress?.id]);
 
   const handleFiles = useCallback(
     async (files: File[]) => {
@@ -311,6 +325,7 @@ export function Composer({
           <FromPicker
             addresses={emailAddresses}
             selected={selectedEmailAddress}
+            preferredEmailAddressID={preferredEmailAddressID}
             onSelect={setSelectedEmailAddressID}
           />
         ) : null}
@@ -488,10 +503,12 @@ function TabPill({
 function FromPicker({
   addresses,
   selected,
+  preferredEmailAddressID,
   onSelect,
 }: {
   addresses: ComposerEmailAddress[];
   selected: ComposerEmailAddress | null;
+  preferredEmailAddressID?: string | null;
   onSelect: (id: string) => void;
 }) {
   if (addresses.length === 0) {
@@ -538,14 +555,28 @@ function FromPicker({
                   {address.label ? `${address.label} · ` : ''}
                   {domain}
                   {address.isDefault ? ' · default' : ''}
+                  {address.id === preferredEmailAddressID ? ' · inbound' : ''}
                 </span>
+                {addressSignature(address) ? (
+                  <span className="mt-1 inline-flex max-w-full items-center gap-1 text-[11px] text-slate-500">
+                    <Signature className="h-3 w-3 shrink-0" />
+                    <span className="truncate">Signature override</span>
+                  </span>
+                ) : null}
               </span>
+              {address.id === preferredEmailAddressID ? (
+                <MailCheck className="mt-1 h-3.5 w-3.5 shrink-0 text-brand-600" />
+              ) : null}
             </DropdownMenuItem>
           );
         })}
       </DropdownMenuContent>
     </DropdownMenu>
   );
+}
+
+function addressSignature(address: ComposerEmailAddress): string | null {
+  return address.signatureHTML ?? address.signatureHtml ?? address.signature ?? null;
 }
 
 function ToolbarButton({

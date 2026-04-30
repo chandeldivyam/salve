@@ -202,7 +202,7 @@ async function loadDeliveryContext(
       ea.local_part,
       ea.full_address,
       ec.from_name,
-      ec.signature,
+      COALESCE(NULLIF(to_jsonb(ea)->>'signature', ''), ec.signature) AS signature,
       sd.id AS sending_domain_id,
       sd.domain AS sending_domain,
       sd.mail_from_subdomain,
