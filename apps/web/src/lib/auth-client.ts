@@ -1,16 +1,20 @@
 // better-auth React client. Talks to /api/auth/* on the API server.
-// Uses VITE_API_URL so the client builds the right absolute URL in dev.
+//
+// In dev we rely on Vite's `server.proxy` so /api/** is same-origin — no CORS
+// preflight, cookies just work. `VITE_API_URL` defaults to '' so paths stay
+// relative; in prod set it to e.g. 'https://api.salve.app'.
 
 import { magicLinkClient, organizationClient } from 'better-auth/client/plugins';
 import { createAuthClient } from 'better-auth/react';
 
-const apiUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
+const apiUrl = import.meta.env.VITE_API_URL ?? '';
 
 export const authClient = createAuthClient({
-  baseURL: apiUrl,
+  baseURL: apiUrl || undefined,
   plugins: [organizationClient(), magicLinkClient()],
   fetchOptions: {
-    // Send cookies cross-origin (web :5173 → api :3001).
+    // Always include cookies — same-origin in dev (via Vite proxy), proper
+    // CORS in prod once a separate API origin is configured.
     credentials: 'include',
   },
 });

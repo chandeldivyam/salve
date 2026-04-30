@@ -23,5 +23,10 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: false,
+    // Proxy /api/** to the Hono API on :3001 so the browser sees same-origin
+    // requests in dev — no CORS preflight, cookies just work.
+    proxy: {
+      '/api': { target: 'http://localhost:3001', changeOrigin: false },
+    },
   },
 });

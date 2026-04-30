@@ -1,10 +1,21 @@
 @import 'tailwindcss';
 
+/* Tailwind v4 auto-detects content from the file referencing the CSS, but
+   workspace-linked packages aren't always reached from the heuristic. Tell it
+   explicitly to scan the @opendesk/ui sources so classes inside Button/Card/
+   Input/Label survive the JIT pass. */
+@source "../../../packages/ui/src/**/*.{ts,tsx}";
+
+/* Salve brand — a calming, healing balm. Shades 50/100/500/600/700/900 in
+   muted teal-leaning blue: enough chroma to feel intentional, low enough to
+   feel restful in a support-tool context where agents stare at it all day. */
 @theme {
-  --color-brand-50: oklch(0.97 0.02 230);
-  --color-brand-500: oklch(0.62 0.16 230);
-  --color-brand-600: oklch(0.55 0.18 230);
-  --color-brand-900: oklch(0.28 0.12 230);
+  --color-brand-50: oklch(0.97 0.022 200);
+  --color-brand-100: oklch(0.93 0.04 200);
+  --color-brand-500: oklch(0.66 0.11 200);
+  --color-brand-600: oklch(0.58 0.115 200);
+  --color-brand-700: oklch(0.5 0.1 200);
+  --color-brand-900: oklch(0.3 0.06 200);
 }
 
 html,

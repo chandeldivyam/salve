@@ -3,7 +3,9 @@
 // directly. The result is also handed to the component via loaderDeps to avoid
 // a second round-trip on initial mount.
 
-const apiUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
+// Default to '' (same-origin) — Vite's `server.proxy` shuttles /api/** to the
+// Hono server in dev. In prod, set VITE_API_URL to the API origin.
+const apiUrl = import.meta.env.VITE_API_URL ?? '';
 
 export interface SessionUser {
   id: string;

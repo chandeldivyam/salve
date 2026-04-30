@@ -3,11 +3,32 @@ import { SERVICE_NAME } from '@opendesk/core';
 import { authSchema, getDb } from '@opendesk/db';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
+import { cors } from 'hono/cors';
 import { auth } from './auth.js';
 import { buildJwtCookieHeader, issueOpendeskJwt } from './jwt.js';
 import { authMiddleware, authOf, requireUser } from './middleware.js';
 
 const app = new Hono();
+
+// Trusted origins for cross-origin browser fetches. In dev the web app is
+// served same-origin via Vite's server.proxy, so CORS is essentially a no-op
+// there. In prod (web on app.salve.app, API on api.salve.app) this is what
+// allows the browser to send cookie-bearing requests.
+const trustedOrigins = (process.env.BETTER_AUTH_TRUSTED_ORIGINS ?? 'http://localhost:5173')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+app.use(
+  '/api/*',
+  cors({
+    origin: (origin) => (origin && trustedOrigins.includes(origin) ? origin : undefined),
+    credentials: true,
+    allowHeaders: ['Content-Type', 'Authorization'],
+    allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    maxAge: 600,
+  }),
+);
 
 // Run before every request. Populates `c.var.auth` and refreshes the opendesk
 // JWT cookie on authenticated requests.

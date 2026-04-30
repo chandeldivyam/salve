@@ -10,7 +10,9 @@ export {
   CardFooter,
   CardHeader,
   CardTitle,
+  type CardTitleProps,
 } from './card.js';
 export { Input, type InputProps } from './input.js';
 export { Label } from './label.js';
+export { Logo, type LogoProps } from './logo.js';
 export { cn } from './utils.js';
