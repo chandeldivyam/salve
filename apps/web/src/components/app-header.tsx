@@ -75,7 +75,17 @@ export function AppHeader() {
   return (
     <header className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border bg-surface px-3 py-2 sm:flex-nowrap sm:px-5">
       <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
-        <Logo withWordmark size={20} />
+        {/* Click-the-logo-to-go-home is a universal product convention.
+            Routes to the inbox (the actual "home" of the app); using
+            <Link> means cmd-click opens in a new tab and the active
+            tab styling stays consistent with every other nav target. */}
+        <Link
+          to="/app/inbox"
+          aria-label="Salve home"
+          className="rounded-md outline-none transition-colors hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+        >
+          <Logo withWordmark size={20} />
+        </Link>
         <span className="hidden h-5 w-px bg-border sm:block" />
         <select
           aria-label="Active workspace"
