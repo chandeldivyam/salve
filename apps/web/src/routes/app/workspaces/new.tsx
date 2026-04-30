@@ -85,7 +85,7 @@ function NewWorkspacePage() {
       }
     }
     showSuccess('Workspace created', `${values.name} is ready.`);
-    await navigate({ to: '/app' });
+    await navigate({ to: '/app/settings/setup' });
   }
 
   return (

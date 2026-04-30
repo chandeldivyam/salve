@@ -19,11 +19,12 @@ import {
 } from '@opendesk/ui';
 import { queries, type Ticket } from '@opendesk/zero-schema';
 import { useQuery } from '@rocicorp/zero/react';
-import { Link, useNavigate } from '@tanstack/react-router';
+import { Link, useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { formatDistanceToNow } from 'date-fns';
-import { Filter, Inbox, Search } from 'lucide-react';
+import { ArrowRight, Filter, Inbox, ListChecks, Search } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSetupProgress } from '@/lib/setup-progress';
 import { useZero } from '@/lib/zero';
 
 type InboxFilter = 'all' | 'unassigned' | 'mine' | 'resolved';
@@ -73,6 +74,11 @@ const FILTERS: Array<{ id: InboxFilter; label: string }> = [
 export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
   const navigate = useNavigate();
   const z = useZero();
+  const ctx = useRouteContext({ from: '/app' }) as {
+    session: { session: { activeOrganizationId: string | null } };
+  };
+  const workspaceID = ctx.session.session.activeOrganizationId ?? null;
+  const setupProgress = useSetupProgress(workspaceID);
   const [tickets, status] = useQuery(queries.inboxOpen()) as unknown as [
     TicketRow[],
     { type: string },
@@ -244,8 +250,9 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
           </div>
         ) : filtered.length === 0 ? (
           <EmptyInbox
-            showCreate={tickets.length === 0 && filter === 'all' && search === ''}
+            showSampleCreate={tickets.length === 0 && filter === 'all' && search === ''}
             onCreate={onCreateSampleTicket}
+            setup={setupProgress}
           />
         ) : (
           <div
@@ -285,24 +292,81 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
   );
 }
 
-function EmptyInbox({ showCreate, onCreate }: { showCreate: boolean; onCreate: () => void }) {
+function EmptyInbox({
+  showSampleCreate,
+  onCreate,
+  setup,
+}: {
+  showSampleCreate: boolean;
+  onCreate: () => void;
+  setup: ReturnType<typeof useSetupProgress>;
+}) {
+  const isDev = import.meta.env.DEV;
+  const promoteSetup = setup.ready && !setup.isComplete && !setup.dismissed;
+  const nextItem = setup.items.find((item) => !item.completed);
+
+  if (promoteSetup) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 px-8 py-12 text-center">
+        <div className="grid h-12 w-12 place-items-center rounded-full bg-brand-soft text-brand-soft-foreground ring-1 ring-brand-border">
+          <ListChecks className="h-6 w-6" />
+        </div>
+        <div className="space-y-1">
+          <p className="text-sm font-medium text-foreground">Set up your inbox</p>
+          <p className="text-xs text-muted-foreground">
+            {setup.completedCount} of {setup.total} complete
+            {nextItem ? ` · Next: ${NEXT_LABEL[nextItem.id]}` : ''}
+          </p>
+        </div>
+        <Button asChild size="sm">
+          <Link to="/app/settings/setup">
+            Continue setup <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </Button>
+        {isDev && showSampleCreate ? (
+          <button
+            type="button"
+            onClick={onCreate}
+            className="text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+          >
+            Dev: create sample tickets
+          </button>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 px-8 py-12 text-center">
       <div className="grid h-12 w-12 place-items-center rounded-full bg-brand-soft text-brand-soft-foreground">
         <Inbox className="h-6 w-6" />
       </div>
       <div className="space-y-1">
-        <p className="text-sm font-medium text-foreground">No tickets yet</p>
-        <p className="text-xs text-muted-foreground">They'll appear here as they come in.</p>
+        <p className="text-sm font-medium text-foreground">Your inbox is empty</p>
+        <p className="text-xs text-muted-foreground">Replies will appear here.</p>
       </div>
-      {showCreate ? (
-        <Button size="sm" variant="outline" onClick={onCreate}>
-          Create sample tickets
-        </Button>
+      {isDev && showSampleCreate ? (
+        <button
+          type="button"
+          onClick={onCreate}
+          className="text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+        >
+          Dev: create sample tickets
+        </button>
       ) : null}
     </div>
   );
 }
+
+const NEXT_LABEL: Record<ReturnType<typeof useSetupProgress>['items'][number]['id'], string> = {
+  workspace: 'create your workspace',
+  domain: 'add a sending domain',
+  dnsVerified: 'verify DNS',
+  address: 'create a support address',
+  routing: 'configure routing',
+  firstMessage: 'receive your first message',
+  invite: 'invite a teammate',
+};
 
 function InboxRow({ ticket, isSelected }: { ticket: TicketRow; isSelected: boolean }) {
   const isUrgent = ticket.priority === 'urgent' || ticket.priority === 'high';
