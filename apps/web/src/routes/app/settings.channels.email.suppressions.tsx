@@ -8,7 +8,6 @@ import { useQuery } from '@rocicorp/zero/react';
 import { createFileRoute } from '@tanstack/react-router';
 import { ShieldOff } from 'lucide-react';
 import { EmptyState } from '@/components/email-settings/empty-state';
-import type { Phase3EmailQueries, Suppression } from '@/components/email-settings/types';
 import { RouteErrorFeedback, RoutePendingFeedback } from '@/components/route-feedback';
 
 export const Route = createFileRoute('/app/settings/channels/email/suppressions')({
@@ -18,11 +17,7 @@ export const Route = createFileRoute('/app/settings/channels/email/suppressions'
 });
 
 function SuppressionsTab() {
-  const emailQueries = queries as unknown as Phase3EmailQueries;
-  const [rows] = useQuery(emailQueries.suppressions()) as unknown as [
-    Suppression[],
-    { type: string },
-  ];
+  const [rows] = useQuery(queries.suppressions());
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-6 sm:px-8">
@@ -54,9 +49,12 @@ function SuppressionsTab() {
                 </thead>
                 <tbody>
                   {rows.map((row, index) => {
-                    const target = row.target ?? row.emailAddress ?? 'unknown';
-                    const channel = row.channel ?? row.channelKind ?? 'email';
-                    const status = row.status ?? (row.deletedAt ? 'inactive' : 'active');
+                    const target = row.target ?? 'unknown';
+                    // Suppressions can apply workspace-wide (no channel) or to a
+                    // specific channel; the related row carries the channel
+                    // kind we want to render.
+                    const channel = row.channel?.kind ?? 'all channels';
+                    const status: 'active' | 'inactive' = 'active';
                     return (
                       <tr
                         key={row.id}

@@ -5,7 +5,13 @@
 // ...)` is structurally impossible — that is the *single* mitigation
 // referenced in the plan's "No declarative permissions" risk.
 
-import { type DefaultSchema, defineQueries, defineQuery, type Query } from '@rocicorp/zero';
+import {
+  type DefaultSchema,
+  defineQueries,
+  defineQuery,
+  type Query,
+  type QueryResultType,
+} from '@rocicorp/zero';
 import { z } from 'zod';
 import type { AuthData } from './schema.js';
 import { builder } from './schema.js';
@@ -29,18 +35,38 @@ type TicketQuery = Query<'ticket', DefaultSchema, any>;
 // ---------- Permission helpers ----------
 
 /**
- * Force `workspaceID = auth.workspaceID` on any ticket query. Returns the
- * input type (`TQuery`) so the caller can keep chaining `.related(...)` /
- * `.orderBy(...)` afterwards. Pattern matches zbugs's `applyIssuePermissions`.
+ * Force the result of a query to be empty by ANDing in an always-false
+ * predicate (`or()` with no arguments evaluates to false). Mirrors the
+ * zbugs pattern at `/tmp/zero-mono/apps/zbugs/shared/queries.ts:350-356`.
  *
- * When `auth` is missing the filter compares against a sentinel that never
- * matches a real workspace id — the query short-circuits to empty.
+ * Used as the unauthenticated short-circuit instead of comparing against a
+ * sentinel string — structurally impossible to collide with a real value.
+ */
+function alwaysFalse<
+  TTable extends keyof TSchema['tables'] & string,
+  TSchema extends DefaultSchema,
+  TReturn,
+>(q: Query<TTable, TSchema, TReturn>): Query<TTable, TSchema, TReturn> {
+  return q.where(({ or }) => or());
+}
+
+/**
+ * Force `workspaceID = auth.workspaceID` on any workspace-scoped query.
+ * Returns the input type (`TQuery`) so the caller can keep chaining
+ * `.related(...)` / `.orderBy(...)` afterwards. Pattern matches zbugs's
+ * `applyIssuePermissions`.
+ *
+ * When `auth` is missing we short-circuit with `alwaysFalse(q)` instead of a
+ * sentinel comparison.
  */
 export function applyWorkspaceScope<TQuery extends WorkspaceQuery>(
   q: TQuery,
   auth: AuthData | undefined | null,
 ): TQuery {
-  return q.where('workspaceID', '=', auth?.workspaceID ?? '__no-workspace__') as TQuery;
+  if (!auth?.workspaceID) {
+    return alwaysFalse(q) as TQuery;
+  }
+  return q.where('workspaceID', '=', auth.workspaceID) as TQuery;
 }
 
 /**
@@ -78,9 +104,14 @@ export const queries = defineQueries({
           .related('authorUser')
           .related('authorCustomer')
           .related('outboundMessages', (o) =>
-            o.related('channel').related('emailAddress').orderBy('createdAt', 'asc'),
+            o
+              .related('channel')
+              .related('emailAddress')
+              .orderBy('createdAt', 'asc')
+              .orderBy('id', 'asc'),
           )
-          .orderBy('createdAt', 'asc'),
+          .orderBy('createdAt', 'asc')
+          .orderBy('id', 'asc'),
       )
       .one(),
   ),
@@ -102,17 +133,27 @@ export const queries = defineQueries({
     )
       .related('customer')
       .related('assignee')
-      .orderBy('updatedAt', 'desc'),
+      .orderBy('updatedAt', 'desc')
+      .orderBy('id', 'desc'),
   ),
 
   /**
    * Tickets assigned to the calling agent. Workspace-scoped + assignee filter.
+   * Short-circuits to empty when there is no authenticated user (no `sub`).
    */
-  myTickets: defineQuery(emptyArg, ({ ctx: auth }) =>
-    applyTicketRead(builder.ticket.where('assigneeID', '=', auth?.sub ?? '__no-user__'), auth)
+  myTickets: defineQuery(emptyArg, ({ ctx: auth }) => {
+    const base = builder.ticket;
+    if (!auth?.sub) {
+      return alwaysFalse(base)
+        .related('customer')
+        .orderBy('updatedAt', 'desc')
+        .orderBy('id', 'desc');
+    }
+    return applyTicketRead(base.where('assigneeID', '=', auth.sub), auth)
       .related('customer')
-      .orderBy('updatedAt', 'desc'),
-  ),
+      .orderBy('updatedAt', 'desc')
+      .orderBy('id', 'desc');
+  }),
 
   /**
    * Status-grouped count for header badges. Zero 1.3.0 has no GROUP BY in
@@ -128,18 +169,22 @@ export const queries = defineQueries({
    * plugin) and scopes by `organizationId = auth.workspaceID`. Used in the
    * Phase-2c assignee dropdown.
    */
-  workspaceMembers: defineQuery(emptyArg, ({ ctx: auth }) =>
-    builder.member
-      .where('organizationId', '=', auth?.workspaceID ?? '__no-workspace__')
-      .related('user'),
-  ),
+  workspaceMembers: defineQuery(emptyArg, ({ ctx: auth }) => {
+    const base = builder.member;
+    if (!auth?.workspaceID) {
+      return alwaysFalse(base).related('user');
+    }
+    return base.where('organizationId', '=', auth.workspaceID).related('user');
+  }),
 
   /**
    * Phase 3a: list sending domains for the caller's workspace. Used in
    * `/app/settings/email/domains`.
    */
   sendingDomains: defineQuery(emptyArg, ({ ctx: auth }) =>
-    applyWorkspaceScope(builder.sendingDomain, auth).orderBy('createdAt', 'asc'),
+    applyWorkspaceScope(builder.sendingDomain, auth)
+      .orderBy('createdAt', 'asc')
+      .orderBy('id', 'asc'),
   ),
 
   /**
@@ -163,7 +208,8 @@ export const queries = defineQueries({
       .related('channel')
       .related('sendingDomain')
       .orderBy('isDefault', 'desc')
-      .orderBy('fullAddress', 'asc'),
+      .orderBy('fullAddress', 'asc')
+      .orderBy('id', 'asc'),
   ),
 
   /**
@@ -179,7 +225,8 @@ export const queries = defineQueries({
       .related('channel')
       .related('sendingDomain')
       .orderBy('isDefault', 'desc')
-      .orderBy('fullAddress', 'asc'),
+      .orderBy('fullAddress', 'asc')
+      .orderBy('id', 'asc'),
   ),
 
   /**
@@ -191,14 +238,18 @@ export const queries = defineQueries({
       .related('emailAddress')
       .related('assignAgent')
       .orderBy('priority', 'asc')
-      .orderBy('createdAt', 'asc'),
+      .orderBy('createdAt', 'asc')
+      .orderBy('id', 'asc'),
   ),
 
   /**
    * Phase 3a: workspace suppression list, channel-optional by contract.
    */
   suppressions: defineQuery(emptyArg, ({ ctx: auth }) =>
-    applyWorkspaceScope(builder.suppression, auth).related('channel').orderBy('createdAt', 'desc'),
+    applyWorkspaceScope(builder.suppression, auth)
+      .related('channel')
+      .orderBy('createdAt', 'desc')
+      .orderBy('id', 'desc'),
   ),
 
   /**
@@ -212,7 +263,8 @@ export const queries = defineQueries({
       .related('emailAddress')
       .related('message')
       .related('ticket')
-      .orderBy('createdAt', 'asc'),
+      .orderBy('createdAt', 'asc')
+      .orderBy('id', 'asc'),
   ),
 
   /**
@@ -224,8 +276,60 @@ export const queries = defineQueries({
       .related('channel')
       .related('processedMessage')
       .related('processedTicket')
-      .orderBy('receivedAt', 'asc'),
+      .orderBy('receivedAt', 'asc')
+      .orderBy('id', 'asc'),
   ),
 });
 
 export type Queries = typeof queries;
+
+// ---------- Typed query result projections ----------
+//
+// Mirrors `/tmp/zero-mono/apps/zbugs/shared/queries.ts:451-453`. With
+// `declare module '@rocicorp/zero' { interface DefaultTypes { schema } }` in
+// `schema.ts`, `useQuery(queries.X(args))` already returns the right tuple;
+// these named row types let callers project the data half without `as unknown
+// as` casts.
+
+/** Single ticket with relateds (returned by `.one()`). */
+export type TicketDetailRow = QueryResultType<typeof queries.ticketByID>;
+
+/** Inbox row (open/in_progress/snoozed list, with customer + assignee). */
+export type InboxRow = QueryResultType<typeof queries.inboxOpen>[number];
+
+/** "Mine" inbox row (workspace + assignee scoped). */
+export type MyTicketRow = QueryResultType<typeof queries.myTickets>[number];
+
+/** Raw ticket row (for client-side status counts). */
+export type TicketCountRow = QueryResultType<typeof queries.ticketCountByStatus>[number];
+
+/** Workspace member row, with the joined `user` mirror. */
+export type WorkspaceMemberRow = QueryResultType<typeof queries.workspaceMembers>[number];
+
+/** Sending domain row, ordered by created-at. */
+export type SendingDomainRow = QueryResultType<typeof queries.sendingDomains>[number];
+
+/** Single sending domain (returned by `.one()`). */
+export type SendingDomainDetailRow = QueryResultType<typeof queries.sendingDomainByID>;
+
+/** Sendable email address row, with channel + sending domain relateds. */
+export type SendableEmailAddressRow = QueryResultType<
+  typeof queries.sendableEmailAddresses
+>[number];
+
+/** Receivable email address row, with channel + sending domain relateds. */
+export type ReceivableEmailAddressRow = QueryResultType<
+  typeof queries.receivableEmailAddresses
+>[number];
+
+/** Inbound routing rule row, with channel/address/assign-agent relateds. */
+export type InboundRoutingRuleRow = QueryResultType<typeof queries.inboundRoutingRules>[number];
+
+/** Suppression list row. */
+export type SuppressionRow = QueryResultType<typeof queries.suppressions>[number];
+
+/** Outbound delivery row tied to a message (per-ticket). */
+export type OutboundMessageRow = QueryResultType<typeof queries.outboundMessagesByTicket>[number];
+
+/** Raw inbound archive row tied to a processed ticket. */
+export type InboundMessageRow = QueryResultType<typeof queries.inboundMessagesByTicket>[number];

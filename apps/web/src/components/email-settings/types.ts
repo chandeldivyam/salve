@@ -1,8 +1,6 @@
 // Shared types + helpers for the /app/settings/channels/email/* tabs.
 // The Phase 3 settings UI reads via Zero (realtime) and writes via REST.
 
-import type { queries } from '@opendesk/zero-schema';
-
 export type TicketPriority = 'low' | 'normal' | 'high' | 'urgent';
 
 export interface Domain {
@@ -36,7 +34,9 @@ export interface EmailAddress {
     workspaceID?: string | null;
     workspaceId?: string | null;
     name?: string | null;
-    config?: Record<string, unknown> | null;
+    // `unknown` so callers can pass a Zero `json()` row (`ReadonlyJSONValue`)
+    // here; `stringFromRecord` re-narrows before reading.
+    config?: unknown;
   } | null;
   canSend?: boolean | null;
   canReceive?: boolean | null;
@@ -98,14 +98,6 @@ export interface InboundRoutingRule {
   } | null;
 }
 
-export type Phase3EmailQueries = typeof queries & {
-  emailAddresses?: () => ReturnType<typeof queries.sendingDomains>;
-  inboundRoutingRules?: () => ReturnType<typeof queries.sendingDomains>;
-  receivableEmailAddresses?: () => ReturnType<typeof queries.sendingDomains>;
-  sendableEmailAddresses: () => ReturnType<typeof queries.sendingDomains>;
-  suppressions: () => ReturnType<typeof queries.sendingDomains>;
-};
-
 export const TICKET_PRIORITIES: TicketPriority[] = ['normal', 'high', 'urgent', 'low'];
 
 export const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? '';
@@ -115,7 +107,12 @@ export const replyEmailDomain =
   (import.meta.env.VITE_REPLY_EMAIL_DOMAIN as string | undefined) ?? 'reply.usesalve.com';
 
 export function inboundForwardingTarget(address: EmailAddress): string {
-  const config = address.channel?.config;
+  const config =
+    address.channel?.config &&
+    typeof address.channel.config === 'object' &&
+    !Array.isArray(address.channel.config)
+      ? (address.channel.config as Record<string, unknown>)
+      : null;
   const configured =
     stringFromRecord(config, 'forwardingAddress') ??
     stringFromRecord(config, 'inboundForwardingAddress') ??

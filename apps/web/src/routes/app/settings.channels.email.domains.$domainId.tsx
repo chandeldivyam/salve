@@ -9,7 +9,7 @@
 //     backend item.
 
 import { Badge, Button, CopyValue } from '@opendesk/ui';
-import { queries } from '@opendesk/zero-schema';
+import { queries, type SendingDomainDetailRow } from '@opendesk/zero-schema';
 import { useQuery } from '@rocicorp/zero/react';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { format } from 'date-fns';
@@ -25,23 +25,13 @@ export const Route = createFileRoute('/app/settings/channels/email/domains/$doma
   errorComponent: RouteErrorFeedback,
 });
 
-interface DomainDetailRow {
-  id: string;
-  domain: string;
-  mailFromSubdomain: string;
-  dnsStatus: 'pending' | 'verified' | 'failed' | 'suspended';
-  dmarcStatus: 'pending' | 'present' | 'missing' | 'failing';
-  dkimTokens?: Array<{ name: string; value: string }> | null;
-  lastVerifiedAt?: number | null;
-  createdAt: number;
-}
+// `SendingDomainDetailRow` is `QueryResultType<typeof queries.sendingDomainByID>`
+// — a `.one()` query, so the type is the row itself, not an array.
+type DomainDetailRow = NonNullable<SendingDomainDetailRow>;
 
 function DomainDetail() {
   const { domainId } = Route.useParams();
-  const [d, status] = useQuery(queries.sendingDomainByID({ id: domainId })) as unknown as [
-    DomainDetailRow | null,
-    { type: string },
-  ];
+  const [d, status] = useQuery(queries.sendingDomainByID({ id: domainId }));
   const [busy, setBusy] = useState(false);
 
   if (status?.type === 'unknown') {

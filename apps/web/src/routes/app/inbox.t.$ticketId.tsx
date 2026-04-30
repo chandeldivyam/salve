@@ -65,11 +65,6 @@ const PRIORITY_OPTIONS: Array<{
   { id: 'low', label: 'Low' },
 ];
 
-type Phase3EmailQueries = typeof queries & {
-  inboundMessagesByTicket?: (args: { id: string }) => ReturnType<typeof queries.sendingDomains>;
-  sendableEmailAddresses: () => ReturnType<typeof queries.sendingDomains>;
-};
-
 type SendMessageWithEmailAddress = Parameters<typeof mutators.message.send>[0] & {
   emailAddressID?: string;
 };
@@ -90,7 +85,11 @@ interface InboundAuthResults {
   dmarc: AuthSignal;
 }
 
-interface InboundMessageRow {
+// Structural reader for inbound rows. The Zero schema row carries
+// `processedMessageID` / `headers: ReadonlyJSONValue` etc.; this interface
+// keeps the union of legacy + current field shapes the helpers below tolerate
+// (the helpers normalise everything to a single auth-results record).
+interface InboundRowReader {
   id: string;
   messageID?: string | null;
   messageId?: string | null;
@@ -106,10 +105,13 @@ interface InboundMessageRow {
   destinationAddress?: string | null;
   envelopeTo?: string | null;
   recipientAddress?: string | null;
-  headers?: Record<string, unknown> | null;
+  // `headers` is `json()` in the Zero schema (i.e. `ReadonlyJSONValue`); the
+  // helpers below only read object-shaped headers, all other shapes fall
+  // through to `null`.
+  headers?: unknown;
   authenticationResults?: unknown;
   authResults?: unknown;
-  providerMeta?: Record<string, unknown> | null;
+  providerMeta?: unknown;
   receivedAt?: number | null;
   createdAt?: number | null;
 }
@@ -146,53 +148,18 @@ function priorityVariant(p: string): 'default' | 'warning' | 'danger' | 'muted' 
 function TicketDetail() {
   const { ticketId } = Route.useParams();
   const z = useZero();
-  const emailQueries = queries as unknown as Phase3EmailQueries;
-  const hasInboundMessagesQuery = typeof emailQueries.inboundMessagesByTicket === 'function';
-  const inboundMessagesQuery =
-    hasInboundMessagesQuery && emailQueries.inboundMessagesByTicket
-      ? emailQueries.inboundMessagesByTicket({ id: ticketId })
-      : queries.sendingDomains();
   const { session } = Route.useRouteContext() as {
     session: { user: { id: string; name: string; email: string } };
   };
   const currentUserID = session.user.id;
 
-  // Zero's relational types don't surface through `useQuery` without heavy
-  // plumbing; project to a structural type at the call site.
-  // biome-ignore lint/suspicious/noExplicitAny: see comment above
-  type AnyTicket = any;
-  // biome-ignore lint/suspicious/noExplicitAny: see comment above
-  type AnyMember = any;
-  const [ticket, status] = useQuery(queries.ticketByID({ id: ticketId })) as unknown as [
-    AnyTicket | null,
-    { type: string },
-  ];
-  const [members] = useQuery(queries.workspaceMembers()) as unknown as [
-    AnyMember[],
-    { type: string },
-  ];
+  const [ticket, status] = useQuery(queries.ticketByID({ id: ticketId }));
+  const [members] = useQuery(queries.workspaceMembers());
   // Phase 3a: outbound delivery status per message. Empty until the
   // Post-commit Inngest delivery → mailpit/SES round-trip stamps a row.
-  const [outboundRows] = useQuery(
-    queries.outboundMessagesByTicket({ id: ticketId }),
-  ) as unknown as [
-    Array<{
-      id: string;
-      messageID: string;
-      status: string;
-      error?: string | null;
-      sentAt?: number | null;
-    }>,
-    { type: string },
-  ];
-  const [sendableEmailAddresses] = useQuery(emailQueries.sendableEmailAddresses()) as unknown as [
-    ComposerEmailAddress[],
-    { type: string },
-  ];
-  const [inboundMessageRows] = useQuery(inboundMessagesQuery as never) as unknown as [
-    InboundMessageRow[],
-    { type: string },
-  ];
+  const [outboundRows] = useQuery(queries.outboundMessagesByTicket({ id: ticketId }));
+  const [sendableEmailAddresses] = useQuery(queries.sendableEmailAddresses());
+  const [inboundMessageRows] = useQuery(queries.inboundMessagesByTicket({ id: ticketId }));
   const deliveryByMessage = new Map<string, { status: string; error?: string | null }>();
   for (const r of outboundRows) {
     deliveryByMessage.set(r.messageID, { status: r.status, error: r.error });
@@ -222,22 +189,22 @@ function TicketDetail() {
     );
   }
 
-  const messages: Array<{
-    id: string;
-    bodyHtml: string;
-    bodyText: string;
-    isInternal: boolean;
-    authorType: 'customer' | 'agent' | 'system';
-    authorUserID?: string | null;
-    createdAt: number;
-    authorUser?: { id: string; name?: string | null; email: string } | null;
-    authorCustomer?: {
+  const messages: ReadonlyArray<{
+    readonly id: string;
+    readonly bodyHtml: string;
+    readonly bodyText: string;
+    readonly isInternal: boolean;
+    readonly authorType: 'customer' | 'agent' | 'system';
+    readonly authorUserID?: string | null;
+    readonly createdAt: number;
+    readonly authorUser?: { id: string; name?: string | null; email: string } | null;
+    readonly authorCustomer?: {
       id: string;
       name?: string | null;
       displayName?: string | null;
       email: string;
     } | null;
-    attachments?: Array<{
+    readonly attachments?: ReadonlyArray<{
       id: string;
       filename: string;
       sizeBytes: number;
@@ -245,7 +212,7 @@ function TicketDetail() {
       s3Key: string;
     }>;
   }> = ticket.messages ?? [];
-  const inboundRows = hasInboundMessagesQuery ? inboundMessageRows : [];
+  const inboundRows = inboundMessageRows;
   const inboundAuthByMessageID = buildInboundAuthByMessageID(inboundRows);
   const preferredEmailAddressID = preferredInboundEmailAddressID(
     ticket,
@@ -515,19 +482,19 @@ function MessageBubble({
   inboundAuth,
 }: {
   message: {
-    id: string;
-    bodyHtml: string;
-    bodyText: string;
-    isInternal: boolean;
-    createdAt: number;
-    authorUser?: { id: string; name?: string | null; email: string } | null;
-    authorCustomer?: {
+    readonly id: string;
+    readonly bodyHtml: string;
+    readonly bodyText: string;
+    readonly isInternal: boolean;
+    readonly createdAt: number;
+    readonly authorUser?: { id: string; name?: string | null; email: string } | null;
+    readonly authorCustomer?: {
       id: string;
       name?: string | null;
       displayName?: string | null;
       email: string;
     } | null;
-    attachments?: Array<{
+    readonly attachments?: ReadonlyArray<{
       id: string;
       filename: string;
       sizeBytes: number;
@@ -628,7 +595,7 @@ function AuthBadge({ label, value }: { label: string; value: AuthSignal }) {
   );
 }
 
-function buildInboundAuthByMessageID(rows: InboundMessageRow[]): Map<string, InboundAuthResults> {
+function buildInboundAuthByMessageID(rows: InboundRowReader[]): Map<string, InboundAuthResults> {
   const byMessageID = new Map<string, InboundAuthResults>();
   for (const row of rows) {
     const messageID = inboundRowMessageID(row);
@@ -641,9 +608,9 @@ function buildInboundAuthByMessageID(rows: InboundMessageRow[]): Map<string, Inb
 function preferredInboundEmailAddressID(
   // biome-ignore lint/suspicious/noExplicitAny: ticket shape is projected from Zero related rows.
   ticket: any,
-  inboundRows: InboundMessageRow[],
-  messages: Array<{ id: string }>,
-  sendableAddresses: ComposerEmailAddress[],
+  inboundRows: ReadonlyArray<InboundRowReader>,
+  messages: ReadonlyArray<{ readonly id: string }>,
+  sendableAddresses: ReadonlyArray<ComposerEmailAddress>,
 ): string | null {
   const sendableIDs = new Set(sendableAddresses.map((address) => address.id));
   const sendableByAddress = new Map(
@@ -674,7 +641,7 @@ function preferredInboundEmailAddressID(
   return null;
 }
 
-function inboundRowMessageID(row: InboundMessageRow): string | null {
+function inboundRowMessageID(row: InboundRowReader): string | null {
   return (
     row.messageID ??
     row.messageId ??
@@ -686,7 +653,7 @@ function inboundRowMessageID(row: InboundMessageRow): string | null {
   );
 }
 
-function inboundRowAddressID(row: InboundMessageRow): string | null {
+function inboundRowAddressID(row: InboundRowReader): string | null {
   return (
     row.emailAddressID ??
     row.emailAddressId ??
@@ -697,20 +664,21 @@ function inboundRowAddressID(row: InboundMessageRow): string | null {
   );
 }
 
-function inboundRowTimestamp(row: InboundMessageRow): number {
+function inboundRowTimestamp(row: InboundRowReader): number {
   return row.receivedAt ?? row.createdAt ?? 0;
 }
 
-function inboundRowDestinationAddress(row: InboundMessageRow): string | null {
+function inboundRowDestinationAddress(row: InboundRowReader): string | null {
   return row.destinationAddress ?? row.envelopeTo ?? row.recipientAddress ?? null;
 }
 
-function authResultsFromInboundRow(row: InboundMessageRow): InboundAuthResults {
+function authResultsFromInboundRow(row: InboundRowReader): InboundAuthResults {
+  const providerMeta = authObject(row.providerMeta);
   const objectSource =
     authObject(row.authenticationResults) ??
     authObject(row.authResults) ??
-    authObject(row.providerMeta?.authenticationResults) ??
-    authObject(row.providerMeta?.authResults);
+    authObject(providerMeta?.authenticationResults) ??
+    authObject(providerMeta?.authResults);
 
   const header = authHeader(row);
 
@@ -726,10 +694,10 @@ function authObject(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 
-function authHeader(row: InboundMessageRow): string | null {
+function authHeader(row: InboundRowReader): string | null {
   if (typeof row.authenticationResults === 'string') return row.authenticationResults;
   if (typeof row.authResults === 'string') return row.authResults;
-  const headers = row.headers;
+  const headers = authObject(row.headers);
   if (!headers) return null;
   const key = Object.keys(headers).find((name) => name.toLowerCase() === 'authentication-results');
   const value = key ? headers[key] : null;
@@ -833,7 +801,7 @@ const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? '';
 function AttachmentList({
   attachments,
 }: {
-  attachments?: Array<{
+  attachments?: ReadonlyArray<{
     id: string;
     filename: string;
     sizeBytes: number;

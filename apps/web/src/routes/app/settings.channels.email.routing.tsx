@@ -13,14 +13,10 @@ import { useState } from 'react';
 import { EmptyState } from '@/components/email-settings/empty-state';
 import { RoutingRuleForm } from '@/components/email-settings/routing-rule-form';
 import {
-  type EmailAddress,
-  type InboundRoutingRule,
-  type Phase3EmailQueries,
   routingRuleAddressID,
   routingRuleAgentID,
   routingRulePriority,
   shortID,
-  type WorkspaceMember,
 } from '@/components/email-settings/types';
 import { RouteErrorFeedback, RoutePendingFeedback } from '@/components/route-feedback';
 
@@ -38,29 +34,9 @@ export const Route = createFileRoute('/app/settings/channels/email/routing')({
 });
 
 function RoutingTab() {
-  const emailQueries = queries as unknown as Phase3EmailQueries;
-  const addressQuery =
-    typeof emailQueries.receivableEmailAddresses === 'function'
-      ? emailQueries.receivableEmailAddresses()
-      : typeof emailQueries.emailAddresses === 'function'
-        ? emailQueries.emailAddresses()
-        : emailQueries.sendableEmailAddresses();
-  const [addresses] = useQuery(addressQuery as never) as unknown as [
-    EmailAddress[],
-    { type: string },
-  ];
-  const routingQuery =
-    typeof emailQueries.inboundRoutingRules === 'function'
-      ? emailQueries.inboundRoutingRules()
-      : queries.sendingDomains();
-  const [rules] = useQuery(routingQuery as never) as unknown as [
-    InboundRoutingRule[],
-    { type: string },
-  ];
-  const [members] = useQuery(queries.workspaceMembers()) as unknown as [
-    WorkspaceMember[],
-    { type: string },
-  ];
+  const [addresses] = useQuery(queries.receivableEmailAddresses());
+  const [rules] = useQuery(queries.inboundRoutingRules());
+  const [members] = useQuery(queries.workspaceMembers());
 
   const [activeAddressID, setActiveAddressID] = useState<string | null>(null);
 

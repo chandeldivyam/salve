@@ -17,7 +17,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@opendesk/ui';
-import { queries, type Ticket } from '@opendesk/zero-schema';
+import { type InboxRow, queries, type Ticket } from '@opendesk/zero-schema';
 import { useQuery } from '@rocicorp/zero/react';
 import { Link, useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -34,13 +34,10 @@ interface InboxListProps {
   currentUserID: string;
 }
 
-// Loose type for a ticket row with relateds — Zero's relational types don't
-// flow through `useQuery` cleanly without quite a bit of generic plumbing,
-// so we just project the columns we read.
-type TicketRow = Ticket & {
-  customer?: { id: string; name?: string | null; email: string } | null;
-  assignee?: { id: string; name?: string | null; email: string; image?: string | null } | null;
-};
+// `InboxRow` is `QueryResultType<typeof queries.inboxOpen>[number]` from
+// `@opendesk/zero-schema` — it carries the ticket columns plus the
+// `customer` and `assignee` relateds declared on `inboxOpen`.
+type TicketRow = InboxRow;
 
 const STATUS_LABEL: Record<Ticket['status'], string> = {
   open: 'Open',
@@ -79,10 +76,7 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
   };
   const workspaceID = ctx.session.session.activeOrganizationId ?? null;
   const setupProgress = useSetupProgress(workspaceID);
-  const [tickets, status] = useQuery(queries.inboxOpen()) as unknown as [
-    TicketRow[],
-    { type: string },
-  ];
+  const [tickets, status] = useQuery(queries.inboxOpen());
   const ready = status?.type !== 'unknown';
   const [filter, setFilter] = useState<InboxFilter>('all');
   const [search, setSearch] = useState('');
@@ -281,7 +275,7 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
                     transform: `translateY(${vi.start}px)`,
                   }}
                 >
-                  <InboxRow ticket={t} isSelected={isSelected} />
+                  <InboxListRow ticket={t} isSelected={isSelected} />
                 </div>
               );
             })}
@@ -368,7 +362,7 @@ const NEXT_LABEL: Record<ReturnType<typeof useSetupProgress>['items'][number]['i
   invite: 'invite a teammate',
 };
 
-function InboxRow({ ticket, isSelected }: { ticket: TicketRow; isSelected: boolean }) {
+function InboxListRow({ ticket, isSelected }: { ticket: TicketRow; isSelected: boolean }) {
   const isUrgent = ticket.priority === 'urgent' || ticket.priority === 'high';
   const customerLabel = ticket.customer?.name ?? ticket.customer?.email ?? 'No customer';
   const updated = new Date(ticket.updatedAt);

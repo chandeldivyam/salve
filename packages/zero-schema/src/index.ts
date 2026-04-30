@@ -43,8 +43,21 @@ export type ProviderEventName = (typeof PROVIDER_EVENT)[keyof typeof PROVIDER_EV
 export {
   applyTicketRead,
   applyWorkspaceScope,
+  type InboundMessageRow,
+  type InboundRoutingRuleRow,
+  type InboxRow,
+  type MyTicketRow,
+  type OutboundMessageRow,
   type Queries,
   queries,
+  type ReceivableEmailAddressRow,
+  type SendableEmailAddressRow,
+  type SendingDomainDetailRow,
+  type SendingDomainRow,
+  type SuppressionRow,
+  type TicketCountRow,
+  type TicketDetailRow,
+  type WorkspaceMemberRow,
 } from './queries.js';
 export {
   type Attachment,

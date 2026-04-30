@@ -14,11 +14,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { AddAddressForm } from '@/components/email-settings/add-address-form';
 import { EmptyState } from '@/components/email-settings/empty-state';
 import {
-  type Domain,
   type EmailAddress,
   getAddressSignature,
   inboundForwardingTarget,
-  type Phase3EmailQueries,
   replyEmailDomain,
   signatureToPlainText,
 } from '@/components/email-settings/types';
@@ -42,19 +40,9 @@ function AddressesTab() {
   const { session } = useRouteContext({ from: '/app' }) as { session: SessionData };
   const workspaceID = session.session.activeOrganizationId ?? null;
   const search = useSearch({ from: Route.id }) as AddressesSearch;
-  const emailQueries = queries as unknown as Phase3EmailQueries;
 
-  const [domains] = useQuery(queries.sendingDomains()) as unknown as [Domain[], { type: string }];
-  const addressQuery =
-    typeof emailQueries.emailAddresses === 'function'
-      ? emailQueries.emailAddresses()
-      : typeof emailQueries.receivableEmailAddresses === 'function'
-        ? emailQueries.receivableEmailAddresses()
-        : emailQueries.sendableEmailAddresses();
-  const [addresses] = useQuery(addressQuery as never) as unknown as [
-    EmailAddress[],
-    { type: string },
-  ];
+  const [domains] = useQuery(queries.sendingDomains());
+  const [addresses] = useQuery(queries.receivableEmailAddresses());
 
   const [showForm, setShowForm] = useState(false);
   const [selectedDomainID, setSelectedDomainID] = useState<string | null>(null);
@@ -78,7 +66,7 @@ function AddressesTab() {
   const grouped = useMemo(() => {
     const map = new Map<string, EmailAddress[]>();
     for (const a of addresses) {
-      const id = a.sendingDomainID ?? a.sendingDomainId ?? a.sendingDomain?.id ?? 'unknown';
+      const id = a.sendingDomainID ?? a.sendingDomain?.id ?? 'unknown';
       map.set(id, [...(map.get(id) ?? []), a]);
     }
     return map;

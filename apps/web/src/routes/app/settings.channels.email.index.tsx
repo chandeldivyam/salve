@@ -7,15 +7,7 @@ import { queries } from '@opendesk/zero-schema';
 import { useQuery } from '@rocicorp/zero/react';
 import { createFileRoute, Link, useRouteContext } from '@tanstack/react-router';
 import { ArrowRight, Inbox, Mail, Reply, Route as RouteIcon, ShieldOff } from 'lucide-react';
-import {
-  type Domain,
-  type EmailAddress,
-  type InboundRoutingRule,
-  type Phase3EmailQueries,
-  replyEmailDomain,
-  type Suppression,
-  workspaceForwardingAddress,
-} from '@/components/email-settings/types';
+import { replyEmailDomain, workspaceForwardingAddress } from '@/components/email-settings/types';
 import { RouteErrorFeedback, RoutePendingFeedback } from '@/components/route-feedback';
 import { showSuccess } from '@/lib/feedback';
 import type { SessionData } from '@/lib/session-loader';
@@ -27,38 +19,18 @@ export const Route = createFileRoute('/app/settings/channels/email/')({
 });
 
 function OverviewTab() {
-  const emailQueries = queries as unknown as Phase3EmailQueries;
   const { session } = useRouteContext({ from: '/app' }) as { session: SessionData };
   const workspaceID = session.session.activeOrganizationId ?? null;
 
-  const [domains] = useQuery(queries.sendingDomains()) as unknown as [Domain[], { type: string }];
-  const addressQuery =
-    typeof emailQueries.emailAddresses === 'function'
-      ? emailQueries.emailAddresses()
-      : emailQueries.sendableEmailAddresses();
-  const [addresses] = useQuery(addressQuery as never) as unknown as [
-    EmailAddress[],
-    { type: string },
-  ];
-  const routingQuery =
-    typeof emailQueries.inboundRoutingRules === 'function'
-      ? emailQueries.inboundRoutingRules()
-      : queries.sendingDomains();
-  const [routingRules] = useQuery(routingQuery as never) as unknown as [
-    InboundRoutingRule[],
-    { type: string },
-  ];
-  const [suppressions] = useQuery(emailQueries.suppressions()) as unknown as [
-    Suppression[],
-    { type: string },
-  ];
+  const [domains] = useQuery(queries.sendingDomains());
+  const [addresses] = useQuery(queries.sendableEmailAddresses());
+  const [routingRules] = useQuery(queries.inboundRoutingRules());
+  const [suppressions] = useQuery(queries.suppressions());
 
   const verifiedDomains = domains.filter((d) => d.dnsStatus === 'verified').length;
   const sendable = addresses.filter((a) => a.canSend !== false).length;
   const receivable = addresses.filter((a) => a.canReceive !== false).length;
-  const enabledRules = routingRules.filter(
-    (r) => r.enabled !== false && r.isActive !== false,
-  ).length;
+  const enabledRules = routingRules.filter((r) => r.enabled !== false).length;
   const suppressionCount = suppressions.length;
 
   const forwardingAddress = workspaceForwardingAddress(workspaceID);

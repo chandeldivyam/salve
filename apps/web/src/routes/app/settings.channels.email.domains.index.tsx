@@ -12,7 +12,7 @@ import { ChevronRight, Mail, Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { AddDomainForm } from '@/components/email-settings/add-domain-form';
 import { EmptyState } from '@/components/email-settings/empty-state';
-import { type Domain, domainStatusVariant } from '@/components/email-settings/types';
+import { domainStatusVariant } from '@/components/email-settings/types';
 import { RouteErrorFeedback, RoutePendingFeedback } from '@/components/route-feedback';
 
 interface DomainsSearch {
@@ -30,7 +30,7 @@ export const Route = createFileRoute('/app/settings/channels/email/domains/')({
 
 function DomainsTab() {
   const search = Route.useSearch();
-  const [domains] = useQuery(queries.sendingDomains()) as unknown as [Domain[], { type: string }];
+  const [domains] = useQuery(queries.sendingDomains());
   const [showForm, setShowForm] = useState(false);
 
   // Honor the ?action=add deep-link from the setup checklist.

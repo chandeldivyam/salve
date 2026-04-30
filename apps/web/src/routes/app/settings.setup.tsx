@@ -14,20 +14,11 @@ export const Route = createFileRoute('/app/settings/setup')({
   component: SetupPage,
 });
 
-interface DomainRow {
-  id: string;
-  domain: string;
-  dnsStatus: 'pending' | 'verified' | 'failed' | 'suspended';
-}
-
 function SetupPage() {
   const { session } = useRouteContext({ from: '/app' }) as { session: SessionData };
   const workspaceID = session.session.activeOrganizationId ?? null;
   const progress = useSetupProgress(workspaceID);
-  const [domains] = useQuery(queries.sendingDomains()) as unknown as [
-    DomainRow[],
-    { type: string },
-  ];
+  const [domains] = useQuery(queries.sendingDomains());
 
   if (!progress.ready) {
     return (

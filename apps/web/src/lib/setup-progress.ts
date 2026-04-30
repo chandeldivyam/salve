@@ -85,10 +85,6 @@ export interface SetupProgressSnapshot {
   shouldPromote: boolean;
 }
 
-interface SignalRow {
-  type: string;
-}
-
 /**
  * Computes the live setup checklist state for the active workspace. Must be
  * called inside a `<ZeroProvider>` (so above /app's auth gate).
@@ -96,26 +92,11 @@ interface SignalRow {
 export function useSetupProgress(workspaceID: string | null): SetupProgressSnapshot {
   const dismissed = useDismissed(workspaceID);
 
-  const [domainRows, domainStatus] = useQuery(queries.sendingDomains()) as unknown as [
-    Array<{ id: string; dnsStatus: string }>,
-    SignalRow,
-  ];
-  const [addressRows, addressStatus] = useQuery(queries.receivableEmailAddresses()) as unknown as [
-    Array<{ id: string }>,
-    SignalRow,
-  ];
-  const [sendableRows, sendableStatus] = useQuery(queries.sendableEmailAddresses()) as unknown as [
-    Array<{ id: string }>,
-    SignalRow,
-  ];
-  const [routingRuleRows, routingStatus] = useQuery(queries.inboundRoutingRules()) as unknown as [
-    Array<{ id: string; enabled?: boolean | null }>,
-    SignalRow,
-  ];
-  const [memberRows, memberStatus] = useQuery(queries.workspaceMembers()) as unknown as [
-    Array<{ id: string }>,
-    SignalRow,
-  ];
+  const [domainRows, domainStatus] = useQuery(queries.sendingDomains());
+  const [addressRows, addressStatus] = useQuery(queries.receivableEmailAddresses());
+  const [sendableRows, sendableStatus] = useQuery(queries.sendableEmailAddresses());
+  const [routingRuleRows, routingStatus] = useQuery(queries.inboundRoutingRules());
+  const [memberRows, memberStatus] = useQuery(queries.workspaceMembers());
 
   const ready =
     domainStatus?.type !== 'unknown' &&
