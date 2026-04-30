@@ -163,7 +163,10 @@ function TicketDetail() {
   // Post-commit Inngest delivery → mailpit/SES round-trip stamps a row.
   const [outboundRows] = useQuery(queries.outboundMessagesByTicket({ id: ticketId }), CACHE_NAV);
   const [sendableEmailAddresses] = useQuery(queries.sendableEmailAddresses(), CACHE_FOREVER);
-  const [inboundMessageRows] = useQuery(queries.inboundMessagesByTicket({ id: ticketId }), CACHE_NAV);
+  const [inboundMessageRows] = useQuery(
+    queries.inboundMessagesByTicket({ id: ticketId }),
+    CACHE_NAV,
+  );
   const deliveryByMessage = new Map<string, { status: string; error?: string | null }>();
   for (const r of outboundRows) {
     deliveryByMessage.set(r.messageID, { status: r.status, error: r.error });

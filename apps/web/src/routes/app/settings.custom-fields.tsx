@@ -90,7 +90,10 @@ function CustomFieldsSettingsPage() {
 
 function CustomFieldCategoryPanel({ category }: { category: CustomFieldCategory }) {
   const z = useZero();
-  const [rawFields] = useQuery(supportMetadataQueries.customFieldsForSettings({ category }), CACHE_NAV);
+  const [rawFields] = useQuery(
+    supportMetadataQueries.customFieldsForSettings({ category }),
+    CACHE_NAV,
+  );
   const fields = rowsAs<CustomFieldRow>(rawFields).sort(
     (a, b) => a.sortOrder - b.sortOrder || a.displayName.localeCompare(b.displayName),
   );

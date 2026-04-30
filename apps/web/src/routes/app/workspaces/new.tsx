@@ -19,6 +19,7 @@ import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { authClient, switchWorkspace } from '@/lib/auth-client';
 import { showSuccess, toUserErrorMessage } from '@/lib/feedback';
+import { clearSessionCache } from '@/lib/session-loader';
 
 export const Route = createFileRoute('/app/workspaces/new')({
   component: NewWorkspacePage,
@@ -84,12 +85,13 @@ function NewWorkspacePage() {
         return;
       }
     }
+    clearSessionCache();
     showSuccess('Workspace created', `${values.name} is ready.`);
     await navigate({ to: '/app/settings/setup' });
   }
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-background p-6">
+    <div className="flex min-h-0 flex-1 items-center justify-center bg-background p-6">
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle as="h1">Create a workspace</CardTitle>

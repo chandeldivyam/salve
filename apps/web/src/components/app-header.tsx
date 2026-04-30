@@ -1,53 +1,34 @@
-// AppHeader — fixed top bar shared across all `/app/*` pages. Renders the
-// brand wordmark, a workspace switcher and the signed-in user's email + sign
-// out button. Phase 2b's `/app/index.tsx` had this baked in inline; Phase 2c
-// promotes it to a reusable component because the inbox layout needs the
-// same header above its two-pane layout.
+// AppHeader — fixed top bar rendered once by `routes/app.tsx` and shared
+// across every `/app/*` page. Mounts once for the session lifetime: sub-
+// route navigation (inbox → settings → tags) does not remount it, so the
+// email + workspace switcher never flicker.
+//
+// Reads the session synchronously from the `/app` route context (set by
+// `beforeLoad`) and the org list synchronously from the module-level
+// cache (also seeded by `beforeLoad`). No useState for either — those
+// would re-run after every render and create the very flicker we're
+// avoiding.
 
 import { Button, Logo } from '@opendesk/ui';
-import { Link, useLocation, useNavigate } from '@tanstack/react-router';
+import { Link, useLocation, useNavigate, useRouteContext } from '@tanstack/react-router';
 import { Settings } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { SetupEntry } from '@/components/setup-entry';
 import { ThemeSwitcher } from '@/components/theme-switcher';
 import { authClient, switchWorkspace } from '@/lib/auth-client';
 import { showError } from '@/lib/feedback';
-import {
-  clearSessionCache,
-  fetchSession,
-  listOrganizations,
-  type SessionData,
-} from '@/lib/session-loader';
-
-interface Org {
-  id: string;
-  name: string;
-  slug: string;
-}
+import { clearSessionCache, getCachedOrgs, type SessionData } from '@/lib/session-loader';
 
 export function AppHeader() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [session, setSession] = useState<SessionData | null>(null);
-  const [orgs, setOrgs] = useState<Org[]>([]);
+  const { session } = useRouteContext({ from: '/app' }) as { session: SessionData };
+  // Org list was pre-fetched in `/app` beforeLoad and cached at module
+  // level; read it synchronously. Returns `[]` on the rare path where it
+  // wasn't pre-fetched (e.g. someone added a route bypassing /app's
+  // beforeLoad), which degrades gracefully to a single-option select.
+  const orgs = getCachedOrgs();
   const [switchingWorkspace, setSwitchingWorkspace] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const [s, o] = await Promise.all([fetchSession(), listOrganizations()]);
-        if (cancelled) return;
-        setSession(s);
-        setOrgs(o);
-      } catch (err) {
-        if (!cancelled) showError(err, 'Could not load workspace menu.');
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   async function onSwitch(workspaceID: string) {
     setSwitchingWorkspace(true);

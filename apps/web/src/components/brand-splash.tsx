@@ -7,7 +7,7 @@
 // The animation is a subtle breathing scale on the leaf glyph plus three
 // trailing dots. Restraint over decoration: no spinners, no bars.
 
-import { Logo, cn } from '@opendesk/ui';
+import { cn, Logo } from '@opendesk/ui';
 
 interface BrandSplashProps {
   className?: string;
@@ -18,10 +18,7 @@ interface BrandSplashProps {
 export function BrandSplash({ className, label }: BrandSplashProps) {
   return (
     <div
-      className={cn(
-        'fixed inset-0 z-50 grid place-items-center bg-background',
-        className,
-      )}
+      className={cn('fixed inset-0 z-50 grid place-items-center bg-background', className)}
       role="status"
       aria-live="polite"
       aria-label={label ?? 'Loading'}

@@ -19,8 +19,7 @@ export interface UseShortcutOptions {
   enabled?: boolean;
 }
 
-const isMac =
-  typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform);
+const isMac = typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform);
 
 /** Returns true when the user is typing in an input/textarea/contenteditable. */
 export function isTypingInElement(target: EventTarget | null): boolean {

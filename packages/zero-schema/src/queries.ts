@@ -96,9 +96,7 @@ const customFieldCategoryArg = z.object({
 // shape. Default cap matches zbugs `issuePreloadV2`'s 1000-row preload
 // (`shared/queries.ts:99-130`) — large enough that most workspaces never
 // hit it, small enough that the initial subscription is bounded.
-const inboxOpenArg = z
-  .object({ limit: z.number().int().min(1).max(2000).optional() })
-  .optional();
+const inboxOpenArg = z.object({ limit: z.number().int().min(1).max(2000).optional() }).optional();
 const DEFAULT_INBOX_LIMIT = 200;
 const MAX_INBOX_LIMIT = 2000;
 

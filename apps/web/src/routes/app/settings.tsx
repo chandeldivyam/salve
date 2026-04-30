@@ -14,7 +14,6 @@ import {
 } from '@tanstack/react-router';
 import { ListChecks, Mail, Settings2, Tags } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { AppHeader } from '@/components/app-header';
 import type { SessionData } from '@/lib/session-loader';
 import { useSetupProgress } from '@/lib/setup-progress';
 
@@ -38,42 +37,42 @@ function SettingsLayout() {
   // Hide the Setup item only when the user finished and dismissed it.
   const showSetup = !(progress.dismissed && progress.isComplete);
 
+  // App chrome (header) lives in `routes/app.tsx`; this layout owns only
+  // the settings sidebar + outlet. The parent flex container in /app
+  // already gives us a row layout.
   return (
-    <div className="flex min-h-dvh flex-col">
-      <AppHeader />
-      <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
-        <aside className="flex shrink-0 flex-col gap-1 border-b border-border bg-surface px-3 py-4 sm:w-[240px] sm:border-r sm:border-b-0 sm:py-5">
-          <p className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:pb-2">
-            Settings
-          </p>
-          {showSetup ? (
-            <SettingsLink to="/app/settings/setup" active={isSetup}>
-              <ListChecks className="h-3.5 w-3.5" />
-              <span className="flex-1">Setup</span>
-              {progress.ready && !progress.isComplete ? (
-                <span className="rounded-full bg-brand-soft px-1.5 py-0.5 text-[10px] font-semibold text-brand-soft-foreground ring-1 ring-brand-border">
-                  {progress.completedCount}/{progress.total}
-                </span>
-              ) : null}
-            </SettingsLink>
-          ) : null}
-          <SettingsLink to="/app/settings/channels/email" active={isEmailChannel}>
-            <Mail className="h-3.5 w-3.5" />
-            <span className="flex-1">Email channel</span>
+    <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
+      <aside className="flex shrink-0 flex-col gap-1 border-b border-border bg-surface px-3 py-4 sm:w-[240px] sm:border-r sm:border-b-0 sm:py-5">
+        <p className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:pb-2">
+          Settings
+        </p>
+        {showSetup ? (
+          <SettingsLink to="/app/settings/setup" active={isSetup}>
+            <ListChecks className="h-3.5 w-3.5" />
+            <span className="flex-1">Setup</span>
+            {progress.ready && !progress.isComplete ? (
+              <span className="rounded-full bg-brand-soft px-1.5 py-0.5 text-[10px] font-semibold text-brand-soft-foreground ring-1 ring-brand-border">
+                {progress.completedCount}/{progress.total}
+              </span>
+            ) : null}
           </SettingsLink>
-          <SettingsLink to="/app/settings/tags" active={isTags}>
-            <Tags className="h-3.5 w-3.5" />
-            <span className="flex-1">Tags</span>
-          </SettingsLink>
-          <SettingsLink to="/app/settings/custom-fields" active={isCustomFields}>
-            <Settings2 className="h-3.5 w-3.5" />
-            <span className="flex-1">Custom fields</span>
-          </SettingsLink>
-        </aside>
-        <main className="flex min-w-0 flex-1 flex-col bg-background">
-          <Outlet />
-        </main>
-      </div>
+        ) : null}
+        <SettingsLink to="/app/settings/channels/email" active={isEmailChannel}>
+          <Mail className="h-3.5 w-3.5" />
+          <span className="flex-1">Email channel</span>
+        </SettingsLink>
+        <SettingsLink to="/app/settings/tags" active={isTags}>
+          <Tags className="h-3.5 w-3.5" />
+          <span className="flex-1">Tags</span>
+        </SettingsLink>
+        <SettingsLink to="/app/settings/custom-fields" active={isCustomFields}>
+          <Settings2 className="h-3.5 w-3.5" />
+          <span className="flex-1">Custom fields</span>
+        </SettingsLink>
+      </aside>
+      <main className="flex min-w-0 flex-1 flex-col bg-background">
+        <Outlet />
+      </main>
     </div>
   );
 }

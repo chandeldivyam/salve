@@ -68,10 +68,7 @@ export function TicketDetailSkeleton() {
                 <span className={cn('h-3 w-32 rounded', SHIMMER)} />
                 <span className={cn('ml-auto h-3 w-16 rounded', SHIMMER)} />
               </div>
-              <span
-                className={cn('mt-3 block w-full rounded', SHIMMER)}
-                style={{ height: h }}
-              />
+              <span className={cn('mt-3 block w-full rounded', SHIMMER)} style={{ height: h }} />
             </div>
           ))}
         </div>
