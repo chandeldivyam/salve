@@ -36,7 +36,7 @@ import {
   UserMinus,
   UserPlus,
 } from 'lucide-react';
-import { Composer, type ComposerSendArgs } from '@/components/composer';
+import { Composer, type ComposerEmailAddress, type ComposerSendArgs } from '@/components/composer';
 import { useZero } from '@/lib/zero';
 
 export const Route = createFileRoute('/app/inbox/t/$ticketId')({
@@ -63,6 +63,14 @@ const PRIORITY_OPTIONS: Array<{
   { id: 'normal', label: 'Normal' },
   { id: 'low', label: 'Low' },
 ];
+
+type Phase3EmailQueries = typeof queries & {
+  sendableEmailAddresses: () => ReturnType<typeof queries.sendingDomains>;
+};
+
+type SendMessageWithEmailAddress = Parameters<typeof mutators.message.send>[0] & {
+  emailAddressID?: string;
+};
 
 function statusVariant(status: string): 'default' | 'success' | 'warning' | 'muted' {
   switch (status) {
@@ -116,7 +124,7 @@ function TicketDetail() {
     { type: string },
   ];
   // Phase 3a: outbound delivery status per message. Empty until the
-  // outbox-poller → Inngest → mailpit/SES round-trip stamps a row.
+  // Post-commit Inngest delivery → mailpit/SES round-trip stamps a row.
   const [outboundRows] = useQuery(
     queries.outboundMessagesByTicket({ id: ticketId }),
   ) as unknown as [
@@ -129,6 +137,9 @@ function TicketDetail() {
     }>,
     { type: string },
   ];
+  const [sendableEmailAddresses] = useQuery(
+    (queries as Phase3EmailQueries).sendableEmailAddresses(),
+  ) as unknown as [ComposerEmailAddress[], { type: string }];
   const deliveryByMessage = new Map<string, { status: string; error?: string | null }>();
   for (const r of outboundRows) {
     deliveryByMessage.set(r.messageID, { status: r.status, error: r.error });
@@ -210,16 +221,16 @@ function TicketDetail() {
   }
 
   async function onSend(args: ComposerSendArgs) {
-    await z.mutate(
-      mutators.message.send({
-        id: crypto.randomUUID(),
-        ticketID: ticketId,
-        bodyHTML: args.bodyHTML,
-        bodyText: args.bodyText,
-        isInternal: args.isInternal,
-        attachments: args.attachments,
-      }),
-    );
+    const payload: SendMessageWithEmailAddress = {
+      id: crypto.randomUUID(),
+      ticketID: ticketId,
+      bodyHTML: args.bodyHTML,
+      bodyText: args.bodyText,
+      isInternal: args.isInternal,
+      attachments: args.attachments,
+      ...(!args.isInternal && args.emailAddressID ? { emailAddressID: args.emailAddressID } : {}),
+    };
+    await z.mutate(mutators.message.send(payload as Parameters<typeof mutators.message.send>[0]));
   }
 
   return (
@@ -403,6 +414,7 @@ function TicketDetail() {
             ticketID={ticketId}
             disabled={isClosed}
             disabledReason="This ticket is closed. Reopen it to reply."
+            emailAddresses={sendableEmailAddresses}
             onSend={onSend}
           />
           {isClosed ? (

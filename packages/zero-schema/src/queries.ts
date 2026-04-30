@@ -60,8 +60,15 @@ export const queries = defineQueries({
       .related('customer')
       .related('assignee')
       .related('createdBy')
+      .related('closedBy')
       .related('messages', (m) =>
-        m.related('attachments').related('authorUser').orderBy('createdAt', 'asc'),
+        m
+          .related('attachments')
+          .related('authorUser')
+          .related('outboundMessages', (o) =>
+            o.related('channel').related('emailAddress').orderBy('createdAt', 'asc'),
+          )
+          .orderBy('createdAt', 'asc'),
       )
       .one(),
   ),
@@ -137,14 +144,44 @@ export const queries = defineQueries({
   ),
 
   /**
+   * Phase 3a: sendable email addresses for the reply composer from-picker.
+   * Address rows carry workspaceID directly; related channel/domain rows give
+   * the UI enough context to render labels and domain status.
+   */
+  sendableEmailAddresses: defineQuery(emptyArg, ({ ctx: auth }) =>
+    builder.emailAddress
+      .where('workspaceID', '=', auth?.workspaceID ?? '__no-workspace__')
+      .where('canSend', '=', true)
+      .where('deletedAt', 'IS', null)
+      .related('channel')
+      .related('sendingDomain')
+      .orderBy('isDefault', 'desc')
+      .orderBy('fullAddress', 'asc'),
+  ),
+
+  /**
+   * Phase 3a: workspace suppression list, channel-optional by contract.
+   */
+  suppressions: defineQuery(emptyArg, ({ ctx: auth }) =>
+    builder.suppression
+      .where('workspaceID', '=', auth?.workspaceID ?? '__no-workspace__')
+      .related('channel')
+      .orderBy('createdAt', 'desc'),
+  ),
+
+  /**
    * Phase 3a: outbound delivery rows for a given ticket (one per agent reply
-   * dispatched through the email subsystem). The ticket detail UI joins these
+   * dispatched through the delivery subsystem). The ticket detail UI joins these
    * onto the message bubbles to render a delivery-status badge.
    */
   outboundMessagesByTicket: defineQuery(idArg, ({ args: { id }, ctx: auth }) =>
     builder.outboundMessage
       .where('workspaceID', '=', auth?.workspaceID ?? '__no-workspace__')
       .where('ticketID', '=', id)
+      .related('channel')
+      .related('emailAddress')
+      .related('message')
+      .related('ticket')
       .orderBy('createdAt', 'asc'),
   ),
 });

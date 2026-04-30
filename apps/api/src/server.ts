@@ -6,18 +6,28 @@ import { mustGetMutator, mustGetQuery, type ReadonlyJSONValue } from '@rocicorp/
 import { handleMutateRequest, handleQueryRequest } from '@rocicorp/zero/server';
 import { zeroPostgresJS } from '@rocicorp/zero/server/adapters/postgresjs';
 import { and, eq } from 'drizzle-orm';
-import { Hono } from 'hono';
+import { Hono, type MiddlewareHandler } from 'hono';
 import { cors } from 'hono/cors';
 import { serve as inngestServe } from 'inngest/hono';
 import { auth } from './auth.js';
 import { handleGetSigned, handlePresign } from './files.js';
 import { inngest } from './inngest/client.js';
-import { outboundEmail } from './inngest/functions/index.js';
+import {
+  bounceRateWatchdog,
+  deliverMessage,
+  deliverMessageRecovery,
+  processProviderWebhook,
+  verifyDomain,
+} from './inngest/functions/index.js';
 import { buildJwtCookieHeader, issueOpendeskJwt, readJwtCookie, verifyOpendeskJwt } from './jwt.js';
 import { authMiddleware, authOf, requireUser, requireWorkspace } from './middleware.js';
-import { startOutboxPoller } from './outbox-poller.js';
-import { createServerMutators } from './server-mutators.js';
-import { handleEmailDomainAddDev, handleEmailDomainVerifyDev } from './settings/email-domains.js';
+import { createServerMutators, type PostCommitTask } from './server-mutators.js';
+import {
+  handleEmailAddressAdd,
+  handleEmailDomainAdd,
+  handleEmailDomainVerifyDev,
+} from './settings/email-domains.js';
+import { handleSesWebhook } from './webhooks/ses.js';
 
 const app = new Hono();
 
@@ -120,14 +130,25 @@ app.post('/api/files/presign', requireWorkspace, handlePresign);
 app.post('/api/files/get', requireWorkspace, handleGetSigned);
 
 // Phase 3a settings: email domains (BYO sending domain).
-//   POST /api/settings/email/domains       — add a new domain (stub DKIM tokens in dev)
+//   POST /api/settings/email/domains       — add a domain + default email channel/address
+//   POST /api/settings/email/domains/:id/addresses — add another sending/receiving address
 //   POST /api/settings/email/domains/:id/verify-dev — flip dns_status='verified' (dev override)
-app.post('/api/settings/email/domains', requireWorkspace, handleEmailDomainAddDev);
+app.post('/api/settings/email/domains', requireWorkspace, handleEmailDomainAdd);
+app.post('/api/settings/email/domains/:id/addresses', requireWorkspace, handleEmailAddressAdd);
 app.post(
   '/api/settings/email/domains/:id/verify-dev',
   requireWorkspace,
   handleEmailDomainVerifyDev,
 );
+app.post('/api/settings/channels/email/domains', requireWorkspace, handleEmailDomainAdd);
+app.post('/api/settings/channels/email/addresses', requireWorkspace, handleEmailAddressAdd);
+app.post(
+  '/api/settings/channels/email/domains/:id/verify-dev',
+  requireWorkspace,
+  handleEmailDomainVerifyDev,
+);
+
+app.post('/api/webhooks/ses', handleSesWebhook);
 
 // Inngest serve endpoint. The Inngest dev server (docker-compose) introspects
 // `/api/inngest` to discover registered functions; a POST to this URL
@@ -141,12 +162,17 @@ app.post(
 // resolves to the Inngest container itself.
 app.use(
   '/api/inngest',
-  // biome-ignore lint/suspicious/noExplicitAny: Inngest's serve typing surfaces a generic-erased context shape that doesn't match Hono's `Context` exactly across versions; safe at runtime.
   inngestServe({
     client: inngest,
-    functions: [outboundEmail],
+    functions: [
+      deliverMessage,
+      verifyDomain,
+      processProviderWebhook,
+      deliverMessageRecovery,
+      bounceRateWatchdog,
+    ],
     serveOrigin: process.env.INNGEST_SERVE_ORIGIN ?? 'http://host.docker.internal:3001',
-  }) as any,
+  }) as MiddlewareHandler,
 );
 
 // Mount better-auth's full handler at /api/auth/*. Better-auth handles:
@@ -211,7 +237,8 @@ app.post('/api/zero/mutate', async (c) => {
   });
   const body = (await c.req.raw.json()) as ReadonlyJSONValue;
 
-  const serverMutators = createServerMutators();
+  const postCommitTasks: PostCommitTask[] = [];
+  const serverMutators = createServerMutators(postCommitTasks);
 
   const response = await handleMutateRequest(
     getZql(),
@@ -225,6 +252,10 @@ app.post('/api/zero/mutate', async (c) => {
     body,
     'info',
   );
+
+  for (const task of postCommitTasks) {
+    await task();
+  }
 
   return c.json(response);
 });
@@ -251,10 +282,4 @@ const port = Number.parseInt(process.env.PORT ?? '3001', 10);
 
 serve({ fetch: app.fetch, port }, (info) => {
   console.log(`[opendesk-api] listening on http://localhost:${info.port}`);
-  // Phase 3a: outbox poller dispatches `email/send.requested` Inngest events
-  // for unprocessed `outbox.kind='email.send'` rows. Disable in tests via
-  // OUTBOX_POLL_DISABLED=1.
-  if (process.env.OUTBOX_POLL_DISABLED !== '1') {
-    startOutboxPoller();
-  }
 });

@@ -13,7 +13,7 @@ src/
 
 ## Notable patterns
 
-- **One source of truth for mutator logic.** The same code runs on the client (for optimistic UI) and on the server (in `apps/api/src/server-mutators.ts`, which wraps these to add post-commit logic like outbox writes / Inngest dispatch).
+- **One source of truth for mutator logic.** The same code runs on the client (for optimistic UI) and on the server (in `apps/api/src/server-mutators.ts`, which wraps these to add post-commit logic like Inngest dispatch).
 - **Three required steps per mutator**:
   1. **Validate input** (Zod schema in `args`).
   2. **Assert authorization** via helpers from `auth.ts`. Throw `MutationError` with the right `MutationErrorCode`.
@@ -58,7 +58,7 @@ defineMutators(mutators, {
   ticket: {
     create: defineMutator(createTicketArgs, async ({ tx, args, ctx }) => {
       await mutators.ticket.create.fn({ tx, args, ctx });        // shared client impl
-      await enqueueOutbox(tx, ctx.workspaceID, 'ticket.created', { ticketID: args.id });
+      postCommitTasks.push(() => inngest.send({ name: 'ticket/created', data: { ticketID: args.id } }));
     }),
   },
   // ...

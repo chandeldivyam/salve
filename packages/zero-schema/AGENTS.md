@@ -52,7 +52,7 @@ Lint rule (planned): ban raw `builder.<table>` access outside this file. Use the
 
 - Zero 1.3 logs `"No permissions found ... no tables will be syncable"` if you have neither `definePermissions` nor any other auth scaffolding. We dropped that warning by removing `definePermissions` entirely (per agents.md guidance) and rely on query-side filters + mutator assertions.
 - `<ZeroProvider context={...}>` requires the `context` shape to match the augmented `DefaultTypes.context`. We synthesise it client-side from the better-auth session (`{ sub, workspaceID, role: null }`); zero-cache receives the real JWT via cookie forwarding for true server-side auth.
-- `json<unknown>()` doesn't satisfy Zero's typed builder constraints. Use bare `json()` for free-form jsonb payloads (e.g. `audit_event.payload`, `outbox.payload`).
+- `json<unknown>()` doesn't satisfy Zero's typed builder constraints. Use bare `json()` for free-form jsonb payloads (e.g. `audit_event.payload`, delivery `provider_meta`).
 - `enableLegacyQueries: true` is needed only as a temporary measure when `defineQueries` isn't yet populated — flipping to `false` makes `z.query` undefined.
 
 ## Where to look

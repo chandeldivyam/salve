@@ -1,27 +1,37 @@
-// Phase 3a: email subsystem schema.
+// Phase 3a: polymorphic delivery schema.
 //
-// All tables are workspace-scoped. Backed by SES in prod / Mailpit in dev (raw
-// SMTP via nodemailer). Inbound is Phase 3b — `email_channel.inbound_localpart`
-// is reserved here as a write-target only.
-//
-// References:
-//   - Plan: "Email subsystem — multi-tenant BYO customer domain"
-//   - Research: tmp/research/atlas-email-deep-dive.md (§§3, 5, 6, 7, 8, 11)
+// `channel` is the cross-channel container. Email is the first implemented
+// driver, with email-only configuration split into `email_channel` and
+// address/domain tables. Later drivers add config and code, not schema churn.
 
+import { sql } from 'drizzle-orm';
 import {
+  boolean,
   index,
+  integer,
   jsonb,
   pgEnum,
   pgTable,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 import { organization } from './auth.js';
-import { message, ticket } from './domain.js';
+import { customer, message, ticket, ticketPriority } from './domain.js';
 
 // ---------- Enums ----------
+
+export const channelKind = pgEnum('channel_kind', [
+  'email',
+  'chat',
+  'whatsapp',
+  'sms',
+  'instagram',
+  'facebook',
+  'api_webhook',
+]);
 
 export const sendingDomainDnsStatus = pgEnum('sending_domain_dns_status', [
   'pending',
@@ -57,8 +67,34 @@ export const suppressionReason = pgEnum('suppression_reason', [
 
 // ---------- Tables ----------
 
+export const channel = pgTable(
+  'channel',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    kind: channelKind('kind').notNull(),
+    name: text('name').notNull(),
+    isDefault: boolean('is_default').notNull().default(false),
+    config: jsonb('config').notNull().default(sql`'{}'::jsonb`),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    workspaceKindIdx: index('channel_workspace_kind_idx').on(t.workspaceId, t.kind),
+    workspaceDefaultIdx: index('channel_workspace_default_idx').on(
+      t.workspaceId,
+      t.kind,
+      t.isDefault,
+    ),
+  }),
+);
+
 // `sending_domain` is the tenant's verified outbound identity (e.g. acme.com).
-// Phase 3a stubs DKIM tokens locally; Phase 3c calls SES CreateEmailIdentity.
+// Provider-specific state stays in providerMeta so SES implementation details
+// don't leak into the cross-channel contract.
 export const sendingDomain = pgTable(
   'sending_domain',
   {
@@ -68,7 +104,6 @@ export const sendingDomain = pgTable(
       .references(() => organization.id, { onDelete: 'cascade' }),
     domain: text('domain').notNull(),
     sesIdentityArn: text('ses_identity_arn'),
-    // Array of { name, value } CNAMEs as SES returns them.
     dkimTokens: jsonb('dkim_tokens'),
     mailFromSubdomain: text('mail_from_subdomain').notNull().default('mail'),
     dnsStatus: sendingDomainDnsStatus('dns_status').notNull().default('pending'),
@@ -76,6 +111,7 @@ export const sendingDomain = pgTable(
     lastVerifiedAt: timestamp('last_verified_at', { withTimezone: true }),
     suspendedAt: timestamp('suspended_at', { withTimezone: true }),
     suspendedReason: text('suspended_reason'),
+    providerMeta: jsonb('provider_meta').notNull().default(sql`'{}'::jsonb`),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -84,37 +120,69 @@ export const sendingDomain = pgTable(
       t.workspaceId,
       t.domain,
     ),
+    workspaceIdx: index('sending_domain_workspace_idx').on(t.workspaceId),
   }),
 );
 
-// `email_channel` is the per-workspace email destination. Inbound localpart
-// stays NULL until Phase 3b wires the SES inbound rule.
 export const emailChannel = pgTable(
   'email_channel',
+  {
+    channelId: uuid('channel_id')
+      .primaryKey()
+      .references(() => channel.id, { onDelete: 'cascade' }),
+    sendingDomainId: uuid('sending_domain_id').references(() => sendingDomain.id, {
+      onDelete: 'set null',
+    }),
+    fromName: text('from_name'),
+    signature: text('signature'),
+    defaultPriority: ticketPriority('default_priority').notNull().default('normal'),
+    threadingPrefs: jsonb('threading_prefs').notNull().default(sql`'{}'::jsonb`),
+    newTicketAfterClosedDays: integer('new_ticket_after_closed_days').notNull().default(14),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    sendingDomainIdx: index('email_channel_sending_domain_idx').on(t.sendingDomainId),
+  }),
+);
+
+export const emailAddress = pgTable(
+  'email_address',
   {
     id: uuid('id').primaryKey().defaultRandom(),
     workspaceId: text('workspace_id')
       .notNull()
       .references(() => organization.id, { onDelete: 'cascade' }),
-    name: text('name').notNull(),
-    inboundLocalpart: text('inbound_localpart'),
-    sendingDomainId: uuid('sending_domain_id').references(() => sendingDomain.id, {
-      onDelete: 'set null',
-    }),
-    isDefault: text('is_default').notNull().default('false'),
+    channelId: uuid('channel_id')
+      .notNull()
+      .references(() => channel.id, { onDelete: 'cascade' }),
+    sendingDomainId: uuid('sending_domain_id')
+      .notNull()
+      .references(() => sendingDomain.id, {
+        onDelete: 'cascade',
+      }),
+    localPart: text('local_part').notNull(),
+    fullAddress: text('full_address').notNull(),
+    canSend: boolean('can_send').notNull().default(true),
+    canReceive: boolean('can_receive').notNull().default(true),
+    isDefault: boolean('is_default').notNull().default(false),
+    defaultTeamId: text('default_team_id'),
+    label: text('label'),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
-    inboundLocalpartUnique: uniqueIndex('email_channel_inbound_localpart_unique').on(
-      t.inboundLocalpart,
+    workspaceIdx: index('email_address_workspace_idx').on(t.workspaceId),
+    channelIdx: index('email_address_channel_idx').on(t.channelId),
+    channelLocalPartUnique: uniqueIndex('email_address_channel_local_part_unique').on(
+      t.channelId,
+      t.localPart,
     ),
-    workspaceIdx: index('email_channel_workspace_idx').on(t.workspaceId),
+    fullAddressUnique: uniqueIndex('email_address_full_address_unique').on(t.fullAddress),
   }),
 );
 
-// `outbound_message` is the audit row for every send. The RFC Message-ID is
-// the join key for inbound thread matching (Phase 3b).
 export const outboundMessage = pgTable(
   'outbound_message',
   {
@@ -122,33 +190,38 @@ export const outboundMessage = pgTable(
     workspaceId: text('workspace_id')
       .notNull()
       .references(() => organization.id, { onDelete: 'cascade' }),
+    channelId: uuid('channel_id')
+      .notNull()
+      .references(() => channel.id, { onDelete: 'cascade' }),
+    emailAddressId: uuid('email_address_id').references(() => emailAddress.id, {
+      onDelete: 'set null',
+    }),
     ticketId: uuid('ticket_id')
       .notNull()
       .references(() => ticket.id, { onDelete: 'cascade' }),
     messageId: uuid('message_id')
       .notNull()
       .references(() => message.id, { onDelete: 'cascade' }),
-    rfcMessageId: text('rfc_message_id').notNull(),
-    sesMessageId: text('ses_message_id'),
-    fromAddress: text('from_address').notNull(),
-    toAddress: text('to_address').notNull(),
-    replyTo: text('reply_to').notNull(),
-    subject: text('subject').notNull(),
+    providerMessageId: text('provider_message_id'),
     status: outboundMessageStatus('status').notNull().default('queued'),
     error: text('error'),
     sentAt: timestamp('sent_at', { withTimezone: true }),
     deliveredAt: timestamp('delivered_at', { withTimezone: true }),
+    providerMeta: jsonb('provider_meta').notNull().default(sql`'{}'::jsonb`),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
-    rfcMessageIdIdx: index('outbound_message_rfc_message_id_idx').on(t.rfcMessageId),
+    messageUnique: uniqueIndex('outbound_message_message_unique').on(t.messageId),
+    providerUnique: uniqueIndex('outbound_message_channel_provider_unique').on(
+      t.channelId,
+      t.providerMessageId,
+    ),
     ticketIdx: index('outbound_message_ticket_idx').on(t.workspaceId, t.ticketId, t.createdAt),
+    statusIdx: index('outbound_message_status_idx').on(t.workspaceId, t.status, t.createdAt),
   }),
 );
 
-// Per-workspace block list. Auto-fills on hard bounce + complaint (Phase 3c
-// when SES events land); manual entries seed via UI in 3a+.
 export const suppression = pgTable(
   'suppression',
   {
@@ -156,14 +229,67 @@ export const suppression = pgTable(
     workspaceId: text('workspace_id')
       .notNull()
       .references(() => organization.id, { onDelete: 'cascade' }),
-    emailAddress: text('email_address').notNull(),
+    channelId: uuid('channel_id').references(() => channel.id, { onDelete: 'cascade' }),
+    target: text('target').notNull(),
     reason: suppressionReason('reason').notNull(),
+    providerMeta: jsonb('provider_meta').notNull().default(sql`'{}'::jsonb`),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
-    workspaceEmailUnique: uniqueIndex('suppression_workspace_email_unique').on(
+    workspaceTargetUnique: unique('suppression_workspace_channel_target_unique')
+      .on(t.workspaceId, t.channelId, t.target)
+      .nullsNotDistinct(),
+    workspaceIdx: index('suppression_workspace_idx').on(t.workspaceId),
+    targetIdx: index('suppression_target_idx').on(t.target),
+  }),
+);
+
+export const webhookEvent = pgTable(
+  'webhook_event',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: text('workspace_id').references(() => organization.id, { onDelete: 'cascade' }),
+    channelId: uuid('channel_id').references(() => channel.id, { onDelete: 'cascade' }),
+    source: text('source').notNull(),
+    eventType: text('event_type').notNull(),
+    providerMessageId: text('provider_message_id'),
+    payload: jsonb('payload').notNull().default(sql`'{}'::jsonb`),
+    processedAt: timestamp('processed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    sourceProviderIdx: index('webhook_event_source_provider_idx').on(t.source, t.providerMessageId),
+    workspaceIdx: index('webhook_event_workspace_idx').on(t.workspaceId, t.createdAt),
+    unprocessedIdx: index('webhook_event_unprocessed_idx').on(t.processedAt),
+  }),
+);
+
+export const customerChannelIdentity = pgTable(
+  'customer_channel_identity',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    channelId: uuid('channel_id')
+      .notNull()
+      .references(() => channel.id, { onDelete: 'cascade' }),
+    customerId: uuid('customer_id')
+      .notNull()
+      .references(() => customer.id, { onDelete: 'cascade' }),
+    externalIdentifier: text('external_identifier').notNull(),
+    providerMeta: jsonb('provider_meta').notNull().default(sql`'{}'::jsonb`),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    channelExternalUnique: uniqueIndex('customer_channel_identity_channel_external_unique').on(
+      t.channelId,
+      t.externalIdentifier,
+    ),
+    workspaceCustomerIdx: index('customer_channel_identity_workspace_customer_idx').on(
       t.workspaceId,
-      t.emailAddress,
+      t.customerId,
     ),
   }),
 );

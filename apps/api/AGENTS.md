@@ -21,7 +21,7 @@ Hono 4 server. Auth, JWT issuance, Zero server-mutators, file presign, webhooks 
 - **Two-pass auth middleware** in `src/middleware.ts`: pre-`next()` resolves the better-auth session from request headers and stamps `c.var.auth`; post-`next()` re-resolves against any newly-set `Set-Cookie` so the very first sign-up/sign-in request emits our JWT cookie alongside better-auth's session cookie.
 - **JWT issuance** (`src/jwt.ts`): HS256 with `AUTH_SECRET`. Same value is `ZERO_AUTH_SECRET` for zero-cache to verify. Claims: `{ sub, workspaceID, role, iat, exp }`. Cookie `jwt`, `HttpOnly`, `SameSite=Lax`, `Secure` only when `NODE_ENV=production`, 7-day expiry.
 - **Workspace switch** re-issues JWT with refreshed claims after verifying `member` table for the target org.
-- **Server-mutators** (`src/server-mutators.ts`): `defineMutators(clientMutators, { ... })` wrapping pattern from zbugs `server/server-mutators.ts:25-80`. Each override calls the shared client impl via `mutators.<ns>.<action>.fn({tx,args,ctx})`, then runs server-only post-commit logic (outbox writes, audit, Inngest dispatch in Phase 3).
+- **Server-mutators** (`src/server-mutators.ts`): `defineMutators(clientMutators, { ... })` wrapping pattern from zbugs `server/server-mutators.ts:25-80`. Each override calls the shared client impl via `mutators.<ns>.<action>.fn({tx,args,ctx})`, then runs server-only post-commit logic such as Inngest dispatch. Delivery uses post-commit `inngest.send`, not an outbox poller.
 - **Zero server adapter**: `zeroPostgresJS(schema, connectionString)` from `@rocicorp/zero/server`. We pass the connection string (not a constructed `postgres` client) to avoid driver-version-mismatch type clashes.
 - **CORS**: `hono/cors` mounted on `/api/*` gated to `BETTER_AUTH_TRUSTED_ORIGINS` (comma-separated env). In dev, the Vite proxy makes this unnecessary; CORS only kicks in for prod cross-origin.
 
@@ -49,7 +49,7 @@ GOOGLE_CLIENT_ID=                                  # optional, gated
 GOOGLE_CLIENT_SECRET=
 ```
 
-Phase 3 will add `MAILER_BACKEND={mailpit|ses}`, SES region/keys, S3 bucket name.
+Phase 3a adds `MAILER_BACKEND={mailpit|ses}`, SES region/webhook vars, and same-origin settings endpoints for email domains and addresses.
 
 ## Where to look
 
@@ -61,4 +61,7 @@ Phase 3 will add `MAILER_BACKEND={mailpit|ses}`, SES region/keys, S3 bucket name
 | `src/middleware.ts` | The two-pass auth middleware + `requireUser` / `requireWorkspace` guards. |
 | `src/server-mutators.ts` | Server-side wrapping of `@opendesk/mutators`. |
 | `src/files.ts` | S3/MinIO presign endpoints. |
-| `src/outbox.ts` | Phase-2b stub for outbox enqueue. Phase 3 wires Inngest dispatch. |
+| `src/inngest/events.ts` | Channel-agnostic Inngest event names and payload schemas. |
+| `src/inngest/functions/` | Delivery, domain verification, webhook processing, and recovery functions. |
+| `src/settings/email-domains.ts` | Email domain/address settings endpoints. |
+| `src/webhooks/ses.ts` | SES SNS webhook intake. |

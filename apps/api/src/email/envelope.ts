@@ -131,6 +131,8 @@ export interface EnvelopeSendingDomain {
   domain: string;
   /** "support" by default; can be overridden per channel. */
   sendingLocalpart?: string;
+  /** Fully qualified sending address, e.g. support@example.com. */
+  fullAddress?: string;
 }
 
 /**
@@ -148,6 +150,10 @@ export interface BuildEnvelopeArgs {
   message: EnvelopeMessage;
   customer: EnvelopeCustomer;
   sendingDomain: EnvelopeSendingDomain;
+  emailChannel?: {
+    fromName?: string | null;
+    signature?: string | null;
+  };
   /** Prior outbound + inbound messages on this ticket, oldest → newest. */
   priorMessages: PriorMessage[];
   /** Per-customer one-click unsubscribe token (we sign it later — placeholder for 3a). */
@@ -183,12 +189,13 @@ export function buildEnvelope(args: BuildEnvelopeArgs): BuiltEnvelope {
     args;
 
   const sendingLocal = sendingDomain.sendingLocalpart ?? 'support';
-  const fromAddr = `${sendingLocal}@${sendingDomain.domain}`;
+  const fromAddr = sendingDomain.fullAddress ?? `${sendingLocal}@${sendingDomain.domain}`;
 
   // Display name: prefer `<workspace.name> Support` unless the workspace name
   // already contains "support" (any case).
   const wsHasSupport = /support/i.test(workspace.name);
-  const fromDisplay = wsHasSupport ? workspace.name : `${workspace.name} Support`;
+  const fromDisplay =
+    args.emailChannel?.fromName ?? (wsHasSupport ? workspace.name : `${workspace.name} Support`);
   const fromHeader = formatAddress(fromDisplay, fromAddr);
 
   // Customer To. Display name from customer.displayName / .name if set.
@@ -252,14 +259,29 @@ export function buildEnvelope(args: BuildEnvelopeArgs): BuiltEnvelope {
 
   return {
     headers,
-    html: message.bodyHtml,
-    text: message.bodyText,
+    html: appendHtmlSignature(message.bodyHtml, args.emailChannel?.signature),
+    text: appendTextSignature(message.bodyText, args.emailChannel?.signature),
     from: fromAddr,
     to: customer.email,
     rfcMessageID,
     subject,
     replyTo,
   };
+}
+
+function appendHtmlSignature(html: string, signature?: string | null): string {
+  if (!signature?.trim()) return html;
+  return `${html}<br><br><div class="opendesk-email-signature">${signature}</div>`;
+}
+
+function appendTextSignature(text: string, signature?: string | null): string {
+  if (!signature?.trim()) return text;
+  const plain = signature
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .trim();
+  return plain ? `${text}\n\n-- \n${plain}` : text;
 }
 
 // ---------- Raw RFC 5322 serializer ----------

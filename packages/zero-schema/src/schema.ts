@@ -1,15 +1,5 @@
 // @opendesk/zero-schema — Zero schema mirroring the Drizzle source-of-truth in
-// `packages/db/src/schema/domain.ts` (and the auth tables we want exposed).
-//
-// Pattern: zbugs's `shared/schema.ts` (modern 1.x DSL — table()/string()/
-// number()/enumeration<T>()/relationships()/createSchema()).
-//
-// **Timestamps**: kept as `timestamptz` in Postgres (source of truth). Zero's
-// upstream PG → ZQL type map converts both `timestamp` and `timestamptz` to
-// `number` (floating-point epoch milliseconds). So we declare these columns
-// as `number()` here and rely on Zero's own conversion — no mirror columns,
-// no triggers, no manual ISO strings. (See
-// `packages/zero-cache/src/types/pg-data-type.ts` in the rocicorp/mono repo.)
+// `packages/db/src/schema`. Auth mirrors expose only UI-safe columns.
 
 import {
   boolean,
@@ -24,10 +14,7 @@ import {
   table,
 } from '@rocicorp/zero';
 
-// ---------- Auth tables (read-only mirror — agents need them to display
-// assignee names + member dropdowns once the inbox UI lands in Phase 2c).
-// We expose only the columns we'll read in the agent UI; sensitive ones
-// (password hashes, tokens, IPs) are deliberately omitted.
+// ---------- Auth tables
 
 const user = table('user')
   .columns({
@@ -46,9 +33,6 @@ const organization = table('organization')
   })
   .primaryKey('id');
 
-// `member` is the better-auth org-plugin junction. Note Drizzle calls the
-// columns userId/organizationId (camelCase, mapped 1:1 in PG), so Zero sees
-// the same names.
 const member = table('member')
   .columns({
     id: string(),
@@ -58,7 +42,7 @@ const member = table('member')
   })
   .primaryKey('id');
 
-// ---------- Domain tables (Phase 2a)
+// ---------- Domain tables
 
 const customer = table('customer')
   .columns({
@@ -66,8 +50,6 @@ const customer = table('customer')
     workspaceID: string().from('workspace_id'),
     email: string(),
     name: string().optional(),
-    // Phase 3a (research §3): a single human can have many addresses. The
-    // matcher (Phase 3b) accumulates these on every reply-to we observe.
     alternateEmails: json<string[]>().from('alternate_emails').optional(),
     displayName: string().from('display_name').optional(),
     avatarUrl: string().from('avatar_url').optional(),
@@ -88,6 +70,7 @@ const ticket = table('ticket')
     customerID: string().from('customer_id').optional(),
     assigneeID: string().from('assignee_id').optional(),
     createdByID: string().from('created_by_id').optional(),
+    closedByID: string().from('closed_by_id').optional(),
     createdAt: number().from('created_at'),
     updatedAt: number().from('updated_at'),
     firstResponseAt: number().from('first_response_at').optional(),
@@ -132,17 +115,28 @@ const auditEvent = table('auditEvent')
     ticketID: string().from('ticket_id'),
     actorID: string().from('actor_id').optional(),
     kind: string(),
-    // Audit payloads are arbitrary JSON; cast to ReadonlyJSONValue for Zero's
-    // typing. Mutators in Phase 2b stamp known shapes; consumers narrow.
     payload: json().optional(),
     createdAt: number().from('created_at'),
   })
   .primaryKey('id');
 
-// ---------- Email tables (Phase 3a) — read-only mirrors. Writes happen via
-// REST handlers (sending_domain) or the Inngest outbound-email function
-// (outbound_message). Clients subscribe to render the settings UI and the
-// per-message delivery status badge in the ticket thread.
+// ---------- Polymorphic delivery tables
+
+const channel = table('channel')
+  .columns({
+    id: string(),
+    workspaceID: string().from('workspace_id'),
+    kind: enumeration<
+      'email' | 'chat' | 'whatsapp' | 'sms' | 'instagram' | 'facebook' | 'api_webhook'
+    >(),
+    name: string(),
+    isDefault: boolean().from('is_default'),
+    config: json(),
+    deletedAt: number().from('deleted_at').optional(),
+    createdAt: number().from('created_at'),
+    updatedAt: number().from('updated_at'),
+  })
+  .primaryKey('id');
 
 const sendingDomain = table('sendingDomain')
   .from('sending_domain')
@@ -150,12 +144,15 @@ const sendingDomain = table('sendingDomain')
     id: string(),
     workspaceID: string().from('workspace_id'),
     domain: string(),
+    sesIdentityArn: string().from('ses_identity_arn').optional(),
     dkimTokens: json<Array<{ name: string; value: string }>>().from('dkim_tokens').optional(),
     mailFromSubdomain: string().from('mail_from_subdomain'),
     dnsStatus: enumeration<'pending' | 'verified' | 'failed' | 'suspended'>().from('dns_status'),
     dmarcStatus: enumeration<'pending' | 'present' | 'missing' | 'failing'>().from('dmarc_status'),
     lastVerifiedAt: number().from('last_verified_at').optional(),
     suspendedAt: number().from('suspended_at').optional(),
+    suspendedReason: string().from('suspended_reason').optional(),
+    providerMeta: json().from('provider_meta'),
     createdAt: number().from('created_at'),
     updatedAt: number().from('updated_at'),
   })
@@ -164,12 +161,33 @@ const sendingDomain = table('sendingDomain')
 const emailChannel = table('emailChannel')
   .from('email_channel')
   .columns({
+    channelID: string().from('channel_id'),
+    sendingDomainID: string().from('sending_domain_id').optional(),
+    fromName: string().from('from_name').optional(),
+    signature: string().optional(),
+    defaultPriority: enumeration<'low' | 'normal' | 'high' | 'urgent'>().from('default_priority'),
+    threadingPrefs: json().from('threading_prefs'),
+    newTicketAfterClosedDays: number().from('new_ticket_after_closed_days'),
+    createdAt: number().from('created_at'),
+    updatedAt: number().from('updated_at'),
+  })
+  .primaryKey('channelID');
+
+const emailAddress = table('emailAddress')
+  .from('email_address')
+  .columns({
     id: string(),
     workspaceID: string().from('workspace_id'),
-    name: string(),
-    inboundLocalpart: string().from('inbound_localpart').optional(),
-    sendingDomainID: string().from('sending_domain_id').optional(),
-    isDefault: string().from('is_default'),
+    channelID: string().from('channel_id'),
+    sendingDomainID: string().from('sending_domain_id'),
+    localPart: string().from('local_part'),
+    fullAddress: string().from('full_address'),
+    canSend: boolean().from('can_send'),
+    canReceive: boolean().from('can_receive'),
+    isDefault: boolean().from('is_default'),
+    defaultTeamID: string().from('default_team_id').optional(),
+    label: string().optional(),
+    deletedAt: number().from('deleted_at').optional(),
     createdAt: number().from('created_at'),
     updatedAt: number().from('updated_at'),
   })
@@ -180,14 +198,11 @@ const outboundMessage = table('outboundMessage')
   .columns({
     id: string(),
     workspaceID: string().from('workspace_id'),
+    channelID: string().from('channel_id'),
+    emailAddressID: string().from('email_address_id').optional(),
     ticketID: string().from('ticket_id'),
     messageID: string().from('message_id'),
-    rfcMessageID: string().from('rfc_message_id'),
-    sesMessageID: string().from('ses_message_id').optional(),
-    fromAddress: string().from('from_address'),
-    toAddress: string().from('to_address'),
-    replyTo: string().from('reply_to'),
-    subject: string(),
+    providerMessageID: string().from('provider_message_id').optional(),
     status: enumeration<
       | 'queued'
       | 'sending'
@@ -201,6 +216,48 @@ const outboundMessage = table('outboundMessage')
     error: string().optional(),
     sentAt: number().from('sent_at').optional(),
     deliveredAt: number().from('delivered_at').optional(),
+    providerMeta: json().from('provider_meta'),
+    createdAt: number().from('created_at'),
+    updatedAt: number().from('updated_at'),
+  })
+  .primaryKey('id');
+
+const suppression = table('suppression')
+  .columns({
+    id: string(),
+    workspaceID: string().from('workspace_id'),
+    channelID: string().from('channel_id').optional(),
+    target: string(),
+    reason: enumeration<'hard_bounce' | 'complaint' | 'manual' | 'unsubscribe'>(),
+    providerMeta: json().from('provider_meta'),
+    createdAt: number().from('created_at'),
+  })
+  .primaryKey('id');
+
+const webhookEvent = table('webhookEvent')
+  .from('webhook_event')
+  .columns({
+    id: string(),
+    workspaceID: string().from('workspace_id').optional(),
+    channelID: string().from('channel_id').optional(),
+    source: string(),
+    eventType: string().from('event_type'),
+    providerMessageID: string().from('provider_message_id').optional(),
+    payload: json(),
+    processedAt: number().from('processed_at').optional(),
+    createdAt: number().from('created_at'),
+  })
+  .primaryKey('id');
+
+const customerChannelIdentity = table('customerChannelIdentity')
+  .from('customer_channel_identity')
+  .columns({
+    id: string(),
+    workspaceID: string().from('workspace_id'),
+    channelID: string().from('channel_id'),
+    customerID: string().from('customer_id'),
+    externalIdentifier: string().from('external_identifier'),
+    providerMeta: json().from('provider_meta'),
     createdAt: number().from('created_at'),
     updatedAt: number().from('updated_at'),
   })
@@ -217,6 +274,11 @@ const userRelationships = relationships(user, ({ many }) => ({
   createdTickets: many({
     sourceField: ['id'],
     destField: ['createdByID'],
+    destSchema: ticket,
+  }),
+  closedTickets: many({
+    sourceField: ['id'],
+    destField: ['closedByID'],
     destSchema: ticket,
   }),
   memberships: many({
@@ -242,6 +304,11 @@ const organizationRelationships = relationships(organization, ({ many }) => ({
     destField: ['workspaceID'],
     destSchema: customer,
   }),
+  channels: many({
+    sourceField: ['id'],
+    destField: ['workspaceID'],
+    destSchema: channel,
+  }),
 }));
 
 const memberRelationships = relationships(member, ({ one }) => ({
@@ -262,6 +329,11 @@ const customerRelationships = relationships(customer, ({ many }) => ({
     sourceField: ['id'],
     destField: ['customerID'],
     destSchema: ticket,
+  }),
+  channelIdentities: many({
+    sourceField: ['id'],
+    destField: ['customerID'],
+    destSchema: customerChannelIdentity,
   }),
 }));
 
@@ -286,6 +358,11 @@ const ticketRelationships = relationships(ticket, ({ one, many }) => ({
     destField: ['id'],
     destSchema: user,
   }),
+  closedBy: one({
+    sourceField: ['closedByID'],
+    destField: ['id'],
+    destSchema: user,
+  }),
   messages: many({
     sourceField: ['id'],
     destField: ['ticketID'],
@@ -295,6 +372,11 @@ const ticketRelationships = relationships(ticket, ({ one, many }) => ({
     sourceField: ['id'],
     destField: ['ticketID'],
     destSchema: auditEvent,
+  }),
+  outboundMessages: many({
+    sourceField: ['id'],
+    destField: ['ticketID'],
+    destSchema: outboundMessage,
   }),
 }));
 
@@ -319,6 +401,11 @@ const messageRelationships = relationships(message, ({ one, many }) => ({
     destField: ['messageID'],
     destSchema: attachment,
   }),
+  outboundMessages: many({
+    sourceField: ['id'],
+    destField: ['messageID'],
+    destSchema: outboundMessage,
+  }),
 }));
 
 const attachmentRelationships = relationships(attachment, ({ one }) => ({
@@ -342,15 +429,63 @@ const auditEventRelationships = relationships(auditEvent, ({ one }) => ({
   }),
 }));
 
+const channelRelationships = relationships(channel, ({ one, many }) => ({
+  workspace: one({
+    sourceField: ['workspaceID'],
+    destField: ['id'],
+    destSchema: organization,
+  }),
+  emailChannel: one({
+    sourceField: ['id'],
+    destField: ['channelID'],
+    destSchema: emailChannel,
+  }),
+  emailAddresses: many({
+    sourceField: ['id'],
+    destField: ['channelID'],
+    destSchema: emailAddress,
+  }),
+  outboundMessages: many({
+    sourceField: ['id'],
+    destField: ['channelID'],
+    destSchema: outboundMessage,
+  }),
+  suppressions: many({
+    sourceField: ['id'],
+    destField: ['channelID'],
+    destSchema: suppression,
+  }),
+  webhookEvents: many({
+    sourceField: ['id'],
+    destField: ['channelID'],
+    destSchema: webhookEvent,
+  }),
+  customerIdentities: many({
+    sourceField: ['id'],
+    destField: ['channelID'],
+    destSchema: customerChannelIdentity,
+  }),
+}));
+
 const sendingDomainRelationships = relationships(sendingDomain, ({ many }) => ({
-  channels: many({
+  emailChannels: many({
     sourceField: ['id'],
     destField: ['sendingDomainID'],
     destSchema: emailChannel,
   }),
+  emailAddresses: many({
+    sourceField: ['id'],
+    destField: ['sendingDomainID'],
+    destSchema: emailAddress,
+  }),
 }));
 
 const emailChannelRelationships = relationships(emailChannel, ({ one }) => ({
+  channel: one({
+    sourceField: ['channelID'],
+    destField: ['id'],
+    destSchema: channel,
+  }),
   sendingDomain: one({
     sourceField: ['sendingDomainID'],
     destField: ['id'],
@@ -358,7 +493,35 @@ const emailChannelRelationships = relationships(emailChannel, ({ one }) => ({
   }),
 }));
 
+const emailAddressRelationships = relationships(emailAddress, ({ one, many }) => ({
+  channel: one({
+    sourceField: ['channelID'],
+    destField: ['id'],
+    destSchema: channel,
+  }),
+  sendingDomain: one({
+    sourceField: ['sendingDomainID'],
+    destField: ['id'],
+    destSchema: sendingDomain,
+  }),
+  outboundMessages: many({
+    sourceField: ['id'],
+    destField: ['emailAddressID'],
+    destSchema: outboundMessage,
+  }),
+}));
+
 const outboundMessageRelationships = relationships(outboundMessage, ({ one }) => ({
+  channel: one({
+    sourceField: ['channelID'],
+    destField: ['id'],
+    destSchema: channel,
+  }),
+  emailAddress: one({
+    sourceField: ['emailAddressID'],
+    destField: ['id'],
+    destSchema: emailAddress,
+  }),
   message: one({
     sourceField: ['messageID'],
     destField: ['id'],
@@ -368,6 +531,35 @@ const outboundMessageRelationships = relationships(outboundMessage, ({ one }) =>
     sourceField: ['ticketID'],
     destField: ['id'],
     destSchema: ticket,
+  }),
+}));
+
+const suppressionRelationships = relationships(suppression, ({ one }) => ({
+  channel: one({
+    sourceField: ['channelID'],
+    destField: ['id'],
+    destSchema: channel,
+  }),
+}));
+
+const webhookEventRelationships = relationships(webhookEvent, ({ one }) => ({
+  channel: one({
+    sourceField: ['channelID'],
+    destField: ['id'],
+    destSchema: channel,
+  }),
+}));
+
+const customerChannelIdentityRelationships = relationships(customerChannelIdentity, ({ one }) => ({
+  channel: one({
+    sourceField: ['channelID'],
+    destField: ['id'],
+    destSchema: channel,
+  }),
+  customer: one({
+    sourceField: ['customerID'],
+    destField: ['id'],
+    destSchema: customer,
   }),
 }));
 
@@ -383,9 +575,14 @@ export const schema = createSchema({
     message,
     attachment,
     auditEvent,
+    channel,
     sendingDomain,
     emailChannel,
+    emailAddress,
     outboundMessage,
+    suppression,
+    webhookEvent,
+    customerChannelIdentity,
   ],
   relationships: [
     userRelationships,
@@ -396,37 +593,18 @@ export const schema = createSchema({
     messageRelationships,
     attachmentRelationships,
     auditEventRelationships,
+    channelRelationships,
     sendingDomainRelationships,
     emailChannelRelationships,
+    emailAddressRelationships,
     outboundMessageRelationships,
+    suppressionRelationships,
+    webhookEventRelationships,
+    customerChannelIdentityRelationships,
   ],
-  // Phase 2b: legacy paths are off. All reads go through `defineQueries` (see
-  // `./queries.ts`) and all writes through `defineMutators` (see
-  // `@opendesk/mutators`). With `enableLegacy{Queries,Mutators}: false` Zero
-  // 1.3.0 refuses any direct `z.query.*` / `z.mutate.*` call, which is the
-  // structural enforcement we want — no caller can bypass `applyWorkspaceScope`
-  // or the assertion helpers.
   enableLegacyMutators: false,
   enableLegacyQueries: false,
 });
-
-// Permissions
-// -----------
-// Zero 1.3.0 marks `definePermissions` and the row-level DSL `@deprecated` in
-// favour of `defineMutators` / `defineQueries`. The Zero docs state outright:
-// "Zero does not have (or need) a first-class permission system like RLS.
-// Instead, you implement permissions ... in your queries and mutators
-// endpoints, and creating a Context object that contains the user's ID."
-// (https://zero.rocicorp.dev/docs/auth.md)
-//
-// We rely entirely on:
-//   1. `applyWorkspaceScope` in `./queries.ts` (read-side filter)
-//   2. `assertCanModifyTicket` etc. in `@opendesk/mutators/auth` (write-side)
-//
-// No `definePermissions` shim is exported here. Verified locally: zero-cache
-// 1.3.0 syncs custom-query results without any deployed permissions object.
-// If a future Zero release re-introduces a permissions requirement, add the
-// thin shim back here — DO NOT use it as a real auth boundary.
 
 export const builder = createBuilder(schema);
 
@@ -439,21 +617,21 @@ export type Ticket = Row<typeof schema.tables.ticket>;
 export type Message = Row<typeof schema.tables.message>;
 export type Attachment = Row<typeof schema.tables.attachment>;
 export type AuditEvent = Row<typeof schema.tables.auditEvent>;
+export type Channel = Row<typeof schema.tables.channel>;
 export type SendingDomain = Row<typeof schema.tables.sendingDomain>;
 export type EmailChannel = Row<typeof schema.tables.emailChannel>;
+export type EmailAddress = Row<typeof schema.tables.emailAddress>;
 export type OutboundMessage = Row<typeof schema.tables.outboundMessage>;
+export type Suppression = Row<typeof schema.tables.suppression>;
+export type WebhookEvent = Row<typeof schema.tables.webhookEvent>;
+export type CustomerChannelIdentity = Row<typeof schema.tables.customerChannelIdentity>;
 
-// AuthData is the JWT shape minted by apps/api (`apps/api/src/jwt.ts`). Mutators
-// in Phase 2b will read it via `ctx`.
 export type AuthData = {
   sub: string;
   workspaceID: string | null;
   role: 'owner' | 'admin' | 'agent' | null;
 };
 
-// Match zbugs's `shared/auth.ts:100-104`: context is `AuthData | undefined` so
-// queries/mutators can run on unauthenticated traffic (the assertions inside
-// reject it explicitly with `MutationError(NOT_LOGGED_IN)`).
 declare module '@rocicorp/zero' {
   interface DefaultTypes {
     schema: Schema;

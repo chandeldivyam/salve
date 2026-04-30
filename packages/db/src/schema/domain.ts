@@ -100,6 +100,7 @@ export const ticket = pgTable(
     // logic (research §1). Stamped by `ticket.close` mutator on transition to
     // closed (resolved doesn't fill it).
     closedAt: timestamp('closed_at', { withTimezone: true }),
+    closedById: text('closed_by_id').references(() => user.id, { onDelete: 'set null' }),
   },
   (t) => ({
     inboxIdx: index('ticket_inbox_idx').on(t.workspaceId, t.status, t.updatedAt),
@@ -179,22 +180,11 @@ export const auditEvent = pgTable(
   }),
 );
 
-// ---------- Outbox (Phase 2b) ----------
+// ---------- Legacy outbox (Phase 2b) ----------
 //
-// Pure server-side queue for "things that must leave the database after a write
-// commits": email dispatch, Inngest events, etc. Mutators (the server-side
-// half) write rows to this table inside the same transaction as the domain
-// write, so we get at-least-once delivery without two-phase commit.
-//
-// Phase 3 wires a Postgres LISTEN/NOTIFY subscriber that turns these rows into
-// Inngest events; Phase 2b only INSERTs and the worker is a TODO. Not mirrored
-// in the Zero schema — clients have no business reading this.
-//
-// The partial index `(processed_at) WHERE processed_at IS NULL` is the worker's
-// queue: a `SELECT ... FOR UPDATE SKIP LOCKED` against unprocessed rows. We
-// declare it as a normal index here and append the `WHERE` clause via raw SQL
-// in the migration (drizzle-kit doesn't expose partial indexes natively in
-// 0.31).
+// Retained for migration continuity only. Phase 3a delivery dispatches Inngest
+// events from server-mutator post-commit hooks; no runtime path polls this
+// table or writes new delivery work here.
 export const outbox = pgTable(
   'outbox',
   {

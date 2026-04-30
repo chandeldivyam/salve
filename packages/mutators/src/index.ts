@@ -8,8 +8,9 @@
 //     workspaceID; cross-workspace is a CROSS_WORKSPACE error)
 //   - emits an `audit_event` row for ticket mutations (ticket.* + message.*)
 //
-// Server-side post-commit hooks (Inngest dispatch, outbox writes for fan-out
-// e.g. `email.send` for `message.send`) live in `apps/api/src/server-mutators.ts`.
+// Server-side post-commit hooks (Inngest fan-out, e.g.
+// `delivery/message.requested` for `message.send`) live in
+// `apps/api/src/server-mutators.ts`.
 
 import { builder } from '@opendesk/zero-schema';
 import {
@@ -71,6 +72,7 @@ export type MessageAttachmentInput = z.infer<typeof messageAttachmentSchema>;
 export const sendMessageArgsSchema = z.object({
   id: idArg,
   ticketID: idArg,
+  emailAddressID: z.union([idArg, z.null()]).optional(),
   bodyHTML: z.string(),
   bodyText: z.string(),
   isInternal: z.boolean().optional(),
@@ -302,8 +304,9 @@ export const mutators = defineMutators({
       const ts = now();
       await tx.mutate.ticket.update({
         id: args.id,
-        status: 'resolved',
-        resolvedAt: ts,
+        status: 'closed',
+        closedAt: ts,
+        closedByID: auth.sub,
         updatedAt: ts,
       });
       await emitAudit(
@@ -312,7 +315,7 @@ export const mutators = defineMutators({
         {
           id: newID(),
           ticketID: args.id,
-          kind: 'ticket.resolved',
+          kind: 'ticket.closed',
         },
         ts,
       );
@@ -326,6 +329,8 @@ export const mutators = defineMutators({
         id: args.id,
         status: 'open',
         resolvedAt: undefined,
+        closedAt: undefined,
+        closedByID: undefined,
         updatedAt: ts,
       });
       await emitAudit(
@@ -403,10 +408,9 @@ export const mutators = defineMutators({
         ts,
       );
 
-      // Outbox fan-out for `email.send` happens in the server-mutator
-      // wrapper (`apps/api/src/server-mutators.ts`) — clients can't INSERT
-      // into the unmirrored `outbox` table. The wrapper re-checks the
-      // (`!isInternal && ticket.customerID`) condition there.
+      // Delivery fan-out for `delivery/message.requested` happens in the
+      // server-mutator wrapper (`apps/api/src/server-mutators.ts`). The
+      // wrapper re-checks the (`!isInternal && ticket.customerID`) condition.
     }),
   },
 });

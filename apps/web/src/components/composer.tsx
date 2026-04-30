@@ -11,12 +11,22 @@
 // The caller wires `onSend` to `mutators.message.send` with a generated
 // message id.
 
-import { Button, cn } from '@opendesk/ui';
+import {
+  Button,
+  cn,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from '@opendesk/ui';
 import Link from '@tiptap/extension-link';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import {
   Bold,
+  Check,
+  ChevronDown,
   Code,
   Italic,
   Link2,
@@ -40,10 +50,23 @@ export interface ComposerAttachment {
   sizeBytes: number;
 }
 
+export interface ComposerEmailAddress {
+  id: string;
+  fullAddress: string;
+  label?: string | null;
+  isDefault?: boolean | null;
+  sendingDomain?: {
+    id?: string;
+    domain?: string | null;
+    dnsStatus?: string | null;
+  } | null;
+}
+
 export interface ComposerSendArgs {
   bodyHTML: string;
   bodyText: string;
   isInternal: boolean;
+  emailAddressID?: string;
   attachments: ComposerAttachment[];
 }
 
@@ -51,6 +74,7 @@ interface ComposerProps {
   ticketID: string;
   disabled?: boolean;
   disabledReason?: string;
+  emailAddresses?: ComposerEmailAddress[];
   onSend: (args: ComposerSendArgs) => Promise<void> | void;
 }
 
@@ -91,12 +115,24 @@ async function uploadToS3(putUrl: string, file: File) {
   if (!res.ok) throw new Error(`s3 upload failed: ${res.status}`);
 }
 
-export function Composer({ ticketID, disabled, disabledReason, onSend }: ComposerProps) {
+export function Composer({
+  ticketID,
+  disabled,
+  disabledReason,
+  emailAddresses = [],
+  onSend,
+}: ComposerProps) {
   const [tab, setTab] = useState<'reply' | 'note'>('reply');
   const [uploads, setUploads] = useState<PendingUpload[]>([]);
   const [sending, setSending] = useState(false);
+  const [selectedEmailAddressID, setSelectedEmailAddressID] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const dropRef = useRef<HTMLDivElement | null>(null);
+
+  const defaultEmailAddress =
+    emailAddresses.find((address) => address.isDefault) ?? emailAddresses[0] ?? null;
+  const selectedEmailAddress =
+    emailAddresses.find((address) => address.id === selectedEmailAddressID) ?? defaultEmailAddress;
 
   const editor = useEditor({
     extensions: [
@@ -127,6 +163,18 @@ export function Composer({ ticketID, disabled, disabledReason, onSend }: Compose
     editor?.commands.clearContent(true);
     setUploads([]);
   }, [ticketID]);
+
+  useEffect(() => {
+    if (!emailAddresses.length) {
+      setSelectedEmailAddressID(null);
+      return;
+    }
+    setSelectedEmailAddressID((current) =>
+      current && emailAddresses.some((address) => address.id === current)
+        ? current
+        : (defaultEmailAddress?.id ?? null),
+    );
+  }, [emailAddresses, defaultEmailAddress?.id]);
 
   const handleFiles = useCallback(
     async (files: File[]) => {
@@ -203,6 +251,7 @@ export function Composer({ ticketID, disabled, disabledReason, onSend }: Compose
         bodyHTML: html,
         bodyText: text,
         isInternal: tab === 'note',
+        emailAddressID: tab === 'reply' ? (selectedEmailAddress?.id ?? undefined) : undefined,
         attachments,
       });
       editor.commands.clearContent(true);
@@ -210,7 +259,7 @@ export function Composer({ ticketID, disabled, disabledReason, onSend }: Compose
     } finally {
       setSending(false);
     }
-  }, [editor, sending, tab, uploads, onSend]);
+  }, [editor, sending, tab, uploads, onSend, selectedEmailAddress]);
 
   // Cmd/Ctrl+Enter submits.
   useEffect(() => {
@@ -244,7 +293,7 @@ export function Composer({ ticketID, disabled, disabledReason, onSend }: Compose
         tab === 'note' && 'border-amber-200 bg-amber-50/40',
       )}
     >
-      <div className="flex items-center gap-1 border-b border-slate-200 px-2 py-2">
+      <div className="flex flex-wrap items-center gap-1 border-b border-slate-200 px-2 py-2">
         <TabPill
           active={tab === 'reply'}
           icon={<MessageSquare className="h-3.5 w-3.5" />}
@@ -258,6 +307,13 @@ export function Composer({ ticketID, disabled, disabledReason, onSend }: Compose
           tone="amber"
           onClick={() => setTab('note')}
         />
+        {tab === 'reply' ? (
+          <FromPicker
+            addresses={emailAddresses}
+            selected={selectedEmailAddress}
+            onSelect={setSelectedEmailAddressID}
+          />
+        ) : null}
         <span className="mx-2 h-5 w-px bg-slate-200" />
         <ToolbarButton
           aria-label="Bold"
@@ -363,9 +419,14 @@ export function Composer({ ticketID, disabled, disabledReason, onSend }: Compose
         </div>
       ) : null}
 
-      <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50/40 px-3 py-2">
-        <span className="text-[11px] text-slate-400">
-          {tab === 'note' ? 'Visible to your team only' : 'Visible to the customer'} · ⌘↩ to send
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 bg-slate-50/40 px-3 py-2">
+        <span className="min-w-0 text-[11px] text-slate-400">
+          {tab === 'note'
+            ? 'Visible to your team only'
+            : selectedEmailAddress
+              ? `Visible to the customer from ${selectedEmailAddress.fullAddress}`
+              : 'Visible to the customer'}{' '}
+          · ⌘↩ to send
         </span>
         <Button
           size="sm"
@@ -421,6 +482,69 @@ function TabPill({
       {icon}
       {label}
     </button>
+  );
+}
+
+function FromPicker({
+  addresses,
+  selected,
+  onSelect,
+}: {
+  addresses: ComposerEmailAddress[];
+  selected: ComposerEmailAddress | null;
+  onSelect: (id: string) => void;
+}) {
+  if (addresses.length === 0) {
+    return (
+      <span className="ml-1 inline-flex min-w-0 items-center rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-500">
+        No send address
+      </span>
+    );
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="ml-1 inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
+        >
+          <span className="text-slate-400">From</span>
+          <span className="max-w-[220px] truncate font-medium text-slate-800 sm:max-w-[260px]">
+            {selected?.fullAddress ?? 'Choose address'}
+          </span>
+          <ChevronDown className="h-3 w-3 shrink-0 text-slate-400" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-[min(360px,calc(100vw-2rem))]">
+        <DropdownMenuLabel>Send from</DropdownMenuLabel>
+        {addresses.map((address) => {
+          const domain =
+            address.sendingDomain?.domain ?? address.fullAddress.split('@')[1] ?? 'email';
+          return (
+            <DropdownMenuItem
+              key={address.id}
+              onSelect={() => onSelect(address.id)}
+              className="items-start gap-2"
+            >
+              <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center">
+                {selected?.id === address.id ? <Check className="h-3.5 w-3.5" /> : null}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-medium text-slate-800">
+                  {address.fullAddress}
+                </span>
+                <span className="block truncate text-[11px] text-slate-500">
+                  {address.label ? `${address.label} · ` : ''}
+                  {domain}
+                  {address.isDefault ? ' · default' : ''}
+                </span>
+              </span>
+            </DropdownMenuItem>
+          );
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
