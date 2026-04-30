@@ -11,6 +11,11 @@ import { schema } from '@opendesk/zero-schema/schema';
 import { ZeroProvider } from '@rocicorp/zero/react';
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
 import { useMemo } from 'react';
+import {
+  RouteErrorFeedback,
+  RouteNotFoundFeedback,
+  RoutePendingFeedback,
+} from '@/components/route-feedback';
 import { fetchSession, type SessionData } from '@/lib/session-loader';
 import { ZERO_CACHE_URL } from '@/lib/zero';
 
@@ -22,6 +27,9 @@ export const Route = createFileRoute('/app')({
     }
     return { session };
   },
+  pendingComponent: RoutePendingFeedback,
+  errorComponent: RouteErrorFeedback,
+  notFoundComponent: RouteNotFoundFeedback,
   component: AppLayout,
 });
 

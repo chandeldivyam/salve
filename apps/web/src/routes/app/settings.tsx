@@ -22,15 +22,15 @@ function SettingsLayout() {
     <div className="flex min-h-dvh flex-col">
       <AppHeader />
       <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
-        <aside className="flex shrink-0 flex-col gap-1 border-b border-slate-200 bg-white px-3 py-4 sm:w-[240px] sm:border-r sm:border-b-0 sm:py-5">
-          <p className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400 sm:pb-2">
+        <aside className="flex shrink-0 flex-col gap-1 border-b border-border bg-surface px-3 py-4 sm:w-[240px] sm:border-r sm:border-b-0 sm:py-5">
+          <p className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:pb-2">
             Settings
           </p>
           <SettingsLink to="/app/settings/channels/email" active={isEmailChannel}>
             Email channel
           </SettingsLink>
         </aside>
-        <main className="flex min-w-0 flex-1 flex-col bg-slate-50">
+        <main className="flex min-w-0 flex-1 flex-col bg-background">
           <Outlet />
         </main>
       </div>
@@ -52,8 +52,8 @@ function SettingsLink({
       to={to}
       className={
         active
-          ? 'rounded-md bg-brand-50 px-2 py-1.5 text-sm font-medium text-brand-700 ring-1 ring-brand-100'
-          : 'rounded-md px-2 py-1.5 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+          ? 'rounded-md bg-brand-soft px-2 py-1.5 text-sm font-medium text-brand-soft-foreground ring-1 ring-brand-border'
+          : 'rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-surface-muted hover:text-foreground'
       }
     >
       {children}

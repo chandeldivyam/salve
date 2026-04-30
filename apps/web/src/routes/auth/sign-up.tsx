@@ -86,7 +86,7 @@ function SignUpPage() {
                 aria-describedby={fieldErrors.name ? 'name-error' : undefined}
               />
               {fieldErrors.name ? (
-                <p id="name-error" className="mt-1 text-sm text-red-600">
+                <p id="name-error" className="mt-1 text-sm text-danger-soft-foreground">
                   {fieldErrors.name}
                 </p>
               ) : null}
@@ -105,7 +105,7 @@ function SignUpPage() {
                 aria-describedby={fieldErrors.email ? 'email-error' : undefined}
               />
               {fieldErrors.email ? (
-                <p id="email-error" className="mt-1 text-sm text-red-600">
+                <p id="email-error" className="mt-1 text-sm text-danger-soft-foreground">
                   {fieldErrors.email}
                 </p>
               ) : null}
@@ -124,22 +124,26 @@ function SignUpPage() {
                 aria-describedby={fieldErrors.password ? 'password-error' : 'password-hint'}
               />
               {fieldErrors.password ? (
-                <p id="password-error" className="mt-1 text-sm text-red-600">
+                <p id="password-error" className="mt-1 text-sm text-danger-soft-foreground">
                   {fieldErrors.password}
                 </p>
               ) : (
-                <p id="password-hint" className="text-xs text-slate-500">
+                <p id="password-hint" className="text-xs text-muted-foreground">
                   At least 8 characters.
                 </p>
               )}
             </div>
-            {serverError ? <p className="text-sm text-red-600">{serverError}</p> : null}
+            {serverError ? (
+              <p role="alert" className="text-sm text-danger-soft-foreground">
+                {serverError}
+              </p>
+            ) : null}
             <Button type="submit" disabled={loading}>
               {loading ? 'Creating account…' : 'Create account'}
             </Button>
-            <p className="text-center text-sm text-slate-500">
+            <p className="text-center text-sm text-muted-foreground">
               Already have an account?{' '}
-              <Link className="font-medium text-brand-700 underline" to="/auth/sign-in">
+              <Link className="font-medium text-brand-soft-foreground underline" to="/auth/sign-in">
                 Sign in
               </Link>
             </p>

@@ -75,8 +75,8 @@ function EmailDomainsList() {
     <div className="mx-auto w-full max-w-3xl px-8 py-8">
       <header className="mb-6 flex items-start justify-between">
         <div>
-          <h1 className="text-lg font-semibold text-slate-900">Email domains</h1>
-          <p className="mt-1 max-w-xl text-sm text-slate-500">
+          <h1 className="text-lg font-semibold text-foreground">Email domains</h1>
+          <p className="mt-1 max-w-xl text-sm text-muted-foreground">
             Send email from your own domain. Add it here, install the DNS records, and we'll
             DKIM-sign every reply on your behalf.
           </p>
@@ -93,9 +93,9 @@ function EmailDomainsList() {
       {showForm ? (
         <form
           onSubmit={onSubmit}
-          className="mb-6 rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
+          className="mb-6 rounded-lg border border-border bg-surface p-4 shadow-sm"
         >
-          <label className="block text-xs font-medium text-slate-600" htmlFor="domain-input">
+          <label className="block text-xs font-medium text-muted-foreground" htmlFor="domain-input">
             Domain
           </label>
           <Input
@@ -107,7 +107,7 @@ function EmailDomainsList() {
             disabled={submitting}
             autoFocus
           />
-          {error ? <p className="mt-2 text-xs text-red-600">{error}</p> : null}
+          {error ? <p className="mt-2 text-xs text-danger-soft-foreground">{error}</p> : null}
           <div className="mt-3 flex justify-end gap-2">
             <Button
               size="sm"
@@ -130,30 +130,30 @@ function EmailDomainsList() {
       ) : null}
 
       {rows.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
+        <div className="rounded-lg border border-dashed border-border bg-surface p-8 text-center text-sm text-muted-foreground">
           No domains yet. Click <strong>Add domain</strong> above to start sending from your own
           address.
         </div>
       ) : (
-        <ul className="divide-y divide-slate-200 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+        <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-surface shadow-sm">
           {rows.map((d) => (
             <li key={d.id}>
               <Link
                 to="/app/settings/email/domains/$domainId"
                 params={{ domainId: d.id }}
                 className={cn(
-                  'flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-slate-50',
+                  'flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-surface-muted',
                 )}
               >
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-slate-900">{d.domain}</p>
-                  <p className="mt-0.5 text-[11px] text-slate-400">
+                  <p className="text-sm font-medium text-foreground">{d.domain}</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
                     Added {format(new Date(d.createdAt), 'MMM d, yyyy')}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge variant={statusVariant(d.dnsStatus)}>{d.dnsStatus}</Badge>
-                  <ChevronRight className="h-4 w-4 text-slate-400" />
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
                 </div>
               </Link>
             </li>

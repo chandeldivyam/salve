@@ -1,16 +1,24 @@
+import { zodResolver } from '@hookform/resolvers/zod';
 import {
-  Button,
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
   Input,
-  Label,
+  LoadingButton,
+  useFieldContext,
 } from '@opendesk/ui';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Controller, useForm } from 'react-hook-form';
+import { z } from 'zod';
 import { authClient, switchWorkspace } from '@/lib/auth-client';
+import { showSuccess, toUserErrorMessage } from '@/lib/feedback';
 
 export const Route = createFileRoute('/app/workspaces/new')({
   component: NewWorkspacePage,
@@ -25,22 +33,46 @@ function slugify(input: string): string {
     .slice(0, 48);
 }
 
+const workspaceSchema = z.object({
+  name: z.string().trim().min(2, 'At least 2 characters.'),
+  slug: z
+    .string()
+    .trim()
+    .min(2, 'At least 2 characters.')
+    .regex(/^[a-z0-9-]+$/, 'Lowercase letters, numbers, and hyphens only.'),
+});
+
+type WorkspaceFormValues = z.infer<typeof workspaceSchema>;
+
 function NewWorkspacePage() {
   const navigate = useNavigate();
-  const [name, setName] = useState('');
-  const [slug, setSlug] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    control,
+    formState: { errors, isSubmitting, dirtyFields },
+  } = useForm<WorkspaceFormValues>({
+    resolver: zodResolver(workspaceSchema),
+    defaultValues: { name: '', slug: '' },
+    mode: 'onSubmit',
+  });
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setLoading(true);
-    const finalSlug = slug || slugify(name);
-    const res = await authClient.organization.create({ name, slug: finalSlug });
+  const name = watch('name');
+  // Auto-derive the slug from the name until the user edits it directly.
+  useEffect(() => {
+    if (dirtyFields.slug) return;
+    setValue('slug', slugify(name ?? ''), { shouldValidate: false });
+  }, [name, dirtyFields.slug, setValue]);
+
+  async function onSubmit(values: WorkspaceFormValues) {
+    setServerError(null);
+    const finalSlug = values.slug || slugify(values.name);
+    const res = await authClient.organization.create({ name: values.name, slug: finalSlug });
     if (res.error) {
-      setLoading(false);
-      setError(res.error.message ?? 'Could not create workspace.');
+      setServerError(res.error.message ?? 'Could not create workspace.');
       return;
     }
     const orgID = (res.data as { id?: string } | null | undefined)?.id;
@@ -48,56 +80,111 @@ function NewWorkspacePage() {
       try {
         await switchWorkspace(orgID);
       } catch (err) {
-        setLoading(false);
-        setError(err instanceof Error ? err.message : 'Could not switch workspace.');
+        setServerError(toUserErrorMessage(err, 'Could not switch workspace.'));
         return;
       }
     }
-    setLoading(false);
+    showSuccess('Workspace created', `${values.name} is ready.`);
     await navigate({ to: '/app' });
   }
 
   return (
-    <div className="flex min-h-dvh items-center justify-center p-6">
+    <div className="flex min-h-dvh items-center justify-center bg-background p-6">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>Create a workspace</CardTitle>
+          <CardTitle as="h1">Create a workspace</CardTitle>
           <CardDescription>
             A workspace is your team's slice of Salve. You'll be its owner.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={onSubmit} className="grid gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="name">Workspace name</Label>
-              <Input
-                id="name"
-                value={name}
-                onChange={(e) => {
-                  setName(e.target.value);
-                  if (!slug) setSlug(slugify(e.target.value));
-                }}
-                placeholder="Acme Support"
-                required
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="slug">URL slug</Label>
-              <Input
-                id="slug"
-                value={slug}
-                onChange={(e) => setSlug(slugify(e.target.value))}
-                placeholder="acme-support"
-                required
-              />
-            </div>
-            {error ? <p className="text-sm text-red-600">{error}</p> : null}
-            <Button type="submit" disabled={loading}>
-              {loading ? 'Creating…' : 'Create workspace'}
-            </Button>
+          <form onSubmit={handleSubmit(onSubmit)} noValidate className="grid gap-4">
+            <FieldGroup>
+              <Field hasError={Boolean(errors.name)}>
+                <FieldLabel>Workspace name</FieldLabel>
+                <NameInput
+                  registration={register('name')}
+                  hasError={Boolean(errors.name)}
+                  placeholder="Acme Support"
+                />
+                <FieldError>{errors.name?.message}</FieldError>
+              </Field>
+              <Field hasError={Boolean(errors.slug)}>
+                <FieldLabel>URL slug</FieldLabel>
+                <Controller
+                  name="slug"
+                  control={control}
+                  render={({ field }) => (
+                    <SlugInput
+                      value={field.value}
+                      onBlur={field.onBlur}
+                      onChange={(value) => field.onChange(slugify(value))}
+                      hasError={Boolean(errors.slug)}
+                    />
+                  )}
+                />
+                <FieldError>{errors.slug?.message}</FieldError>
+              </Field>
+            </FieldGroup>
+            {serverError ? (
+              <p role="alert" className="text-sm text-danger-soft-foreground">
+                {serverError}
+              </p>
+            ) : null}
+            <LoadingButton type="submit" className="w-full" loading={isSubmitting}>
+              {isSubmitting ? 'Creating workspace…' : 'Create workspace'}
+            </LoadingButton>
           </form>
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function NameInput({
+  registration,
+  hasError,
+  placeholder,
+}: {
+  registration: ReturnType<ReturnType<typeof useForm<WorkspaceFormValues>>['register']>;
+  hasError: boolean;
+  placeholder?: string;
+}) {
+  const ctx = useFieldContext();
+  return (
+    <Input
+      id={ctx?.inputId}
+      placeholder={placeholder}
+      autoComplete="organization"
+      aria-invalid={hasError || undefined}
+      aria-describedby={hasError ? ctx?.errorId : undefined}
+      {...registration}
+    />
+  );
+}
+
+function SlugInput({
+  value,
+  onChange,
+  onBlur,
+  hasError,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onBlur: () => void;
+  hasError: boolean;
+}) {
+  const ctx = useFieldContext();
+  return (
+    <Input
+      id={ctx?.inputId}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      onBlur={onBlur}
+      placeholder="acme-support"
+      autoComplete="off"
+      aria-invalid={hasError || undefined}
+      aria-describedby={hasError ? ctx?.errorId : undefined}
+    />
   );
 }

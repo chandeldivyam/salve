@@ -51,15 +51,15 @@ function DomainDetail() {
   const [busy, setBusy] = useState(false);
 
   if (status?.type === 'unknown') {
-    return <div className="p-8 text-sm text-slate-400">Loading…</div>;
+    return <div className="p-8 text-sm text-muted-foreground">Loading…</div>;
   }
   if (!d) {
     return (
       <div className="p-8">
-        <Link to="/app/settings/email/domains" className="text-sm text-slate-500">
+        <Link to="/app/settings/email/domains" className="text-sm text-muted-foreground">
           ← Back
         </Link>
-        <p className="mt-4 text-sm text-slate-600">Domain not found.</p>
+        <p className="mt-4 text-sm text-muted-foreground">Domain not found.</p>
       </div>
     );
   }
@@ -108,14 +108,14 @@ function DomainDetail() {
     <div className="mx-auto w-full max-w-3xl px-8 py-8">
       <Link
         to="/app/settings/email/domains"
-        className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-800"
+        className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="h-3 w-3" /> Back to domains
       </Link>
 
       <header className="mt-3 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-lg font-semibold text-slate-900">{d.domain}</h1>
+          <h1 className="text-lg font-semibold text-foreground">{d.domain}</h1>
           <div className="mt-1 flex items-center gap-2">
             <Badge variant={statusVariant(d.dnsStatus)}>DNS: {d.dnsStatus}</Badge>
             <Badge variant={statusVariant(d.dmarcStatus === 'present' ? 'verified' : 'pending')}>
@@ -136,15 +136,15 @@ function DomainDetail() {
         </div>
       </header>
 
-      <p className="mt-3 max-w-xl text-sm text-slate-500">
+      <p className="mt-3 max-w-xl text-sm text-muted-foreground">
         Add the records below to your DNS provider. Once they propagate, we'll DKIM-sign every reply
-        as <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px]">support@{d.domain}</code>.
+        as <code className="rounded bg-muted px-1 py-0.5 text-[12px]">support@{d.domain}</code>.
       </p>
 
-      <section className="mt-6 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+      <section className="mt-6 overflow-hidden rounded-lg border border-border bg-surface shadow-sm">
         <table className="w-full text-left text-[13px]">
           <thead>
-            <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+            <tr className="border-b border-border bg-surface-muted text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
               <th className="px-3 py-2">Purpose</th>
               <th className="px-3 py-2">Type</th>
               <th className="px-3 py-2">Host</th>
@@ -156,12 +156,12 @@ function DomainDetail() {
               <tr
                 // biome-ignore lint/suspicious/noArrayIndexKey: stable list, not reordered
                 key={i}
-                className={cn(i !== records.length - 1 && 'border-b border-slate-100')}
+                className={cn(i !== records.length - 1 && 'border-b border-border')}
               >
-                <td className="px-3 py-2.5 font-medium text-slate-700">{r.kind}</td>
-                <td className="px-3 py-2.5 text-slate-500">{r.type}</td>
-                <td className="px-3 py-2.5 font-mono text-[12px] text-slate-800">{r.host}</td>
-                <td className="px-3 py-2.5 font-mono text-[12px] text-slate-800">
+                <td className="px-3 py-2.5 font-medium text-foreground">{r.kind}</td>
+                <td className="px-3 py-2.5 text-muted-foreground">{r.type}</td>
+                <td className="px-3 py-2.5 font-mono text-[12px] text-foreground">{r.host}</td>
+                <td className="px-3 py-2.5 font-mono text-[12px] text-foreground">
                   <CopyValue value={r.value} />
                 </td>
               </tr>
@@ -171,7 +171,7 @@ function DomainDetail() {
       </section>
 
       {d.dnsStatus !== 'verified' ? (
-        <p className="mt-4 text-xs text-slate-500">
+        <p className="mt-4 text-xs text-muted-foreground">
           DNS propagation can take up to an hour. After updating your records, click the verify
           button to re-check.
         </p>
@@ -204,9 +204,9 @@ function CopyValue({ value }: { value: string }) {
         )}
       >
         {copied ? (
-          <Check className="h-3 w-3 text-emerald-600" />
+          <Check className="h-3 w-3 text-success" />
         ) : (
-          <Copy className="h-3 w-3 text-slate-400" />
+          <Copy className="h-3 w-3 text-muted-foreground" />
         )}
       </span>
     </button>

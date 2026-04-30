@@ -20,9 +20,9 @@ export const ScrollArea = forwardRef<
     </ScrollAreaPrimitive.Viewport>
     <ScrollAreaPrimitive.Scrollbar
       orientation="vertical"
-      className="flex w-2 touch-none select-none border-l border-l-transparent p-[1px] transition-colors hover:bg-slate-100/40"
+      className="flex w-2 touch-none select-none border-l border-l-transparent p-[1px] transition-colors hover:bg-muted/60"
     >
-      <ScrollAreaPrimitive.Thumb className="relative flex-1 rounded-full bg-slate-300" />
+      <ScrollAreaPrimitive.Thumb className="relative flex-1 rounded-full bg-border-strong" />
     </ScrollAreaPrimitive.Scrollbar>
     <ScrollAreaPrimitive.Corner />
   </ScrollAreaPrimitive.Root>

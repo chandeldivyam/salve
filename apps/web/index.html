@@ -4,6 +4,34 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Salve · opendesk dev shell</title>
+    <script>
+      // Anti-FOUC: paint the right theme synchronously before any stylesheet
+      // or bundle parses. Mirrors STORAGE_KEY + VALID_MODES from
+      // apps/web/src/lib/theme.ts — keep them in sync.
+      (() => {
+        let stored = null;
+        let mode = 'system';
+        let resolved = 'light';
+        try {
+          stored = localStorage.getItem('salve.theme');
+        } catch (_e) {
+          // localStorage may be denied (e.g. Safari private mode).
+        }
+        mode = stored === 'light' || stored === 'dark' ? stored : 'system';
+        try {
+          resolved =
+            mode === 'system'
+              ? window.matchMedia('(prefers-color-scheme: dark)').matches
+                ? 'dark'
+                : 'light'
+              : mode;
+        } catch (_e) {
+          resolved = mode === 'dark' ? 'dark' : 'light';
+        }
+        if (resolved === 'dark') document.documentElement.classList.add('dark');
+        document.documentElement.style.colorScheme = resolved;
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

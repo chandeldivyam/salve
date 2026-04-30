@@ -24,7 +24,7 @@ export const DropdownMenuContent = forwardRef<
       ref={ref}
       sideOffset={sideOffset}
       className={cn(
-        'z-50 min-w-[10rem] overflow-hidden rounded-md border border-slate-200 bg-white p-1 text-sm text-slate-700 shadow-lg',
+        'z-50 min-w-[10rem] overflow-hidden rounded-md border border-border bg-popover p-1 text-sm text-popover-foreground shadow-lg',
         'data-[state=open]:animate-in data-[state=closed]:animate-out',
         className,
       )}
@@ -42,7 +42,7 @@ export const DropdownMenuItem = forwardRef<
     ref={ref}
     className={cn(
       'relative flex cursor-pointer select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors',
-      'focus:bg-brand-50 focus:text-brand-900 data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+      'focus:bg-brand-soft focus:text-brand-soft-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
       inset && 'pl-8',
       className,
     )}
@@ -58,7 +58,7 @@ export const DropdownMenuCheckboxItem = forwardRef<
   <DropdownMenuPrimitive.CheckboxItem
     ref={ref}
     className={cn(
-      'relative flex cursor-pointer select-none items-center gap-2 rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none focus:bg-brand-50 focus:text-brand-900',
+      'relative flex cursor-pointer select-none items-center gap-2 rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none focus:bg-brand-soft focus:text-brand-soft-foreground',
       className,
     )}
     checked={checked}
@@ -81,7 +81,7 @@ export const DropdownMenuLabel = forwardRef<
   <DropdownMenuPrimitive.Label
     ref={ref}
     className={cn(
-      'px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400',
+      'px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground',
       inset && 'pl-8',
       className,
     )}
@@ -96,12 +96,15 @@ export const DropdownMenuSeparator = forwardRef<
 >(({ className, ...props }, ref) => (
   <DropdownMenuPrimitive.Separator
     ref={ref}
-    className={cn('-mx-1 my-1 h-px bg-slate-100', className)}
+    className={cn('-mx-1 my-1 h-px bg-border', className)}
     {...props}
   />
 ));
 DropdownMenuSeparator.displayName = 'DropdownMenuSeparator';
 
 export const DropdownMenuShortcut = ({ className, ...props }: HTMLAttributes<HTMLSpanElement>) => (
-  <span className={cn('ml-auto text-[11px] tracking-wide text-slate-400', className)} {...props} />
+  <span
+    className={cn('ml-auto text-[11px] tracking-wide text-muted-foreground', className)}
+    {...props}
+  />
 );

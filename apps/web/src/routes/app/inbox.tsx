@@ -26,10 +26,10 @@ function InboxLayout() {
     <div className="flex h-dvh flex-col">
       <AppHeader />
       <div className="flex min-h-0 flex-1">
-        <aside className="flex w-[360px] shrink-0 border-r border-slate-200 bg-white">
+        <aside className="flex w-[360px] shrink-0 border-r border-border bg-surface">
           <InboxList selectedTicketID={params.ticketId ?? null} currentUserID={userID} />
         </aside>
-        <main className="flex min-w-0 flex-1 bg-slate-50">
+        <main className="flex min-w-0 flex-1 bg-background">
           <Outlet />
         </main>
       </div>

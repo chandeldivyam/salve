@@ -218,8 +218,8 @@ function EmailChannelSettings() {
     <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-6 sm:px-8">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-lg font-semibold text-slate-900">Email channel</h1>
-          <p className="mt-1 max-w-2xl text-sm text-slate-500">
+          <h1 className="text-lg font-semibold text-foreground">Email channel</h1>
+          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
             Manage outbound domains, receiving addresses, routing, and suppressed recipients for
             this workspace.
           </p>
@@ -256,16 +256,16 @@ function EmailChannelSettings() {
 
       <ForwardingHintBar addressCount={addresses.length} />
 
-      <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-200 px-4 py-3">
-          <h2 className="text-sm font-semibold text-slate-900">Domains and addresses</h2>
+      <section className="overflow-hidden rounded-lg border border-border bg-surface shadow-sm">
+        <div className="border-b border-border px-4 py-3">
+          <h2 className="text-sm font-semibold text-foreground">Domains and addresses</h2>
         </div>
         {domains.length === 0 ? (
-          <div className="px-4 py-8 text-center text-sm text-slate-500">
+          <div className="px-4 py-8 text-center text-sm text-muted-foreground">
             Add a domain before creating send or receive addresses.
           </div>
         ) : (
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-border">
             {domains.map((domain) => {
               const domainAddresses = mergeAddresses(
                 addressesByDomain.get(domain.id) ?? [],
@@ -317,11 +317,11 @@ function AddDomainForm({ onDone }: { onDone: () => void }) {
     <form
       noValidate
       onSubmit={onSubmit}
-      className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
+      className="rounded-lg border border-border bg-surface p-4 shadow-sm"
     >
       <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
         <div className="min-w-0">
-          <label className="block text-xs font-medium text-slate-600" htmlFor="domain-input">
+          <label className="block text-xs font-medium text-muted-foreground" htmlFor="domain-input">
             Domain
           </label>
           <Input
@@ -334,7 +334,7 @@ function AddDomainForm({ onDone }: { onDone: () => void }) {
             className="mt-1"
             autoFocus
           />
-          {error ? <p className="mt-1 text-xs text-red-600">{error}</p> : null}
+          {error ? <p className="mt-1 text-xs text-danger-soft-foreground">{error}</p> : null}
         </div>
         <div className="flex justify-end gap-2">
           <Button size="sm" type="button" variant="outline" onClick={onDone} disabled={submitting}>
@@ -351,21 +351,21 @@ function AddDomainForm({ onDone }: { onDone: () => void }) {
 
 function ForwardingHintBar({ addressCount }: { addressCount: number }) {
   return (
-    <section className="grid gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm sm:grid-cols-2">
-      <div className="flex min-w-0 items-center gap-2 text-xs text-slate-600">
+    <section className="grid gap-2 rounded-lg border border-border bg-surface px-4 py-3 shadow-sm sm:grid-cols-2">
+      <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
         <Inbox className="h-4 w-4 shrink-0 text-brand-600" />
         <span className="truncate">
           {addressCount} configured {addressCount === 1 ? 'address' : 'addresses'} forward into{' '}
-          <code className="font-mono text-[11px] text-slate-800">
+          <code className="font-mono text-[11px] text-foreground">
             inbound+ws_&lt;workspace&gt;@{inboundEmailDomain}
           </code>
         </span>
       </div>
-      <div className="flex min-w-0 items-center gap-2 text-xs text-slate-600">
+      <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
         <Reply className="h-4 w-4 shrink-0 text-brand-600" />
         <span className="truncate">
           Thread replies route through{' '}
-          <code className="font-mono text-[11px] text-slate-800">*@{replyEmailDomain}</code>
+          <code className="font-mono text-[11px] text-foreground">*@{replyEmailDomain}</code>
         </span>
       </div>
     </section>
@@ -426,11 +426,11 @@ function AddAddressForm({
     <form
       noValidate
       onSubmit={onSubmit}
-      className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
+      className="rounded-lg border border-border bg-surface p-4 shadow-sm"
     >
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
         <div className="min-w-0">
-          <p className="mb-1 text-xs font-medium text-slate-600">Domain</p>
+          <p className="mb-1 text-xs font-medium text-muted-foreground">Domain</p>
           <DomainPicker
             domains={domains}
             selectedDomain={selectedDomain}
@@ -439,7 +439,10 @@ function AddAddressForm({
           />
         </div>
         <div className="min-w-0">
-          <label className="block text-xs font-medium text-slate-600" htmlFor="localpart-input">
+          <label
+            className="block text-xs font-medium text-muted-foreground"
+            htmlFor="localpart-input"
+          >
             Local part
           </label>
           <Input
@@ -453,7 +456,7 @@ function AddAddressForm({
           />
         </div>
         <div className="min-w-0">
-          <label className="block text-xs font-medium text-slate-600" htmlFor="label-input">
+          <label className="block text-xs font-medium text-muted-foreground" htmlFor="label-input">
             Label
           </label>
           <Input
@@ -467,7 +470,7 @@ function AddAddressForm({
         </div>
         <div className="min-w-0 lg:col-span-3">
           <label
-            className="block text-xs font-medium text-slate-600"
+            className="block text-xs font-medium text-muted-foreground"
             htmlFor="signature-override-input"
           >
             Signature override
@@ -478,7 +481,7 @@ function AddAddressForm({
             value={signatureHTML}
             onChange={(e) => setSignatureHTML(e.target.value)}
             disabled={submitting}
-            className="mt-1 min-h-20 w-full resize-y rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-1 min-h-20 w-full resize-y rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50"
           />
         </div>
         <div className="flex justify-end gap-2">
@@ -495,7 +498,7 @@ function AddAddressForm({
         </div>
       </div>
       {selectedDomain ? (
-        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
           <span className="truncate">
             Address: {localPart.trim() || 'local'}@{selectedDomain.domain}
           </span>
@@ -507,7 +510,7 @@ function AddAddressForm({
           </span>
         </div>
       ) : null}
-      {error ? <p className="mt-2 text-xs text-red-600">{error}</p> : null}
+      {error ? <p className="mt-2 text-xs text-danger-soft-foreground">{error}</p> : null}
     </form>
   );
 }
@@ -528,10 +531,10 @@ function DomainPicker({
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="inline-flex h-9 w-full min-w-0 items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 hover:bg-slate-50"
+          className="inline-flex h-9 w-full min-w-0 items-center justify-between gap-2 rounded-md border border-border bg-surface px-3 text-sm text-foreground hover:bg-surface-muted"
         >
           <span className="truncate">{selectedDomain?.domain ?? 'Choose domain'}</span>
-          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-[min(320px,calc(100vw-2rem))]">
@@ -582,13 +585,13 @@ function DomainRow({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <p className="truncate text-sm font-semibold text-slate-900">{domain.domain}</p>
+            <p className="truncate text-sm font-semibold text-foreground">{domain.domain}</p>
             <Badge variant={domainStatusVariant(domain.dnsStatus)}>DNS: {domain.dnsStatus}</Badge>
             <Badge variant={domain.dmarcStatus === 'present' ? 'success' : 'warning'}>
               DMARC: {domain.dmarcStatus}
             </Badge>
           </div>
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-xs text-muted-foreground">
             Added {format(new Date(domain.createdAt), 'MMM d, yyyy')}
           </p>
         </div>
@@ -611,11 +614,11 @@ function DomainRow({
       </div>
 
       {addresses.length === 0 ? (
-        <div className="mt-3 border-y border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-500">
+        <div className="mt-3 border-y border-dashed border-border bg-surface-muted px-3 py-3 text-sm text-muted-foreground">
           No send or receive addresses on this domain yet.
         </div>
       ) : (
-        <div className="mt-3 divide-y divide-slate-100 border-y border-slate-100">
+        <div className="mt-3 divide-y divide-border border-y border-border">
           {addresses.map((address) => (
             <AddressRow
               key={address.id}
@@ -650,7 +653,7 @@ function AddressRow({
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-start">
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <p className="break-all text-sm font-medium text-slate-800">{address.fullAddress}</p>
+            <p className="break-all text-sm font-medium text-foreground">{address.fullAddress}</p>
             {address.isDefault ? <Badge variant="default">Default</Badge> : null}
           </div>
           <div className="mt-1 flex flex-wrap gap-1.5">
@@ -664,15 +667,15 @@ function AddressRow({
           </div>
         </div>
 
-        <div className="min-w-0 text-xs text-slate-500">
-          <p className="flex items-center gap-1.5 font-medium text-slate-700">
+        <div className="min-w-0 text-xs text-muted-foreground">
+          <p className="flex items-center gap-1.5 font-medium text-foreground">
             <Inbox className="h-3.5 w-3.5 text-brand-600" />
             Forwarding
           </p>
           <div className="mt-1 flex min-w-0 items-center gap-1.5">
             <span className="truncate">{address.fullAddress}</span>
-            <ArrowRight className="h-3 w-3 shrink-0 text-slate-300" />
-            <code className="truncate font-mono text-[11px] text-slate-700">
+            <ArrowRight className="h-3 w-3 shrink-0 text-border-strong" />
+            <code className="truncate font-mono text-[11px] text-foreground">
               {inboundForwardingTarget(address)}
             </code>
           </div>
@@ -681,8 +684,8 @@ function AddressRow({
           </p>
         </div>
 
-        <div className="min-w-0 text-xs text-slate-500">
-          <p className="flex items-center gap-1.5 font-medium text-slate-700">
+        <div className="min-w-0 text-xs text-muted-foreground">
+          <p className="flex items-center gap-1.5 font-medium text-foreground">
             <RouteIcon className="h-3.5 w-3.5 text-brand-600" />
             Routing
           </p>
@@ -706,8 +709,8 @@ function AddressRow({
         </div>
       </div>
 
-      <div className="mt-2 flex min-w-0 items-start gap-1.5 text-xs text-slate-500">
-        <Signature className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" />
+      <div className="mt-2 flex min-w-0 items-start gap-1.5 text-xs text-muted-foreground">
+        <Signature className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         {signatureOverride ? (
           <span className="line-clamp-2 min-w-0 break-words">
             Signature override: {stripTags(signatureOverride)}
@@ -739,7 +742,7 @@ function RoutingRuleSummary({
 }) {
   if (!routingRulesAvailable) {
     return (
-      <p className="mt-1 flex items-center gap-1.5 text-amber-700">
+      <p className="mt-1 flex items-center gap-1.5 text-warning-soft-foreground">
         <AlertCircle className="h-3.5 w-3.5 shrink-0" />
         Routing query pending
       </p>
@@ -763,14 +766,14 @@ function RoutingRuleSummary({
         const agentID = routingRuleAgentID(rule);
         return (
           <p key={rule.id} className="truncate">
-            <span className="font-medium text-slate-700">{address.fullAddress}</span> {'->'}{' '}
+            <span className="font-medium text-foreground">{address.fullAddress}</span> {'->'}{' '}
             {priority ?? 'normal'}
             {teamID ? ` / team ${shortID(teamID)}` : ' / team default'}
             {agentID ? ` / agent ${shortID(agentID)}` : ''}
           </p>
         );
       })}
-      {rules.length > 2 ? <p className="text-slate-400">+{rules.length - 2} more</p> : null}
+      {rules.length > 2 ? <p className="text-muted-foreground">+{rules.length - 2} more</p> : null}
     </div>
   );
 }
@@ -818,21 +821,21 @@ function RoutingRuleForm({
   }
 
   return (
-    <form noValidate onSubmit={onSubmit} className="mt-3 border-t border-slate-100 pt-3">
+    <form noValidate onSubmit={onSubmit} className="mt-3 border-t border-border pt-3">
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
         <div className="min-w-0">
-          <p className="mb-1 text-xs font-medium text-slate-600">Destination</p>
-          <div className="flex h-9 min-w-0 items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700">
+          <p className="mb-1 text-xs font-medium text-muted-foreground">Destination</p>
+          <div className="flex h-9 min-w-0 items-center rounded-md border border-border bg-surface-muted px-3 text-sm text-foreground">
             <span className="truncate">{address.fullAddress}</span>
           </div>
         </div>
         <div className="min-w-0">
-          <p className="mb-1 text-xs font-medium text-slate-600">Priority</p>
+          <p className="mb-1 text-xs font-medium text-muted-foreground">Priority</p>
           <PriorityPicker value={setPriority} onChange={setSetPriority} />
         </div>
         <div className="min-w-0">
           <label
-            className="block text-xs font-medium text-slate-600"
+            className="block text-xs font-medium text-muted-foreground"
             htmlFor={`team-${address.id}`}
           >
             Default team
@@ -847,7 +850,7 @@ function RoutingRuleForm({
           />
         </div>
         <div className="min-w-0">
-          <p className="mb-1 text-xs font-medium text-slate-600">Default agent</p>
+          <p className="mb-1 text-xs font-medium text-muted-foreground">Default agent</p>
           <AgentPicker members={members} value={assignAgentID} onChange={setAssignAgentID} />
         </div>
         <div className="flex justify-end gap-2">
@@ -865,7 +868,7 @@ function RoutingRuleForm({
           </Button>
         </div>
       </div>
-      {error ? <p className="mt-2 text-xs text-red-600">{error}</p> : null}
+      {error ? <p className="mt-2 text-xs text-danger-soft-foreground">{error}</p> : null}
     </form>
   );
 }
@@ -882,10 +885,10 @@ function PriorityPicker({
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="inline-flex h-9 w-full min-w-0 items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 hover:bg-slate-50"
+          className="inline-flex h-9 w-full min-w-0 items-center justify-between gap-2 rounded-md border border-border bg-surface px-3 text-sm text-foreground hover:bg-surface-muted"
         >
           <span className="truncate capitalize">{value}</span>
-          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-[min(220px,calc(100vw-2rem))]">
@@ -918,12 +921,12 @@ function AgentPicker({
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="inline-flex h-9 w-full min-w-0 items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 hover:bg-slate-50"
+          className="inline-flex h-9 w-full min-w-0 items-center justify-between gap-2 rounded-md border border-border bg-surface px-3 text-sm text-foreground hover:bg-surface-muted"
         >
           <span className="truncate">
             {selected ? (selected.user?.name ?? selected.user?.email ?? value) : 'Any agent'}
           </span>
-          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-[min(300px,calc(100vw-2rem))]">
@@ -932,7 +935,7 @@ function AgentPicker({
           <span className="grid h-4 w-4 place-items-center">
             {!value ? <Check className="h-3.5 w-3.5" /> : null}
           </span>
-          <UserRound className="h-3.5 w-3.5 text-slate-400" />
+          <UserRound className="h-3.5 w-3.5 text-muted-foreground" />
           Any agent
         </DropdownMenuItem>
         {members.map((member) => {
@@ -943,7 +946,7 @@ function AgentPicker({
               <span className="grid h-4 w-4 place-items-center">
                 {value === id ? <Check className="h-3.5 w-3.5" /> : null}
               </span>
-              <UserRound className="h-3.5 w-3.5 text-slate-400" />
+              <UserRound className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="truncate">{member.user?.name ?? member.user?.email ?? id}</span>
             </DropdownMenuItem>
           );
@@ -955,19 +958,19 @@ function AgentPicker({
 
 function SuppressionList({ rows }: { rows: Suppression[] }) {
   return (
-    <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-200 px-4 py-3">
-        <h2 className="text-sm font-semibold text-slate-900">Suppressions</h2>
+    <section className="overflow-hidden rounded-lg border border-border bg-surface shadow-sm">
+      <div className="border-b border-border px-4 py-3">
+        <h2 className="text-sm font-semibold text-foreground">Suppressions</h2>
       </div>
       {rows.length === 0 ? (
-        <div className="px-4 py-8 text-center text-sm text-slate-500">
+        <div className="px-4 py-8 text-center text-sm text-muted-foreground">
           No suppressed recipients.
         </div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[620px] text-left text-[13px]">
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+              <tr className="border-b border-border bg-surface-muted text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                 <th className="px-3 py-2">Target</th>
                 <th className="px-3 py-2">Reason</th>
                 <th className="px-3 py-2">Channel</th>
@@ -982,13 +985,13 @@ function SuppressionList({ rows }: { rows: Suppression[] }) {
                 return (
                   <tr
                     key={row.id}
-                    className={cn(index !== rows.length - 1 && 'border-b border-slate-100')}
+                    className={cn(index !== rows.length - 1 && 'border-b border-border')}
                   >
-                    <td className="max-w-[240px] truncate px-3 py-2.5 font-medium text-slate-800">
+                    <td className="max-w-[240px] truncate px-3 py-2.5 font-medium text-foreground">
                       {target}
                     </td>
-                    <td className="px-3 py-2.5 text-slate-600">{row.reason}</td>
-                    <td className="px-3 py-2.5 text-slate-600">{channel}</td>
+                    <td className="px-3 py-2.5 text-muted-foreground">{row.reason}</td>
+                    <td className="px-3 py-2.5 text-muted-foreground">{channel}</td>
                     <td className="px-3 py-2.5">
                       <Badge variant={status === 'active' ? 'danger' : 'muted'}>{status}</Badge>
                     </td>

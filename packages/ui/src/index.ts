@@ -32,11 +32,25 @@ export {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from './dropdown-menu.js';
+export {
+  Field,
+  FieldDescription,
+  FieldError,
+  type FieldErrorProps,
+  FieldGroup,
+  FieldLabel,
+  type FieldLabelProps,
+  type FieldProps,
+  useFieldContext,
+} from './field.js';
+export { FormActions, type FormActionsProps } from './form-actions.js';
 export { Input, type InputProps } from './input.js';
 export { Label } from './label.js';
+export { LoadingButton, type LoadingButtonProps } from './loading-button.js';
 export { Logo, type LogoProps } from './logo.js';
 export { ScrollArea } from './scroll-area.js';
 export { Separator } from './separator.js';
 export { Skeleton } from './skeleton.js';
+export { Textarea, type TextareaProps } from './textarea.js';
 export { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './tooltip.js';
 export { cn } from './utils.js';

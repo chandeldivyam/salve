@@ -163,7 +163,7 @@ export function Composer({
     editorProps: {
       attributes: {
         class:
-          'prose prose-sm max-w-none focus:outline-none min-h-[100px] px-4 py-3 text-[13.5px] text-slate-800 leading-relaxed',
+          'prose prose-sm max-w-none focus:outline-none min-h-[100px] px-4 py-3 text-[13.5px] text-surface-foreground leading-relaxed',
       },
     },
   });
@@ -292,8 +292,8 @@ export function Composer({
 
   if (disabled) {
     return (
-      <div className="m-4 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
-        <Lock className="mr-2 inline h-3.5 w-3.5 text-slate-400" />
+      <div className="m-4 rounded-lg border border-border bg-surface px-4 py-3 text-sm text-muted-foreground">
+        <Lock className="mr-2 inline h-3.5 w-3.5 text-muted-foreground" />
         {disabledReason ?? 'Composer disabled.'}
       </div>
     );
@@ -303,11 +303,11 @@ export function Composer({
     <div
       ref={dropRef}
       className={cn(
-        'tiptap-composer m-4 flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm',
-        tab === 'note' && 'border-amber-200 bg-amber-50/40',
+        'tiptap-composer m-4 flex flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-sm',
+        tab === 'note' && 'border-warning-border bg-warning-soft/40',
       )}
     >
-      <div className="flex flex-wrap items-center gap-1 border-b border-slate-200 px-2 py-2">
+      <div className="flex flex-wrap items-center gap-1 border-b border-border px-2 py-2">
         <TabPill
           active={tab === 'reply'}
           icon={<MessageSquare className="h-3.5 w-3.5" />}
@@ -329,7 +329,7 @@ export function Composer({
             onSelect={setSelectedEmailAddressID}
           />
         ) : null}
-        <span className="mx-2 h-5 w-px bg-slate-200" />
+        <span className="mx-2 h-5 w-px bg-border" />
         <ToolbarButton
           aria-label="Bold"
           active={editor?.isActive('bold') ?? false}
@@ -395,7 +395,7 @@ export function Composer({
         >
           <ListOrdered className="h-3.5 w-3.5" />
         </ToolbarButton>
-        <span className="mx-2 h-5 w-px bg-slate-200" />
+        <span className="mx-2 h-5 w-px bg-border" />
         <ToolbarButton aria-label="Attach" onClick={() => fileInputRef.current?.click()}>
           <Paperclip className="h-3.5 w-3.5" />
         </ToolbarButton>
@@ -404,27 +404,31 @@ export function Composer({
       <EditorContent editor={editor} />
 
       {uploads.length > 0 ? (
-        <div className="flex flex-wrap gap-1.5 border-t border-slate-100 px-3 py-2">
+        <div className="flex flex-wrap gap-1.5 border-t border-border px-3 py-2">
           {uploads.map((u) => (
             <span
               key={u.localID}
               className={cn(
                 'inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px]',
-                u.status === 'uploading' && 'border-slate-200 bg-slate-50 text-slate-600',
-                u.status === 'done' && 'border-emerald-200 bg-emerald-50 text-emerald-700',
-                u.status === 'error' && 'border-red-200 bg-red-50 text-red-700',
+                u.status === 'uploading' && 'border-border bg-muted text-muted-foreground',
+                u.status === 'done' &&
+                  'border-success-border bg-success-soft text-success-soft-foreground',
+                u.status === 'error' &&
+                  'border-danger-border bg-danger-soft text-danger-soft-foreground',
               )}
             >
               <Paperclip className="h-3 w-3" />
               <span className="max-w-[160px] truncate">{u.filename}</span>
-              <span className="text-slate-400">·</span>
+              <span className="text-muted-foreground">·</span>
               <span>{formatSize(u.sizeBytes)}</span>
-              {u.status === 'uploading' && <span className="text-slate-400">uploading…</span>}
+              {u.status === 'uploading' && (
+                <span className="text-muted-foreground">uploading…</span>
+              )}
               {u.status === 'error' && <span title={u.error}>failed</span>}
               <button
                 type="button"
                 onClick={() => removeUpload(u.localID)}
-                className="ml-1 text-slate-400 hover:text-slate-700"
+                className="ml-1 text-muted-foreground hover:text-foreground"
                 aria-label="Remove attachment"
               >
                 <X className="h-3 w-3" />
@@ -434,8 +438,8 @@ export function Composer({
         </div>
       ) : null}
 
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 bg-slate-50/40 px-3 py-2">
-        <span className="min-w-0 text-[11px] text-slate-400">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border bg-surface-muted/60 px-3 py-2">
+        <span className="min-w-0 text-[11px] text-muted-foreground">
           {tab === 'note'
             ? 'Visible to your team only'
             : selectedEmailAddress
@@ -489,9 +493,9 @@ function TabPill({
         'inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors',
         active
           ? tone === 'amber'
-            ? 'bg-amber-100 text-amber-800 ring-1 ring-amber-200'
-            : 'bg-brand-50 text-brand-700 ring-1 ring-brand-200'
-          : 'text-slate-500 hover:bg-slate-100',
+            ? 'bg-warning-soft text-warning-soft-foreground ring-1 ring-warning-border'
+            : 'bg-brand-soft text-brand-soft-foreground ring-1 ring-brand-border'
+          : 'text-muted-foreground hover:bg-surface-muted',
       )}
     >
       {icon}
@@ -513,7 +517,7 @@ function FromPicker({
 }) {
   if (addresses.length === 0) {
     return (
-      <span className="ml-1 inline-flex min-w-0 items-center rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-500">
+      <span className="ml-1 inline-flex min-w-0 items-center rounded-md border border-border bg-muted px-2 py-1 text-xs text-muted-foreground">
         No send address
       </span>
     );
@@ -524,13 +528,13 @@ function FromPicker({
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="ml-1 inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
+          className="ml-1 inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-md border border-border bg-surface px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground"
         >
-          <span className="text-slate-400">From</span>
-          <span className="max-w-[220px] truncate font-medium text-slate-800 sm:max-w-[260px]">
+          <span className="text-muted-foreground">From</span>
+          <span className="max-w-[220px] truncate font-medium text-foreground sm:max-w-[260px]">
             {selected?.fullAddress ?? 'Choose address'}
           </span>
-          <ChevronDown className="h-3 w-3 shrink-0 text-slate-400" />
+          <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-[min(360px,calc(100vw-2rem))]">
@@ -548,17 +552,17 @@ function FromPicker({
                 {selected?.id === address.id ? <Check className="h-3.5 w-3.5" /> : null}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate font-medium text-slate-800">
+                <span className="block truncate font-medium text-foreground">
                   {address.fullAddress}
                 </span>
-                <span className="block truncate text-[11px] text-slate-500">
+                <span className="block truncate text-[11px] text-muted-foreground">
                   {address.label ? `${address.label} · ` : ''}
                   {domain}
                   {address.isDefault ? ' · default' : ''}
                   {address.id === preferredEmailAddressID ? ' · inbound' : ''}
                 </span>
                 {addressSignature(address) ? (
-                  <span className="mt-1 inline-flex max-w-full items-center gap-1 text-[11px] text-slate-500">
+                  <span className="mt-1 inline-flex max-w-full items-center gap-1 text-[11px] text-muted-foreground">
                     <Signature className="h-3 w-3 shrink-0" />
                     <span className="truncate">Signature override</span>
                   </span>
@@ -594,8 +598,8 @@ function ToolbarButton({
       type="button"
       onClick={onClick}
       className={cn(
-        'inline-grid h-7 w-7 place-items-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800',
-        active && 'bg-brand-50 text-brand-700',
+        'inline-grid h-7 w-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground',
+        active && 'bg-brand-soft text-brand-soft-foreground',
       )}
       {...props}
     >

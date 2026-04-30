@@ -10,11 +10,11 @@ const badgeVariants = cva(
   {
     variants: {
       variant: {
-        default: 'bg-brand-50 text-brand-700 ring-brand-200',
-        success: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
-        warning: 'bg-amber-50 text-amber-700 ring-amber-200',
-        danger: 'bg-red-50 text-red-700 ring-red-200',
-        muted: 'bg-slate-100 text-slate-600 ring-slate-200',
+        default: 'bg-brand-soft text-brand-soft-foreground ring-brand-border',
+        success: 'bg-success-soft text-success-soft-foreground ring-success-border',
+        warning: 'bg-warning-soft text-warning-soft-foreground ring-warning-border',
+        danger: 'bg-danger-soft text-danger-soft-foreground ring-danger-border',
+        muted: 'bg-muted text-muted-foreground ring-border',
       },
     },
     defaultVariants: { variant: 'default' },

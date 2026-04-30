@@ -1,10 +1,26 @@
 import { createRouter, RouterProvider } from '@tanstack/react-router';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import {
+  RouteErrorFeedback,
+  RouteNotFoundFeedback,
+  RoutePendingFeedback,
+} from './components/route-feedback';
+import { applyTheme } from './lib/theme';
 import './styles.css';
 import { routeTree } from './routeTree.gen';
 
-const router = createRouter({ routeTree });
+// Paint the right theme before React hydrates to avoid a FOUC.
+applyTheme();
+
+const router = createRouter({
+  routeTree,
+  defaultPendingComponent: RoutePendingFeedback,
+  defaultErrorComponent: RouteErrorFeedback,
+  defaultNotFoundComponent: RouteNotFoundFeedback,
+  defaultPendingMs: 150,
+  defaultPendingMinMs: 400,
+});
 
 declare module '@tanstack/react-router' {
   interface Register {

@@ -200,16 +200,18 @@ function TicketDetail() {
 
   if (status?.type === 'unknown') {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-slate-400">Loading…</div>
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+        Loading…
+      </div>
     );
   }
 
   if (!ticket) {
     return (
       <div className="flex flex-1 items-center justify-center px-6">
-        <div className="max-w-sm rounded-xl border border-slate-200 bg-white p-6 text-center shadow-sm">
-          <p className="text-sm font-semibold text-slate-800">Ticket not found</p>
-          <p className="mt-1 text-xs text-slate-500">
+        <div className="max-w-sm rounded-xl border border-border bg-surface p-6 text-center shadow-sm">
+          <p className="text-sm font-semibold text-foreground">Ticket not found</p>
+          <p className="mt-1 text-xs text-muted-foreground">
             This ticket doesn't exist or isn't in your workspace.
           </p>
           <Button asChild className="mt-4" variant="outline" size="sm">
@@ -301,15 +303,15 @@ function TicketDetail() {
   }
 
   return (
-    <div className="flex h-full flex-1 flex-col bg-slate-50">
-      <header className="flex shrink-0 flex-col gap-3 border-b border-slate-200 bg-white px-6 py-4">
+    <div className="flex h-full flex-1 flex-col bg-background">
+      <header className="flex shrink-0 flex-col gap-3 border-b border-border bg-surface px-6 py-4">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
               {ticket.customer?.email ?? ticket.customer?.name ?? 'No customer'} ·{' '}
               {ticket.shortID > 0 ? `#${ticket.shortID}` : 'new'}
             </p>
-            <h1 className="truncate text-lg font-semibold text-slate-900" title={ticket.title}>
+            <h1 className="truncate text-lg font-semibold text-foreground" title={ticket.title}>
               {ticket.title}
             </h1>
           </div>
@@ -318,7 +320,8 @@ function TicketDetail() {
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="grid h-8 w-8 place-items-center rounded-md border border-slate-200 text-slate-500 hover:bg-slate-50"
+                  aria-label="Ticket actions"
+                  className="grid h-8 w-8 place-items-center rounded-md border border-border text-muted-foreground hover:bg-surface-muted"
                 >
                   <MoreHorizontal className="h-4 w-4" />
                 </button>
@@ -343,7 +346,7 @@ function TicketDetail() {
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="inline-flex items-center gap-1 rounded-md ring-1 ring-inset ring-transparent transition-colors hover:ring-slate-200"
+                className="inline-flex items-center gap-1 rounded-md ring-1 ring-inset ring-transparent transition-colors hover:ring-border-strong"
               >
                 <Badge variant={statusVariant(ticket.status)}>
                   {STATUS_OPTIONS.find((o) => o.id === ticket.status)?.label ?? ticket.status}
@@ -366,7 +369,7 @@ function TicketDetail() {
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="inline-flex items-center gap-1 rounded-md ring-1 ring-inset ring-transparent transition-colors hover:ring-slate-200"
+                className="inline-flex items-center gap-1 rounded-md ring-1 ring-inset ring-transparent transition-colors hover:ring-border-strong"
               >
                 <Badge variant={priorityVariant(ticket.priority)}>
                   {ticket.priority}
@@ -389,7 +392,7 @@ function TicketDetail() {
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="inline-flex items-center gap-1.5 rounded-md border border-transparent px-1 py-0.5 text-xs text-slate-600 hover:border-slate-200 hover:bg-slate-50"
+                className="inline-flex items-center gap-1.5 rounded-md border border-transparent px-1 py-0.5 text-xs text-muted-foreground hover:border-border hover:bg-surface-muted"
               >
                 {ticket.assignee ? (
                   <>
@@ -402,11 +405,11 @@ function TicketDetail() {
                   </>
                 ) : (
                   <>
-                    <UserPlus className="h-3.5 w-3.5 text-slate-400" />
+                    <UserPlus className="h-3.5 w-3.5 text-muted-foreground" />
                     <span>Unassigned</span>
                   </>
                 )}
-                <ChevronDown className="h-3 w-3 text-slate-400" />
+                <ChevronDown className="h-3 w-3 text-muted-foreground" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
@@ -439,7 +442,7 @@ function TicketDetail() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <div className="ml-auto text-[11px] text-slate-400">
+          <div className="ml-auto text-[11px] text-muted-foreground">
             Updated {formatDistanceToNow(new Date(ticket.updatedAt), { addSuffix: true })}
           </div>
         </div>
@@ -449,8 +452,8 @@ function TicketDetail() {
         <ScrollArea className="flex-1">
           <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-6 py-6">
             {ticket.description ? (
-              <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-sm">
-                <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-slate-400">
+              <div className="rounded-lg border border-border bg-surface p-4 text-sm text-surface-foreground shadow-sm">
+                <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                   Original description
                 </p>
                 <p className="whitespace-pre-wrap text-[13.5px] leading-relaxed">
@@ -459,7 +462,7 @@ function TicketDetail() {
               </div>
             ) : null}
             {messages.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-xs text-slate-400">
+              <div className="rounded-lg border border-dashed border-border bg-surface px-4 py-6 text-center text-xs text-muted-foreground">
                 No messages yet — write a reply or note below to get started.
               </div>
             ) : (
@@ -544,20 +547,20 @@ function MessageBubble({
 
   if (internal) {
     return (
-      <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 shadow-sm">
-        <div className="mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-amber-700">
+      <div className="rounded-lg border border-warning-border bg-warning-soft px-4 py-3 shadow-sm">
+        <div className="mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-warning-soft-foreground">
           <Lock className="h-3 w-3" /> Internal note
-          <span className="ml-auto text-[10px] font-normal text-amber-600/80">
+          <span className="ml-auto text-[10px] font-normal text-warning-soft-foreground/80">
             {format(ts, 'MMM d, h:mm a')}
           </span>
         </div>
         <div
-          className="prose prose-sm max-w-none text-[13.5px] text-amber-900"
+          className="prose prose-sm max-w-none text-[13.5px] text-warning-soft-foreground"
           // biome-ignore lint/security/noDangerouslySetInnerHtml: Tiptap output sanitized at compose-time; Phase 7 hardens with server-side stripping.
           dangerouslySetInnerHTML={{ __html: message.bodyHtml }}
         />
         <AttachmentList attachments={message.attachments} />
-        <p className="mt-2 text-[11px] text-amber-800/70">
+        <p className="mt-2 text-[11px] text-warning-soft-foreground/70">
           {authorName ?? author?.email ?? 'Unknown'}
         </p>
       </div>
@@ -575,8 +578,8 @@ function MessageBubble({
           className={cn(
             'max-w-[75%] rounded-2xl px-4 py-2.5 text-[13.5px] shadow-sm',
             isAgent
-              ? 'bg-brand-50 text-brand-900 ring-1 ring-brand-100'
-              : 'bg-white text-slate-800 ring-1 ring-slate-200',
+              ? 'bg-brand-soft text-brand-soft-foreground ring-1 ring-brand-border'
+              : 'bg-surface text-surface-foreground ring-1 ring-border',
           )}
         >
           <div
@@ -589,7 +592,7 @@ function MessageBubble({
       </div>
       <p
         className={cn(
-          'flex flex-wrap items-center gap-1.5 px-10 text-[10.5px] text-slate-400',
+          'flex flex-wrap items-center gap-1.5 px-10 text-[10.5px] text-muted-foreground',
           isAgent ? 'self-end text-right' : 'self-start',
         )}
       >
@@ -609,7 +612,7 @@ function MessageBubble({
 function AuthResultsBadges({ results }: { results: InboundAuthResults }) {
   return (
     <span className="inline-flex flex-wrap items-center gap-1">
-      <ShieldCheck className="h-3 w-3 text-slate-400" />
+      <ShieldCheck className="h-3 w-3 text-muted-foreground" />
       <AuthBadge label="SPF" value={results.spf} />
       <AuthBadge label="DKIM" value={results.dkim} />
       <AuthBadge label="DMARC" value={results.dmarc} />
@@ -861,11 +864,11 @@ function AttachmentList({
           key={a.id}
           type="button"
           onClick={() => onClick(a.s3Key)}
-          className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-50"
+          className="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-1 text-[11px] text-muted-foreground hover:bg-surface-muted"
         >
           <Paperclip className="h-3 w-3" />
           <span className="max-w-[160px] truncate">{a.filename}</span>
-          <span className="text-slate-400">·</span>
+          <span className="text-muted-foreground">·</span>
           <span>{formatBytes(a.sizeBytes)}</span>
         </button>
       ))}

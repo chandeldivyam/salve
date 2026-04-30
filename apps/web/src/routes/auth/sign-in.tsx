@@ -82,7 +82,7 @@ function SignInPage() {
                 aria-describedby={fieldErrors.email ? 'email-error' : undefined}
               />
               {fieldErrors.email ? (
-                <p id="email-error" className="mt-1 text-sm text-red-600">
+                <p id="email-error" className="mt-1 text-sm text-danger-soft-foreground">
                   {fieldErrors.email}
                 </p>
               ) : null}
@@ -101,21 +101,25 @@ function SignInPage() {
                 aria-describedby={fieldErrors.password ? 'password-error' : undefined}
               />
               {fieldErrors.password ? (
-                <p id="password-error" className="mt-1 text-sm text-red-600">
+                <p id="password-error" className="mt-1 text-sm text-danger-soft-foreground">
                   {fieldErrors.password}
                 </p>
               ) : null}
             </div>
-            {serverError ? <p className="text-sm text-red-600">{serverError}</p> : null}
+            {serverError ? (
+              <p role="alert" className="text-sm text-danger-soft-foreground">
+                {serverError}
+              </p>
+            ) : null}
             <Button type="submit" disabled={loading}>
               {loading ? 'Signing in…' : 'Sign in'}
             </Button>
             <Button type="button" variant="outline" disabled aria-disabled>
               Continue with Google
             </Button>
-            <p className="text-center text-sm text-slate-500">
+            <p className="text-center text-sm text-muted-foreground">
               No account?{' '}
-              <Link className="font-medium text-brand-700 underline" to="/auth/sign-up">
+              <Link className="font-medium text-brand-soft-foreground underline" to="/auth/sign-up">
                 Create one
               </Link>
             </p>

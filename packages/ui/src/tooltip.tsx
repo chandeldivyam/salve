@@ -15,7 +15,7 @@ export const TooltipContent = forwardRef<
       ref={ref}
       sideOffset={sideOffset}
       className={cn(
-        'z-50 overflow-hidden rounded-md bg-slate-900 px-2 py-1 text-[11px] font-medium text-white shadow-md',
+        'z-50 overflow-hidden rounded-md bg-tooltip px-2 py-1 text-[11px] font-medium text-tooltip-foreground shadow-md',
         'data-[state=delayed-open]:animate-in data-[state=closed]:animate-out',
         className,
       )}

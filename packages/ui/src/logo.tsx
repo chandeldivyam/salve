@@ -50,7 +50,7 @@ export const Logo = forwardRef<SVGSVGElement, LogoProps>(
     return (
       <span className={cn('inline-flex items-center gap-2 text-brand-600', className)}>
         <Logo size={size} />
-        <span className="text-base font-semibold tracking-tight text-slate-900">Salve</span>
+        <span className="text-base font-semibold tracking-tight text-foreground">Salve</span>
       </span>
     );
   },

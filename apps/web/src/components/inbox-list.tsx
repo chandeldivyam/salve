@@ -193,11 +193,11 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
   }
 
   return (
-    <div className="flex h-full w-full flex-col bg-white">
-      <div className="flex shrink-0 flex-col gap-2 border-b border-slate-200 px-4 py-3">
+    <div className="flex h-full w-full flex-col bg-surface">
+      <div className="flex shrink-0 flex-col gap-2 border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
-            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -210,7 +210,7 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
               <button
                 type="button"
                 aria-label="Filters"
-                className="grid h-9 w-9 place-items-center rounded-md border border-slate-200 text-slate-500 hover:bg-slate-50"
+                className="grid h-9 w-9 place-items-center rounded-md border border-border text-muted-foreground hover:bg-surface-muted"
               >
                 <Filter className="h-4 w-4" />
               </button>
@@ -227,8 +227,8 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
               className={cn(
                 'rounded-md px-2 py-1 text-xs font-medium transition-colors',
                 filter === f.id
-                  ? 'bg-brand-50 text-brand-700 ring-1 ring-brand-200'
-                  : 'text-slate-500 hover:bg-slate-100',
+                  ? 'bg-brand-soft text-brand-soft-foreground ring-1 ring-brand-border'
+                  : 'text-muted-foreground hover:bg-surface-muted',
               )}
             >
               {f.label}
@@ -239,7 +239,7 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
 
       <div ref={parentRef} className="flex-1 overflow-y-auto">
         {!ready ? (
-          <div className="flex h-full items-center justify-center text-xs text-slate-400">
+          <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
             Loading inbox…
           </div>
         ) : filtered.length === 0 ? (
@@ -288,12 +288,12 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
 function EmptyInbox({ showCreate, onCreate }: { showCreate: boolean; onCreate: () => void }) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 px-8 py-12 text-center">
-      <div className="grid h-12 w-12 place-items-center rounded-full bg-brand-50 text-brand-700">
+      <div className="grid h-12 w-12 place-items-center rounded-full bg-brand-soft text-brand-soft-foreground">
         <Inbox className="h-6 w-6" />
       </div>
       <div className="space-y-1">
-        <p className="text-sm font-medium text-slate-700">No tickets yet</p>
-        <p className="text-xs text-slate-500">They'll appear here as they come in.</p>
+        <p className="text-sm font-medium text-foreground">No tickets yet</p>
+        <p className="text-xs text-muted-foreground">They'll appear here as they come in.</p>
       </div>
       {showCreate ? (
         <Button size="sm" variant="outline" onClick={onCreate}>
@@ -314,10 +314,10 @@ function InboxRow({ ticket, isSelected }: { ticket: TicketRow; isSelected: boole
       to="/app/inbox/t/$ticketId"
       params={{ ticketId: ticket.id }}
       className={cn(
-        'group block border-b border-slate-100 transition-colors',
+        'group block border-b border-border transition-colors',
         isSelected
-          ? 'border-l-4 border-l-brand-500 bg-brand-50/60'
-          : 'border-l-4 border-l-transparent hover:bg-slate-50',
+          ? 'border-l-4 border-l-brand-500 bg-brand-soft/60'
+          : 'border-l-4 border-l-transparent hover:bg-surface-muted',
       )}
     >
       <div className="flex items-start gap-3 px-4 py-3">
@@ -326,31 +326,34 @@ function InboxRow({ ticket, isSelected }: { ticket: TicketRow; isSelected: boole
             aria-hidden="true"
             className={cn(
               'mt-1 h-2 w-2 shrink-0 rounded-full',
-              ticket.priority === 'urgent' ? 'bg-red-500' : 'bg-amber-500',
+              ticket.priority === 'urgent' ? 'bg-danger' : 'bg-warning',
             )}
           />
         ) : (
-          <span aria-hidden="true" className="mt-1 h-2 w-2 shrink-0 rounded-full bg-slate-300" />
+          <span
+            aria-hidden="true"
+            className="mt-1 h-2 w-2 shrink-0 rounded-full bg-border-strong"
+          />
         )}
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between gap-2">
             <span
               className={cn(
-                'block truncate text-[13px] text-slate-500',
-                isSelected && 'text-brand-700',
+                'block truncate text-[13px] text-muted-foreground',
+                isSelected && 'text-brand-soft-foreground',
               )}
               title={customerLabel}
             >
               {customerLabel}
             </span>
-            <span className="shrink-0 text-[11px] tabular-nums text-slate-400">
+            <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
               {formatDistanceToNow(updated, { addSuffix: false })}
             </span>
           </div>
           <p
             className={cn(
               'mt-0.5 line-clamp-1 text-[13.5px] leading-snug',
-              isSelected ? 'font-semibold text-slate-900' : 'font-medium text-slate-800',
+              isSelected ? 'font-semibold text-foreground' : 'font-medium text-foreground/90',
             )}
           >
             {ticket.title}
@@ -383,7 +386,7 @@ function InboxRow({ ticket, isSelected }: { ticket: TicketRow; isSelected: boole
                   <TooltipContent>{ticket.assignee.name ?? ticket.assignee.email}</TooltipContent>
                 </Tooltip>
               ) : (
-                <span className="text-[11px] text-slate-400">Unassigned</span>
+                <span className="text-[11px] text-muted-foreground">Unassigned</span>
               )}
             </span>
           </div>
