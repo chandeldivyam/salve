@@ -114,6 +114,39 @@ export const queries = defineQueries({
       .where('organizationId', '=', auth?.workspaceID ?? '__no-workspace__')
       .related('user'),
   ),
+
+  /**
+   * Phase 3a: list sending domains for the caller's workspace. Used in
+   * `/app/settings/email/domains`.
+   */
+  sendingDomains: defineQuery(emptyArg, ({ ctx: auth }) =>
+    builder.sendingDomain
+      .where('workspaceID', '=', auth?.workspaceID ?? '__no-workspace__')
+      .orderBy('createdAt', 'asc'),
+  ),
+
+  /**
+   * Phase 3a: a single sending domain by id, scoped to the caller's
+   * workspace. The detail page renders DKIM/MAIL FROM/DMARC records.
+   */
+  sendingDomainByID: defineQuery(idArg, ({ args: { id }, ctx: auth }) =>
+    builder.sendingDomain
+      .where('id', id)
+      .where('workspaceID', '=', auth?.workspaceID ?? '__no-workspace__')
+      .one(),
+  ),
+
+  /**
+   * Phase 3a: outbound delivery rows for a given ticket (one per agent reply
+   * dispatched through the email subsystem). The ticket detail UI joins these
+   * onto the message bubbles to render a delivery-status badge.
+   */
+  outboundMessagesByTicket: defineQuery(idArg, ({ args: { id }, ctx: auth }) =>
+    builder.outboundMessage
+      .where('workspaceID', '=', auth?.workspaceID ?? '__no-workspace__')
+      .where('ticketID', '=', id)
+      .orderBy('createdAt', 'asc'),
+  ),
 });
 
 export type Queries = typeof queries;

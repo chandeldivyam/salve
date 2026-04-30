@@ -66,6 +66,10 @@ const customer = table('customer')
     workspaceID: string().from('workspace_id'),
     email: string(),
     name: string().optional(),
+    // Phase 3a (research §3): a single human can have many addresses. The
+    // matcher (Phase 3b) accumulates these on every reply-to we observe.
+    alternateEmails: json<string[]>().from('alternate_emails').optional(),
+    displayName: string().from('display_name').optional(),
     avatarUrl: string().from('avatar_url').optional(),
     createdAt: number().from('created_at'),
     updatedAt: number().from('updated_at'),
@@ -88,6 +92,7 @@ const ticket = table('ticket')
     updatedAt: number().from('updated_at'),
     firstResponseAt: number().from('first_response_at').optional(),
     resolvedAt: number().from('resolved_at').optional(),
+    closedAt: number().from('closed_at').optional(),
   })
   .primaryKey('id');
 
@@ -131,6 +136,73 @@ const auditEvent = table('auditEvent')
     // typing. Mutators in Phase 2b stamp known shapes; consumers narrow.
     payload: json().optional(),
     createdAt: number().from('created_at'),
+  })
+  .primaryKey('id');
+
+// ---------- Email tables (Phase 3a) — read-only mirrors. Writes happen via
+// REST handlers (sending_domain) or the Inngest outbound-email function
+// (outbound_message). Clients subscribe to render the settings UI and the
+// per-message delivery status badge in the ticket thread.
+
+const sendingDomain = table('sendingDomain')
+  .from('sending_domain')
+  .columns({
+    id: string(),
+    workspaceID: string().from('workspace_id'),
+    domain: string(),
+    dkimTokens: json<Array<{ name: string; value: string }>>().from('dkim_tokens').optional(),
+    mailFromSubdomain: string().from('mail_from_subdomain'),
+    dnsStatus: enumeration<'pending' | 'verified' | 'failed' | 'suspended'>().from('dns_status'),
+    dmarcStatus: enumeration<'pending' | 'present' | 'missing' | 'failing'>().from('dmarc_status'),
+    lastVerifiedAt: number().from('last_verified_at').optional(),
+    suspendedAt: number().from('suspended_at').optional(),
+    createdAt: number().from('created_at'),
+    updatedAt: number().from('updated_at'),
+  })
+  .primaryKey('id');
+
+const emailChannel = table('emailChannel')
+  .from('email_channel')
+  .columns({
+    id: string(),
+    workspaceID: string().from('workspace_id'),
+    name: string(),
+    inboundLocalpart: string().from('inbound_localpart').optional(),
+    sendingDomainID: string().from('sending_domain_id').optional(),
+    isDefault: string().from('is_default'),
+    createdAt: number().from('created_at'),
+    updatedAt: number().from('updated_at'),
+  })
+  .primaryKey('id');
+
+const outboundMessage = table('outboundMessage')
+  .from('outbound_message')
+  .columns({
+    id: string(),
+    workspaceID: string().from('workspace_id'),
+    ticketID: string().from('ticket_id'),
+    messageID: string().from('message_id'),
+    rfcMessageID: string().from('rfc_message_id'),
+    sesMessageID: string().from('ses_message_id').optional(),
+    fromAddress: string().from('from_address'),
+    toAddress: string().from('to_address'),
+    replyTo: string().from('reply_to'),
+    subject: string(),
+    status: enumeration<
+      | 'queued'
+      | 'sending'
+      | 'sent'
+      | 'delivered'
+      | 'bounced'
+      | 'complained'
+      | 'suppressed'
+      | 'failed'
+    >(),
+    error: string().optional(),
+    sentAt: number().from('sent_at').optional(),
+    deliveredAt: number().from('delivered_at').optional(),
+    createdAt: number().from('created_at'),
+    updatedAt: number().from('updated_at'),
   })
   .primaryKey('id');
 
@@ -270,10 +342,51 @@ const auditEventRelationships = relationships(auditEvent, ({ one }) => ({
   }),
 }));
 
+const sendingDomainRelationships = relationships(sendingDomain, ({ many }) => ({
+  channels: many({
+    sourceField: ['id'],
+    destField: ['sendingDomainID'],
+    destSchema: emailChannel,
+  }),
+}));
+
+const emailChannelRelationships = relationships(emailChannel, ({ one }) => ({
+  sendingDomain: one({
+    sourceField: ['sendingDomainID'],
+    destField: ['id'],
+    destSchema: sendingDomain,
+  }),
+}));
+
+const outboundMessageRelationships = relationships(outboundMessage, ({ one }) => ({
+  message: one({
+    sourceField: ['messageID'],
+    destField: ['id'],
+    destSchema: message,
+  }),
+  ticket: one({
+    sourceField: ['ticketID'],
+    destField: ['id'],
+    destSchema: ticket,
+  }),
+}));
+
 // ---------- Schema
 
 export const schema = createSchema({
-  tables: [user, organization, member, customer, ticket, message, attachment, auditEvent],
+  tables: [
+    user,
+    organization,
+    member,
+    customer,
+    ticket,
+    message,
+    attachment,
+    auditEvent,
+    sendingDomain,
+    emailChannel,
+    outboundMessage,
+  ],
   relationships: [
     userRelationships,
     organizationRelationships,
@@ -283,6 +396,9 @@ export const schema = createSchema({
     messageRelationships,
     attachmentRelationships,
     auditEventRelationships,
+    sendingDomainRelationships,
+    emailChannelRelationships,
+    outboundMessageRelationships,
   ],
   // Phase 2b: legacy paths are off. All reads go through `defineQueries` (see
   // `./queries.ts`) and all writes through `defineMutators` (see
@@ -323,6 +439,9 @@ export type Ticket = Row<typeof schema.tables.ticket>;
 export type Message = Row<typeof schema.tables.message>;
 export type Attachment = Row<typeof schema.tables.attachment>;
 export type AuditEvent = Row<typeof schema.tables.auditEvent>;
+export type SendingDomain = Row<typeof schema.tables.sendingDomain>;
+export type EmailChannel = Row<typeof schema.tables.emailChannel>;
+export type OutboundMessage = Row<typeof schema.tables.outboundMessage>;
 
 // AuthData is the JWT shape minted by apps/api (`apps/api/src/jwt.ts`). Mutators
 // in Phase 2b will read it via `ctx`.

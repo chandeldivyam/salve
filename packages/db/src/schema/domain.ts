@@ -17,6 +17,7 @@
 //   `organization` table is text-keyed and we want explicit cleanup paths;
 //   we just declare the FK to enforce referential integrity.
 
+import { sql } from 'drizzle-orm';
 import {
   boolean,
   index,
@@ -56,6 +57,12 @@ export const customer = pgTable(
       .references(() => organization.id, { onDelete: 'cascade' }),
     email: text('email').notNull(),
     name: text('name'),
+    // Phase 3a (research §3): a single human can have many addresses. Lookups
+    // through `EmailCustomerMatcher`-equivalent (3b) check this column too.
+    // Stored as JSONB array (not Postgres `text[]`) because Zero's SQLite
+    // replica doesn't handle PG array types natively; JSONB round-trips fine.
+    alternateEmails: jsonb('alternate_emails').notNull().default(sql`'[]'::jsonb`),
+    displayName: text('display_name'),
     avatarUrl: text('avatar_url'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -89,6 +96,10 @@ export const ticket = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     firstResponseAt: timestamp('first_response_at', { withTimezone: true }),
     resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+    // Phase 3a: closed_at is read in Phase 3b's "closed-ticket reopen window"
+    // logic (research §1). Stamped by `ticket.close` mutator on transition to
+    // closed (resolved doesn't fill it).
+    closedAt: timestamp('closed_at', { withTimezone: true }),
   },
   (t) => ({
     inboxIdx: index('ticket_inbox_idx').on(t.workspaceId, t.status, t.updatedAt),

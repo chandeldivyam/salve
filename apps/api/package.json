@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.957.0",
+    "@aws-sdk/client-sesv2": "3.1039.0",
     "@aws-sdk/s3-request-presigner": "3.957.0",
     "@hono/node-server": "2.0.0",
     "@opendesk/core": "workspace:*",
@@ -22,12 +23,15 @@
     "better-auth": "1.6.9",
     "drizzle-orm": "0.45.2",
     "hono": "4.12.15",
+    "inngest": "4.2.6",
     "jose": "6.2.3",
     "nanoid": "5.1.9",
+    "nodemailer": "8.0.7",
     "postgres": "3.4.9",
     "zod": "4.4.1"
   },
   "devDependencies": {
+    "@types/nodemailer": "8.0.0",
     "tsx": "4.21.0"
   }
 }

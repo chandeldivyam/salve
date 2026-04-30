@@ -5,4 +5,5 @@
 //                 attachment, audit_event); all carry workspace_id.
 export * from './auth.js';
 export * from './domain.js';
+export * from './email.js';
 export * from './workspace.js';

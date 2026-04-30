@@ -1,0 +1,18 @@
+{
+  "name": "@opendesk/inngest",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Inngest function workspace. Phase 3a placeholder — the only Inngest function so far (`outbound-email`) lives in `apps/api/src/inngest/functions/` because it needs the same email-builder + db helpers the Hono server already imports. Phase 3b (inbound) will start moving functions here.",
+  "scripts": {
+    "type-check": "tsc -p tsconfig.json --noEmit",
+    "format": "biome format --write .",
+    "check": "biome check ."
+  },
+  "dependencies": {
+    "inngest": "4.2.6"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3"
+  }
+}

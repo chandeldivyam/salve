@@ -5,7 +5,8 @@
 // same header above its two-pane layout.
 
 import { Button, Logo } from '@opendesk/ui';
-import { useNavigate } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
+import { Settings } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { authClient, switchWorkspace } from '@/lib/auth-client';
 import { fetchSession, listOrganizations, type SessionData } from '@/lib/session-loader';
@@ -76,6 +77,14 @@ export function AppHeader() {
         </select>
       </div>
       <div className="flex items-center gap-3">
+        <Link
+          to="/app/settings/email/domains"
+          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+          title="Settings"
+        >
+          <Settings className="h-3.5 w-3.5" />
+          Settings
+        </Link>
         <span className="text-xs text-slate-500">{session?.user.email}</span>
         <Button variant="outline" size="sm" onClick={onSignOut}>
           Sign out

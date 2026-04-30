@@ -5,7 +5,9 @@
 // that every read in the app must funnel through.
 
 export const ZERO_SCHEMA_NAME = 'opendesk' as const;
-export const ZERO_SCHEMA_VERSION = 2 as const;
+// Phase 3a bumps the schema version: new email tables (`sending_domain`,
+// `email_channel`, `outbound_message`) and new customer/ticket columns.
+export const ZERO_SCHEMA_VERSION = 3 as const;
 
 /**
  * Outbox row kinds. Server-only — clients never read these. Lives here only
@@ -32,10 +34,13 @@ export {
   type AuthData,
   builder,
   type Customer,
+  type EmailChannel,
   type Member,
   type Message,
   type Organization,
+  type OutboundMessage,
   type Schema,
+  type SendingDomain,
   schema,
   type Ticket,
   type User,

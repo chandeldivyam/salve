@@ -115,6 +115,24 @@ function TicketDetail() {
     AnyMember[],
     { type: string },
   ];
+  // Phase 3a: outbound delivery status per message. Empty until the
+  // outbox-poller → Inngest → mailpit/SES round-trip stamps a row.
+  const [outboundRows] = useQuery(
+    queries.outboundMessagesByTicket({ id: ticketId }),
+  ) as unknown as [
+    Array<{
+      id: string;
+      messageID: string;
+      status: string;
+      error?: string | null;
+      sentAt?: number | null;
+    }>,
+    { type: string },
+  ];
+  const deliveryByMessage = new Map<string, { status: string; error?: string | null }>();
+  for (const r of outboundRows) {
+    deliveryByMessage.set(r.messageID, { status: r.status, error: r.error });
+  }
 
   if (status?.type === 'unknown') {
     return (
@@ -373,6 +391,7 @@ function TicketDetail() {
                   message={m}
                   isAgent={m.authorType === 'agent' || m.authorType === 'system'}
                   isSelf={m.authorUserID === currentUserID}
+                  delivery={deliveryByMessage.get(m.id) ?? null}
                 />
               ))
             )}
@@ -403,6 +422,7 @@ function MessageBubble({
   message,
   isAgent,
   isSelf,
+  delivery,
 }: {
   message: {
     id: string;
@@ -421,6 +441,7 @@ function MessageBubble({
   };
   isAgent: boolean;
   isSelf: boolean;
+  delivery: { status: string; error?: string | null } | null;
 }) {
   const author = message.authorUser;
   const ts = new Date(message.createdAt);
@@ -473,14 +494,35 @@ function MessageBubble({
       </div>
       <p
         className={cn(
-          'px-10 text-[10.5px] text-slate-400',
+          'flex items-center gap-1.5 px-10 text-[10.5px] text-slate-400',
           isAgent ? 'self-end text-right' : 'self-start',
         )}
       >
-        {author?.name ?? author?.email ?? 'Unknown'}
-        {isSelf ? ' (you)' : ''} · {format(ts, 'MMM d, h:mm a')}
+        <span>
+          {author?.name ?? author?.email ?? 'Unknown'}
+          {isSelf ? ' (you)' : ''} · {format(ts, 'MMM d, h:mm a')}
+        </span>
+        {isAgent && delivery ? (
+          <DeliveryBadge status={delivery.status} error={delivery.error} />
+        ) : null}
       </p>
     </div>
+  );
+}
+
+function DeliveryBadge({ status, error }: { status: string; error?: string | null }) {
+  const variant: 'default' | 'success' | 'warning' | 'danger' | 'muted' =
+    status === 'sent' || status === 'delivered'
+      ? 'success'
+      : status === 'queued' || status === 'sending'
+        ? 'warning'
+        : status === 'bounced' || status === 'complained' || status === 'failed'
+          ? 'danger'
+          : 'muted';
+  return (
+    <Badge variant={variant} title={error ?? undefined}>
+      {status}
+    </Badge>
   );
 }
 
