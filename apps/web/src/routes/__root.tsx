@@ -1,11 +1,14 @@
 import { createRootRoute, Outlet } from '@tanstack/react-router';
-import { BrandSplash } from '@/components/brand-splash';
 import { FeedbackToasts } from '@/components/feedback-toasts';
-import { RouteErrorFeedback, RouteNotFoundFeedback } from '@/components/route-feedback';
+import {
+  RouteErrorFeedback,
+  RouteNotFoundFeedback,
+  RoutePendingFeedback,
+} from '@/components/route-feedback';
 
 export const Route = createRootRoute({
   component: RootComponent,
-  pendingComponent: BrandSplash,
+  pendingComponent: RoutePendingFeedback,
   errorComponent: RouteErrorFeedback,
   notFoundComponent: RouteNotFoundFeedback,
 });

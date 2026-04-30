@@ -849,17 +849,47 @@ The skeleton renders only on the truly first mount (no IDB cache yet). Once a qu
 
 There is one window we cannot cover with skeletons or IDB: the time between the browser fetching the HTML and React mounting. On a hard reload, this is anywhere from 50ms (warm) to 800ms (cold) — long enough to see a white flash, then a route-pending state, then real content. Three transitions, three different visuals.
 
-The fix is a single brand splash that paints from the very first frame and stays continuous through every hand-off:
+The fix is a single brand splash that paints from the very first frame and hides as soon as React has content. **Inline in `index.html`, not React.** This is the only place it lives:
 
-1. **Inline in `index.html`** — `<div id="initial-splash">` with the leaf glyph + dot animation declared inline (no Tailwind / no bundle dependency). Painted on the very first frame, before any JS executes.
-2. **As `defaultPendingComponent`** in `main.tsx` — the React `<BrandSplash>` component (`apps/web/src/components/brand-splash.tsx`) is visually identical to the inline one, so when React takes over rendering it's seamless.
-3. **Hidden via CSS** the moment React paints into `#root`: `#root:not(:empty) ~ #initial-splash { opacity: 0 }`. The React splash takes over at the same z-index. No flash.
+```html
+<div id="root"></div>
+<style>
+  #initial-splash { position: fixed; inset: 0; ... transition: opacity 220ms ease-out; }
+  #root:not(:empty) ~ #initial-splash { opacity: 0; pointer-events: none; }
+</style>
+<div id="initial-splash">…leaf glyph + dots, inline SVG, inline animations…</div>
+```
+
+The inline splash uses raw `oklch(...)` colours (CSS variables aren't available before the stylesheet loads) and inline `@keyframes` (no Tailwind, no bundle dependency). It's visible from the very first paint and hides automatically the moment React paints anything into `#root`.
+
+A `<BrandSplash>` React component exists at `apps/web/src/components/brand-splash.tsx` — visually identical — and is wired *only* on `routes/app.tsx`'s `pendingComponent`. It fires when the auth fetch in `beforeLoad` is genuinely slow (>200ms — the `defaultPendingMs` floor). With session caching (next bullet) this is rare.
+
+**THE TRAP:** Setting `BrandSplash` as `defaultPendingComponent` makes it fire on every in-app route transition (clicking a ticket, switching tabs). That is wrong — in-app navigation must never full-screen splash. The default pending component is `RoutePendingFeedback` (small card); only the auth gate gets the splash.
+
+**THE OTHER TRAP:** TanStack Router re-runs `beforeLoad` on every navigation that re-matches the route. Without caching, every internal click re-fetches `/api/auth/get-session`, and a slow fetch fires the auth-gate splash mid-app. **Cache the session at module level** (`apps/web/src/lib/session-loader.ts`):
+
+```ts
+let cachedSession: SessionData | null | undefined = undefined;
+let inflight: Promise<SessionData | null> | null = null;
+
+export async function fetchSession(): Promise<SessionData | null> {
+  if (cachedSession !== undefined) return cachedSession;
+  if (inflight) return inflight;
+  inflight = fetchSessionUncached().then((s) => { cachedSession = s; inflight = null; return s; });
+  return inflight;
+}
+
+export function clearSessionCache(): void { cachedSession = undefined; inflight = null; }
+```
+
+Sign-out calls `clearSessionCache()` so the next `/app` entry refetches and redirects if needed.
 
 Rules:
-- The inline splash markup in `index.html` and the `<BrandSplash>` component MUST stay visually identical. If you change one, change the other. Animation timings live in `styles.css` (`@keyframes brand-splash-*`).
-- Use `BrandSplash` (full-screen) only for **auth-gating** pending states — `__root.tsx` and `routes/app.tsx`. Nested route transitions inside the app shell use `RoutePendingFeedback` (the card variant) so the user keeps the surrounding chrome.
-- The inline splash uses raw `oklch(...)` colours, not CSS variables, because variables aren't available before the stylesheet loads. Match them to `--background` / `--brand-600` for both light and dark mode.
+- Inline splash in `index.html` and the `<BrandSplash>` component MUST stay visually identical. Shared animation timings live in `styles.css` (`@keyframes brand-splash-*`).
+- `BrandSplash` is wired *only* at `routes/app.tsx` (auth gate). Never as `defaultPendingComponent`. Never on `__root.tsx`.
+- The inline splash uses raw OKLCH colours that match `--background` / `--brand-600` in both light and dark mode.
 - `prefers-reduced-motion` cancels the animation in both copies.
+- Any new async work in `beforeLoad` must be cache-fast on warm calls. If you add an async hop and don't cache it, the auth-gate splash will start firing on every internal navigation — exact symptom of the trap above.
 
 ### Animations
 
@@ -1022,6 +1052,8 @@ If you do any of these, expect to be asked to undo them in code review.
 29. **Unbounded list queries.** Every list that grows with workspace size needs a `limit` arg + window growth. `.orderBy(...).orderBy('id', 'desc')` *without* a `.limit()` is a code-review blocker. See §3.3.1.
 30. **No preload at the app shell.** Inbox + workspace metadata must be subscribed via `preloadWorkspace(z)` for the lifetime of `<ZeroProvider>`. Without it, navigating away from `/app/inbox` lets the TTL clock start and a quick reload races the cache. See `apps/web/src/lib/zero-preload.ts`.
 31. **`"Loading…"` text instead of a skeleton.** Centered loading text is the wrong shape, shifts layout when content arrives, and makes the app feel slower than it is. Render a skeleton at the *exact* dimensions of the real content (`apps/web/src/components/skeletons.tsx`).
+32. **Full-screen splash on in-app navigation.** `BrandSplash` is for the auth gate only. Wiring it as `defaultPendingComponent` makes every ticket click flash a full-screen splash — instant downgrade from "feels like Linear" to "feels like a 2010 web app". See §14 "Pre-React splash for the auth window".
+33. **Async `beforeLoad` without caching.** TanStack Router re-runs `beforeLoad` on every matched navigation. An uncached async fetch in there will re-trigger the route's pending state on every click and silently re-hit your auth endpoint. Cache the result at module level (or use the loader's `staleTime`).
 
 ---
 

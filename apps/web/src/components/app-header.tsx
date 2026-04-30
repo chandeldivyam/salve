@@ -12,7 +12,12 @@ import { SetupEntry } from '@/components/setup-entry';
 import { ThemeSwitcher } from '@/components/theme-switcher';
 import { authClient, switchWorkspace } from '@/lib/auth-client';
 import { showError } from '@/lib/feedback';
-import { fetchSession, listOrganizations, type SessionData } from '@/lib/session-loader';
+import {
+  clearSessionCache,
+  fetchSession,
+  listOrganizations,
+  type SessionData,
+} from '@/lib/session-loader';
 
 interface Org {
   id: string;
@@ -58,6 +63,7 @@ export function AppHeader() {
   async function onSignOut() {
     try {
       await authClient.signOut();
+      clearSessionCache();
       await navigate({ to: '/auth/sign-in' });
     } catch (err) {
       showError(err, 'Could not sign out.');
