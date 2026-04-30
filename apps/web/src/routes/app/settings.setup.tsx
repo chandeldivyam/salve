@@ -153,6 +153,11 @@ function SetupHeader({
   );
 }
 
+interface ActionTarget {
+  to: string;
+  search?: Record<string, string>;
+}
+
 function SetupRow({
   item,
   ready,
@@ -169,7 +174,7 @@ function SetupRow({
   title: string;
   description: string;
   actionLabel: string;
-  actionTo: string | null;
+  actionTo: ActionTarget | null;
   actionDisabled: boolean;
   actionCaption?: string;
   children?: ReactNode;
@@ -204,7 +209,9 @@ function SetupRow({
           </Button>
         ) : (
           <Button asChild size="sm" variant={item.id === 'workspace' ? 'outline' : 'default'}>
-            <Link to={actionTo}>{actionLabel}</Link>
+            <Link to={actionTo.to} search={actionTo.search}>
+              {actionLabel}
+            </Link>
           </Button>
         )}
         {actionCaption && !completed ? (
@@ -289,14 +296,19 @@ const ACTION_CAPTION: Partial<Record<SetupItemSnapshot['id'], string>> = {
   invite: 'Coming next phase',
 };
 
-function resolveActionTo(id: SetupItemSnapshot['id'], dnsTarget: string | null): string | null {
+function resolveActionTo(
+  id: SetupItemSnapshot['id'],
+  dnsTarget: string | null,
+): ActionTarget | null {
   switch (id) {
     case 'domain':
+      return { to: '/app/settings/channels/email/domains', search: { action: 'add' } };
     case 'address':
+      return { to: '/app/settings/channels/email/addresses', search: { action: 'add' } };
     case 'routing':
-      return '/app/settings/channels/email';
+      return { to: '/app/settings/channels/email/routing' };
     case 'dnsVerified':
-      return dnsTarget ? `/app/settings/email/domains/${dnsTarget}` : null;
+      return dnsTarget ? { to: `/app/settings/channels/email/domains/${dnsTarget}` } : null;
     default:
       return null;
   }

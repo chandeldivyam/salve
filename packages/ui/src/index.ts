@@ -20,6 +20,7 @@ export {
   CardTitle,
   type CardTitleProps,
 } from './card.js';
+export { CopyValue, type CopyValueProps } from './copy-value.js';
 export {
   DropdownMenu,
   DropdownMenuCheckboxItem,

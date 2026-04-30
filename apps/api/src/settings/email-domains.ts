@@ -118,8 +118,10 @@ export async function handleEmailDomainAdd(c: Context): Promise<Response> {
   }
 
   const domain = parsed.data.domain.toLowerCase();
-  const localPart = parsed.data.localPart.toLowerCase();
-  const fullAddress = `${localPart}@${domain}`;
+  // `localPart` from the request body is accepted for backwards compatibility
+  // but no longer used: domain-add no longer auto-creates a support@<domain>
+  // email_address row (see note below). Users now create addresses explicitly
+  // on the Addresses tab.
   const sql = getClient();
 
   const duplicate = await sql<Array<{ id: string }>>`
@@ -136,7 +138,12 @@ export async function handleEmailDomainAdd(c: Context): Promise<Response> {
   const dkimTokens = await provisionSesDomain(domain);
   const sendingDomainID = randomUUID();
   const channelID = randomUUID();
-  const emailAddressID = randomUUID();
+
+  // Note: we no longer auto-create a `support@<domain>` email_address row here.
+  // The setup checklist's "Create a support address" step needs to reflect
+  // explicit user intent — auto-creating an address would flip the step
+  // immediately on domain add and skip a checklist item visibly. Users now
+  // create addresses on the Addresses tab.
 
   await sql.begin(async (tx) => {
     await tx`
@@ -196,37 +203,6 @@ export async function handleEmailDomainAdd(c: Context): Promise<Response> {
         now()
       )
     `;
-
-    await tx`
-      INSERT INTO email_address (
-        id,
-        workspace_id,
-        channel_id,
-        sending_domain_id,
-        local_part,
-        full_address,
-        can_send,
-        can_receive,
-        is_default,
-        label,
-        created_at,
-        updated_at
-      )
-      VALUES (
-        ${emailAddressID},
-        ${auth.workspaceID},
-        ${channelID},
-        ${sendingDomainID},
-        ${localPart},
-        ${fullAddress},
-        true,
-        true,
-        true,
-        'Support',
-        now(),
-        now()
-      )
-    `;
   });
 
   await inngest.send({
@@ -242,7 +218,6 @@ export async function handleEmailDomainAdd(c: Context): Promise<Response> {
     {
       id: sendingDomainID,
       channelID,
-      emailAddressID,
       domain,
       dkimTokens,
       mailFromDomain: `${process.env.MAIL_FROM_SUBDOMAIN ?? 'mail'}.${domain}`,
@@ -519,6 +494,16 @@ async function findEmailChannel(
 }
 
 export async function handleEmailDomainVerifyDev(c: Context): Promise<Response> {
+  // Dev-only override that flips dns_status='verified' without a real DNS
+  // lookup. The UI also gates the button behind `import.meta.env.DEV`, but
+  // the API must enforce this independently — a direct curl in production
+  // would otherwise bypass actual verification. The real verification path
+  // is the `verifyDomain` Inngest function, which performs DNS + SES lookups
+  // and runs in all environments.
+  if (process.env.NODE_ENV === 'production') {
+    return c.json({ error: 'dev_endpoint_not_available_in_production' }, 403);
+  }
+
   const auth = authOf(c);
   if (!auth.workspaceID) return c.json({ error: 'no-workspace' }, 403);
   const id = c.req.param('id');
