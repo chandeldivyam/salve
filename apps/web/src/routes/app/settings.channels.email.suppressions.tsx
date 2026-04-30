@@ -9,6 +9,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { ShieldOff } from 'lucide-react';
 import { EmptyState } from '@/components/email-settings/empty-state';
 import { RouteErrorFeedback, RoutePendingFeedback } from '@/components/route-feedback';
+import { CACHE_NAV } from '@/lib/zero-cache';
 
 export const Route = createFileRoute('/app/settings/channels/email/suppressions')({
   component: SuppressionsTab,
@@ -17,7 +18,7 @@ export const Route = createFileRoute('/app/settings/channels/email/suppressions'
 });
 
 function SuppressionsTab() {
-  const [rows] = useQuery(queries.suppressions());
+  const [rows] = useQuery(queries.suppressions(), CACHE_NAV);
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-6 sm:px-8">

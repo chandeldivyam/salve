@@ -9,6 +9,7 @@ import { Check, Circle, ListChecks, Loader2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { SessionData } from '@/lib/session-loader';
 import { type SetupItemSnapshot, setSetupDismissed, useSetupProgress } from '@/lib/setup-progress';
+import { CACHE_NAV } from '@/lib/zero-cache';
 
 export const Route = createFileRoute('/app/settings/setup')({
   component: SetupPage,
@@ -18,7 +19,7 @@ function SetupPage() {
   const { session } = useRouteContext({ from: '/app' }) as { session: SessionData };
   const workspaceID = session.session.activeOrganizationId ?? null;
   const progress = useSetupProgress(workspaceID);
-  const [domains] = useQuery(queries.sendingDomains());
+  const [domains] = useQuery(queries.sendingDomains(), CACHE_NAV);
 
   if (!progress.ready) {
     return (

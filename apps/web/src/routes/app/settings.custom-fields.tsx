@@ -28,6 +28,7 @@ import {
   supportMetadataQueries,
 } from '@/lib/support-metadata';
 import { useZero } from '@/lib/zero';
+import { CACHE_NAV } from '@/lib/zero-cache';
 
 export const Route = createFileRoute('/app/settings/custom-fields')({
   component: CustomFieldsSettingsPage,
@@ -89,7 +90,7 @@ function CustomFieldsSettingsPage() {
 
 function CustomFieldCategoryPanel({ category }: { category: CustomFieldCategory }) {
   const z = useZero();
-  const [rawFields] = useQuery(supportMetadataQueries.customFieldsForSettings({ category }));
+  const [rawFields] = useQuery(supportMetadataQueries.customFieldsForSettings({ category }), CACHE_NAV);
   const fields = rowsAs<CustomFieldRow>(rawFields).sort(
     (a, b) => a.sortOrder - b.sortOrder || a.displayName.localeCompare(b.displayName),
   );

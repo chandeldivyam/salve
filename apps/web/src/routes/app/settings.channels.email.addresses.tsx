@@ -22,6 +22,7 @@ import {
 } from '@/components/email-settings/types';
 import { RouteErrorFeedback, RoutePendingFeedback } from '@/components/route-feedback';
 import type { SessionData } from '@/lib/session-loader';
+import { CACHE_NAV } from '@/lib/zero-cache';
 
 interface AddressesSearch {
   action?: 'add';
@@ -41,8 +42,8 @@ function AddressesTab() {
   const workspaceID = session.session.activeOrganizationId ?? null;
   const search = useSearch({ from: Route.id }) as AddressesSearch;
 
-  const [domains] = useQuery(queries.sendingDomains());
-  const [addresses] = useQuery(queries.receivableEmailAddresses());
+  const [domains] = useQuery(queries.sendingDomains(), CACHE_NAV);
+  const [addresses] = useQuery(queries.receivableEmailAddresses(), CACHE_NAV);
 
   const [showForm, setShowForm] = useState(false);
   const [selectedDomainID, setSelectedDomainID] = useState<string | null>(null);

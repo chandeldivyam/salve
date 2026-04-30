@@ -1,8 +1,13 @@
 // Phase 2c inbox list — Linear-tight, virtualized, keyboard-driven.
 //
-// Reads `inboxOpen` (workspace-scoped) once and applies `filter` + `search`
-// fully client-side; Phase 4 will introduce dedicated server-side queries
-// for /unassigned, /mine, /resolved when the inbox grows past ~5k rows.
+// Reads `inboxOpen` (workspace-scoped) with a growing window for infinite
+// scroll, applies `filter` + `search` client-side, and renders rows from
+// IndexedDB immediately on mount so a hard reload never flashes a loading
+// state. The query is paged: initial limit `INITIAL_PAGE`, grown by
+// `PAGE_GROWTH` whenever the user scrolls within `LOAD_MORE_THRESHOLD` of
+// the bottom. Mirrors zbugs `issueListV2` cursor pattern in spirit (limit
+// instead of cursor, since Zero already de-duplicates an expanded window
+// efficiently).
 
 import { mutators } from '@opendesk/mutators';
 import {
@@ -23,10 +28,13 @@ import { Link, useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { formatDistanceToNow } from 'date-fns';
 import { ArrowRight, Filter, Inbox, ListChecks, Search } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSetupProgress } from '@/lib/setup-progress';
+import { useShortcut } from '@/lib/shortcuts';
 import { sortedTagsFromRelations, type TagRow, tagPillStyle } from '@/lib/support-metadata';
 import { useZero } from '@/lib/zero';
+import { CACHE_FOREVER } from '@/lib/zero-cache';
+import { InboxListSkeleton } from './skeletons';
 
 type InboxFilter = 'all' | 'unassigned' | 'mine' | 'resolved';
 
@@ -69,6 +77,15 @@ const FILTERS: Array<{ id: InboxFilter; label: string }> = [
   { id: 'resolved', label: 'Resolved' },
 ];
 
+// Pagination knobs. Initial page mirrors the zbugs `issueListV2` window
+// (small enough to render quickly on a cold IDB), growth doubles until we
+// hit MAX_INBOX_LIMIT in the schema (2000). Most workspaces never grow
+// past the initial page.
+const INITIAL_PAGE = 200;
+const PAGE_GROWTH = 200;
+const PAGE_CEILING = 2000;
+const LOAD_MORE_THRESHOLD = 16; // grow when within this many rows of the bottom
+
 export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
   const navigate = useNavigate();
   const z = useZero();
@@ -77,8 +94,12 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
   };
   const workspaceID = ctx.session.session.activeOrganizationId ?? null;
   const setupProgress = useSetupProgress(workspaceID);
-  const [tickets, status] = useQuery(queries.inboxOpen());
-  const ready = status?.type !== 'unknown';
+  const [pageLimit, setPageLimit] = useState(INITIAL_PAGE);
+  // CACHE_FOREVER (10m) so the inbox hydrates from IDB before the first
+  // render after a hard reload. Without this, a fresh mount has nothing
+  // to show until the server replies and the UI flashes a loading state.
+  const [tickets, status] = useQuery(queries.inboxOpen({ limit: pageLimit }), CACHE_FOREVER);
+  const ready = status?.type === 'complete';
   const [filter, setFilter] = useState<InboxFilter>('all');
   const [search, setSearch] = useState('');
 
@@ -120,47 +141,46 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
   });
 
   // J/K + arrow keys for keyboard navigation. E archives (close mutator).
-  // Bound on the list container itself so the composer textarea isn't
-  // hijacked.
+  // `useShortcut` centralises the "skip while typing" gate (lib/shortcuts).
+  const goToIndex = useCallback(
+    (idx: number) => {
+      const t = filtered[idx];
+      if (t) navigate({ to: '/app/inbox/t/$ticketId', params: { ticketId: t.id } });
+    },
+    [filtered, navigate],
+  );
+  const cur = selectedIndex < 0 ? 0 : selectedIndex;
+  useShortcut(['j', 'ArrowDown'], () => {
+    if (filtered.length === 0) return;
+    goToIndex(Math.min(filtered.length - 1, cur + 1));
+  });
+  useShortcut(['k', 'ArrowUp'], () => {
+    if (filtered.length === 0) return;
+    goToIndex(Math.max(0, cur - 1));
+  });
+  useShortcut('Enter', () => {
+    if (filtered.length > 0) goToIndex(cur);
+  });
+  useShortcut(['e', 'E'], () => {
+    const t = filtered[cur];
+    if (t) z.mutate(mutators.ticket.close({ id: t.id }));
+  });
+
+  // Infinite scroll — when the last virtualized row index is within
+  // LOAD_MORE_THRESHOLD of the end, grow the query window. Capped at
+  // PAGE_CEILING (also enforced server-side via MAX_INBOX_LIMIT in the
+  // schema). Done via the virtualizer's reported items so we don't have
+  // to attach our own scroll listener.
+  const virtualItems = virtualizer.getVirtualItems();
+  const lastVirtualIndex = virtualItems[virtualItems.length - 1]?.index ?? 0;
   useEffect(() => {
-    function onKey(ev: KeyboardEvent) {
-      // ignore when an input/textarea/contenteditable is focused
-      const target = ev.target as HTMLElement | null;
-      if (
-        target &&
-        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
-      ) {
-        return;
-      }
-      if (filtered.length === 0) return;
-      const cur = selectedIndex < 0 ? 0 : selectedIndex;
-      let next = cur;
-      if (ev.key === 'j' || ev.key === 'ArrowDown') {
-        next = Math.min(filtered.length - 1, cur + 1);
-      } else if (ev.key === 'k' || ev.key === 'ArrowUp') {
-        next = Math.max(0, cur - 1);
-      } else if (ev.key === 'Enter') {
-        const t = filtered[cur];
-        if (t) navigate({ to: '/app/inbox/t/$ticketId', params: { ticketId: t.id } });
-        return;
-      } else if (ev.key === 'e' || ev.key === 'E') {
-        const t = filtered[cur];
-        if (t) {
-          z.mutate(mutators.ticket.close({ id: t.id }));
-        }
-        return;
-      } else {
-        return;
-      }
-      ev.preventDefault();
-      const t = filtered[next];
-      if (t) {
-        navigate({ to: '/app/inbox/t/$ticketId', params: { ticketId: t.id } });
-      }
+    if (!ready) return;
+    if (tickets.length < pageLimit) return; // server has fewer rows than the cap → fully loaded
+    if (pageLimit >= PAGE_CEILING) return;
+    if (filtered.length - lastVirtualIndex <= LOAD_MORE_THRESHOLD) {
+      setPageLimit((p) => Math.min(PAGE_CEILING, p + PAGE_GROWTH));
     }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [filtered, navigate, selectedIndex, z]);
+  }, [ready, tickets.length, pageLimit, filtered.length, lastVirtualIndex]);
 
   async function onCreateSampleTicket() {
     const samples = [
@@ -239,10 +259,18 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
       </div>
 
       <div ref={parentRef} className="flex-1 overflow-y-auto">
-        {!ready ? (
-          <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-            Loading inbox…
-          </div>
+        {/*
+         * Render order matters here:
+         *   1. tickets present → render the list (covers both "live data"
+         *      and "IDB cache from a previous mount", so reload never
+         *      flashes a loading state).
+         *   2. server confirmed empty + matches the empty filter → empty state.
+         *   3. server hasn't responded yet → skeleton at the row shape.
+         * Gating purely on `ready` (zbugs `ticketStatus.type === 'complete'`)
+         * was the source of the previous loading flash on every mount.
+         */}
+        {filtered.length === 0 && !ready ? (
+          <InboxListSkeleton />
         ) : filtered.length === 0 ? (
           <EmptyInbox
             showSampleCreate={tickets.length === 0 && filter === 'all' && search === ''}

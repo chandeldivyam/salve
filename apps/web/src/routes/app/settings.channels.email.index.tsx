@@ -11,6 +11,7 @@ import { replyEmailDomain, workspaceForwardingAddress } from '@/components/email
 import { RouteErrorFeedback, RoutePendingFeedback } from '@/components/route-feedback';
 import { showSuccess } from '@/lib/feedback';
 import type { SessionData } from '@/lib/session-loader';
+import { CACHE_NAV } from '@/lib/zero-cache';
 
 export const Route = createFileRoute('/app/settings/channels/email/')({
   component: OverviewTab,
@@ -22,10 +23,10 @@ function OverviewTab() {
   const { session } = useRouteContext({ from: '/app' }) as { session: SessionData };
   const workspaceID = session.session.activeOrganizationId ?? null;
 
-  const [domains] = useQuery(queries.sendingDomains());
-  const [addresses] = useQuery(queries.sendableEmailAddresses());
-  const [routingRules] = useQuery(queries.inboundRoutingRules());
-  const [suppressions] = useQuery(queries.suppressions());
+  const [domains] = useQuery(queries.sendingDomains(), CACHE_NAV);
+  const [addresses] = useQuery(queries.sendableEmailAddresses(), CACHE_NAV);
+  const [routingRules] = useQuery(queries.inboundRoutingRules(), CACHE_NAV);
+  const [suppressions] = useQuery(queries.suppressions(), CACHE_NAV);
 
   const verifiedDomains = domains.filter((d) => d.dnsStatus === 'verified').length;
   const sendable = addresses.filter((a) => a.canSend !== false).length;

@@ -91,6 +91,17 @@ const customFieldCategoryArg = z.object({
   category: z.enum(['ticket', 'customer']),
 });
 
+// `inboxOpen` accepts an optional `limit` so the inbox view can grow the
+// window via infinite scroll without round-tripping a different query
+// shape. Default cap matches zbugs `issuePreloadV2`'s 1000-row preload
+// (`shared/queries.ts:99-130`) — large enough that most workspaces never
+// hit it, small enough that the initial subscription is bounded.
+const inboxOpenArg = z
+  .object({ limit: z.number().int().min(1).max(2000).optional() })
+  .optional();
+const DEFAULT_INBOX_LIMIT = 200;
+const MAX_INBOX_LIMIT = 2000;
+
 // ---------- Queries ----------
 
 export const queries = defineQueries({
@@ -134,10 +145,13 @@ export const queries = defineQueries({
 
   /**
    * Inbox — open / in_progress / snoozed tickets in the caller's workspace,
-   * sorted by recency.
+   * sorted by recency. Bounded by `limit` (default 200, max 2000) so the
+   * subscription cost stays predictable for large workspaces. The list view
+   * grows the limit as the user scrolls.
    */
-  inboxOpen: defineQuery(emptyArg, ({ ctx: auth }) =>
-    applyTicketRead(
+  inboxOpen: defineQuery(inboxOpenArg, ({ args, ctx: auth }) => {
+    const limit = Math.min(args?.limit ?? DEFAULT_INBOX_LIMIT, MAX_INBOX_LIMIT);
+    return applyTicketRead(
       builder.ticket.where(({ cmp, or }) =>
         or(
           cmp('status', '=', 'open'),
@@ -156,8 +170,9 @@ export const queries = defineQueries({
           .orderBy('tagID', 'asc'),
       )
       .orderBy('updatedAt', 'desc')
-      .orderBy('id', 'desc'),
-  ),
+      .orderBy('id', 'desc')
+      .limit(limit);
+  }),
 
   /**
    * Active tag groups for settings and grouped tag pickers.

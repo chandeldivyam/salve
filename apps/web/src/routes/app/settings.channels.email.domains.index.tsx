@@ -14,6 +14,7 @@ import { AddDomainForm } from '@/components/email-settings/add-domain-form';
 import { EmptyState } from '@/components/email-settings/empty-state';
 import { domainStatusVariant } from '@/components/email-settings/types';
 import { RouteErrorFeedback, RoutePendingFeedback } from '@/components/route-feedback';
+import { CACHE_NAV } from '@/lib/zero-cache';
 
 interface DomainsSearch {
   action?: 'add';
@@ -30,7 +31,7 @@ export const Route = createFileRoute('/app/settings/channels/email/domains/')({
 
 function DomainsTab() {
   const search = Route.useSearch();
-  const [domains] = useQuery(queries.sendingDomains());
+  const [domains] = useQuery(queries.sendingDomains(), CACHE_NAV);
   const [showForm, setShowForm] = useState(false);
 
   // Honor the ?action=add deep-link from the setup checklist.

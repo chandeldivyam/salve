@@ -15,6 +15,7 @@ import {
   tagPillStyle,
 } from '@/lib/support-metadata';
 import { useZero } from '@/lib/zero';
+import { CACHE_NAV } from '@/lib/zero-cache';
 
 export const Route = createFileRoute('/app/settings/tags')({
   component: TagsSettingsPage,
@@ -26,8 +27,8 @@ type Selection = { kind: 'group'; id: string } | { kind: 'tag'; id: string } | n
 
 function TagsSettingsPage() {
   const z = useZero();
-  const [rawGroups] = useQuery(supportMetadataQueries.tagGroupsForSettings());
-  const [rawTags] = useQuery(supportMetadataQueries.tagsForSettings());
+  const [rawGroups] = useQuery(supportMetadataQueries.tagGroupsForSettings(), CACHE_NAV);
+  const [rawTags] = useQuery(supportMetadataQueries.tagsForSettings(), CACHE_NAV);
   const allGroups = useMemo(
     () =>
       [...rowsAs<TagGroupRow>(rawGroups)].sort(

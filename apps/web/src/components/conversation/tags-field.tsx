@@ -11,6 +11,7 @@ import {
   tagPillStyle,
 } from '@/lib/support-metadata';
 import { useZero } from '@/lib/zero';
+import { CACHE_FOREVER } from '@/lib/zero-cache';
 
 interface TagsFieldProps {
   ticketID: string;
@@ -19,7 +20,7 @@ interface TagsFieldProps {
 
 export function TagsField({ ticketID, ticket }: TagsFieldProps) {
   const z = useZero();
-  const [rawTags] = useQuery(supportMetadataQueries.tags());
+  const [rawTags] = useQuery(supportMetadataQueries.tags(), CACHE_FOREVER);
   const tags = rowsAs<TagRow>(rawTags).filter((tag) => !tag.archivedAt);
   const currentTags = sortedTagsFromRelations(objectValue(ticket, 'tags'));
   const currentIDs = useMemo(() => new Set(currentTags.map((tag) => tag.id)), [currentTags]);

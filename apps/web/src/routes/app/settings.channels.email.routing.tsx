@@ -19,6 +19,7 @@ import {
   shortID,
 } from '@/components/email-settings/types';
 import { RouteErrorFeedback, RoutePendingFeedback } from '@/components/route-feedback';
+import { CACHE_NAV } from '@/lib/zero-cache';
 
 interface RoutingSearch {
   action?: 'add';
@@ -34,9 +35,9 @@ export const Route = createFileRoute('/app/settings/channels/email/routing')({
 });
 
 function RoutingTab() {
-  const [addresses] = useQuery(queries.receivableEmailAddresses());
-  const [rules] = useQuery(queries.inboundRoutingRules());
-  const [members] = useQuery(queries.workspaceMembers());
+  const [addresses] = useQuery(queries.receivableEmailAddresses(), CACHE_NAV);
+  const [rules] = useQuery(queries.inboundRoutingRules(), CACHE_NAV);
+  const [members] = useQuery(queries.workspaceMembers(), CACHE_NAV);
 
   const [activeAddressID, setActiveAddressID] = useState<string | null>(null);
 

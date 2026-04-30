@@ -40,7 +40,9 @@ import {
 import { Composer, type ComposerEmailAddress, type ComposerSendArgs } from '@/components/composer';
 import { CustomFieldsBlock } from '@/components/conversation/custom-fields-block';
 import { TagsField } from '@/components/conversation/tags-field';
+import { TicketDetailSkeleton } from '@/components/skeletons';
 import { useZero } from '@/lib/zero';
+import { CACHE_FOREVER, CACHE_NAV } from '@/lib/zero-cache';
 
 export const Route = createFileRoute('/app/inbox/t/$ticketId')({
   component: TicketDetail,
@@ -155,19 +157,26 @@ function TicketDetail() {
   };
   const currentUserID = session.user.id;
 
-  const [ticket] = useQuery(queries.ticketByID({ id: ticketId }));
-  const [members] = useQuery(queries.workspaceMembers());
+  const [ticket, ticketStatus] = useQuery(queries.ticketByID({ id: ticketId }), CACHE_NAV);
+  const [members] = useQuery(queries.workspaceMembers(), CACHE_FOREVER);
   // Phase 3a: outbound delivery status per message. Empty until the
   // Post-commit Inngest delivery → mailpit/SES round-trip stamps a row.
-  const [outboundRows] = useQuery(queries.outboundMessagesByTicket({ id: ticketId }));
-  const [sendableEmailAddresses] = useQuery(queries.sendableEmailAddresses());
-  const [inboundMessageRows] = useQuery(queries.inboundMessagesByTicket({ id: ticketId }));
+  const [outboundRows] = useQuery(queries.outboundMessagesByTicket({ id: ticketId }), CACHE_NAV);
+  const [sendableEmailAddresses] = useQuery(queries.sendableEmailAddresses(), CACHE_FOREVER);
+  const [inboundMessageRows] = useQuery(queries.inboundMessagesByTicket({ id: ticketId }), CACHE_NAV);
   const deliveryByMessage = new Map<string, { status: string; error?: string | null }>();
   for (const r of outboundRows) {
     deliveryByMessage.set(r.messageID, { status: r.status, error: r.error });
   }
 
+  // Distinguish "still hydrating" (don't claim not-found) from "server
+  // confirmed empty" (truly not found). zbugs `issue-page.tsx` makes the
+  // same distinction: only render the not-found card once the result is
+  // `complete`, otherwise render a layout-shape skeleton.
   if (!ticket) {
+    if (ticketStatus?.type !== 'complete') {
+      return <TicketDetailSkeleton />;
+    }
     return (
       <div className="flex flex-1 items-center justify-center px-6">
         <div className="max-w-sm rounded-xl border border-border bg-surface p-6 text-center shadow-sm">

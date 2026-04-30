@@ -23,6 +23,7 @@ import {
   supportMetadataQueries,
 } from '@/lib/support-metadata';
 import { useZero } from '@/lib/zero';
+import { CACHE_FOREVER } from '@/lib/zero-cache';
 
 interface CustomFieldsBlockProps {
   entity: CustomFieldCategory;
@@ -33,7 +34,10 @@ interface CustomFieldsBlockProps {
 
 export function CustomFieldsBlock({ entity, entityID, record, title }: CustomFieldsBlockProps) {
   const z = useZero();
-  const [rawFields] = useQuery(supportMetadataQueries.customFieldsByCategory({ category: entity }));
+  const [rawFields] = useQuery(
+    supportMetadataQueries.customFieldsByCategory({ category: entity }),
+    CACHE_FOREVER,
+  );
   const fields = rowsAs<CustomFieldRow>(rawFields)
     .filter(isCustomFieldActive)
     .sort((a, b) => a.sortOrder - b.sortOrder || a.displayName.localeCompare(b.displayName));

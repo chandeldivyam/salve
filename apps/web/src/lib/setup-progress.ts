@@ -6,6 +6,7 @@
 import { queries } from '@opendesk/zero-schema';
 import { useQuery } from '@rocicorp/zero/react';
 import { useSyncExternalStore } from 'react';
+import { CACHE_FOREVER } from './zero-cache';
 
 const STORAGE_PREFIX = 'salve.setup.dismissed.';
 
@@ -92,11 +93,15 @@ export interface SetupProgressSnapshot {
 export function useSetupProgress(workspaceID: string | null): SetupProgressSnapshot {
   const dismissed = useDismissed(workspaceID);
 
-  const [domainRows, domainStatus] = useQuery(queries.sendingDomains());
-  const [addressRows, addressStatus] = useQuery(queries.receivableEmailAddresses());
-  const [sendableRows, sendableStatus] = useQuery(queries.sendableEmailAddresses());
-  const [routingRuleRows, routingStatus] = useQuery(queries.inboundRoutingRules());
-  const [memberRows, memberStatus] = useQuery(queries.workspaceMembers());
+  // CACHE_FOREVER (10m) so the checklist hydrates instantly from IDB on
+  // reload — the alternative is `ready=false` for the first frames after
+  // every navigation, which makes the inbox empty state and header pill
+  // flicker. The setup status changes rarely; staleness is acceptable.
+  const [domainRows, domainStatus] = useQuery(queries.sendingDomains(), CACHE_FOREVER);
+  const [addressRows, addressStatus] = useQuery(queries.receivableEmailAddresses(), CACHE_FOREVER);
+  const [sendableRows, sendableStatus] = useQuery(queries.sendableEmailAddresses(), CACHE_FOREVER);
+  const [routingRuleRows, routingStatus] = useQuery(queries.inboundRoutingRules(), CACHE_FOREVER);
+  const [memberRows, memberStatus] = useQuery(queries.workspaceMembers(), CACHE_FOREVER);
 
   const ready =
     domainStatus?.type !== 'unknown' &&

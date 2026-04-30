@@ -18,6 +18,7 @@ import { useState } from 'react';
 import { domainStatusVariant, postEmpty } from '@/components/email-settings/types';
 import { RouteErrorFeedback, RoutePendingFeedback } from '@/components/route-feedback';
 import { showError, showSuccess } from '@/lib/feedback';
+import { CACHE_NAV } from '@/lib/zero-cache';
 
 export const Route = createFileRoute('/app/settings/channels/email/domains/$domainId')({
   component: DomainDetail,
@@ -31,7 +32,7 @@ type DomainDetailRow = NonNullable<SendingDomainDetailRow>;
 
 function DomainDetail() {
   const { domainId } = Route.useParams();
-  const [d, status] = useQuery(queries.sendingDomainByID({ id: domainId }));
+  const [d, status] = useQuery(queries.sendingDomainByID({ id: domainId }), CACHE_NAV);
   const [busy, setBusy] = useState(false);
 
   if (status?.type === 'unknown') {
