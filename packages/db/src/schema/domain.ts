@@ -167,3 +167,37 @@ export const auditEvent = pgTable(
     ticketCreatedIdx: index('audit_event_ticket_created_idx').on(t.ticketId, t.createdAt),
   }),
 );
+
+// ---------- Outbox (Phase 2b) ----------
+//
+// Pure server-side queue for "things that must leave the database after a write
+// commits": email dispatch, Inngest events, etc. Mutators (the server-side
+// half) write rows to this table inside the same transaction as the domain
+// write, so we get at-least-once delivery without two-phase commit.
+//
+// Phase 3 wires a Postgres LISTEN/NOTIFY subscriber that turns these rows into
+// Inngest events; Phase 2b only INSERTs and the worker is a TODO. Not mirrored
+// in the Zero schema — clients have no business reading this.
+//
+// The partial index `(processed_at) WHERE processed_at IS NULL` is the worker's
+// queue: a `SELECT ... FOR UPDATE SKIP LOCKED` against unprocessed rows. We
+// declare it as a normal index here and append the `WHERE` clause via raw SQL
+// in the migration (drizzle-kit doesn't expose partial indexes natively in
+// 0.31).
+export const outbox = pgTable(
+  'outbox',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    kind: text('kind').notNull(),
+    payload: jsonb('payload').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    processedAt: timestamp('processed_at', { withTimezone: true }),
+  },
+  (t) => ({
+    pendingIdx: index('outbox_pending_idx').on(t.processedAt),
+    workspaceIdx: index('outbox_workspace_idx').on(t.workspaceId, t.createdAt),
+  }),
+);

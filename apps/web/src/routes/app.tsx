@@ -5,6 +5,7 @@
 // (ZERO_QUERY_FORWARD_COOKIES / ZERO_MUTATE_FORWARD_COOKIES in
 // apps/zero-cache/.env).
 
+import { mutators } from '@opendesk/mutators';
 import { schema } from '@opendesk/zero-schema/schema';
 import { ZeroProvider } from '@rocicorp/zero/react';
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
@@ -37,6 +38,7 @@ function AppLayout() {
       userID: session.user.id,
       cacheURL: ZERO_CACHE_URL,
       schema,
+      mutators,
       context: {
         sub: session.user.id,
         workspaceID: session.session.activeOrganizationId ?? null,

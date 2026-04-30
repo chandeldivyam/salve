@@ -12,11 +12,9 @@
 // `packages/zero-cache/src/types/pg-data-type.ts` in the rocicorp/mono repo.)
 
 import {
-  ANYONE_CAN_DO_ANYTHING,
   boolean,
   createBuilder,
   createSchema,
-  definePermissions,
   enumeration,
   json,
   number,
@@ -286,35 +284,33 @@ export const schema = createSchema({
     attachmentRelationships,
     auditEventRelationships,
   ],
-  // Phase 2a: keep legacy CRUD/queries enabled so the verification step can
-  // do `useQuery(z.query.ticket.where('workspaceID','=',id))` directly. Phase
-  // 2b flips both to `false` once we register custom queries (`defineQueries`)
-  // and custom mutators (`defineMutators`) — at that point all reads/writes
-  // flow through workspace-scoped helpers and these legacy paths are dead.
-  enableLegacyMutators: true,
-  enableLegacyQueries: true,
+  // Phase 2b: legacy paths are off. All reads go through `defineQueries` (see
+  // `./queries.ts`) and all writes through `defineMutators` (see
+  // `@opendesk/mutators`). With `enableLegacy{Queries,Mutators}: false` Zero
+  // 1.3.0 refuses any direct `z.query.*` / `z.mutate.*` call, which is the
+  // structural enforcement we want — no caller can bypass `applyWorkspaceScope`
+  // or the assertion helpers.
+  enableLegacyMutators: false,
+  enableLegacyQueries: false,
 });
 
-// Phase 2a permissions — temporary `ANYONE_CAN_DO_ANYTHING` for every table
-// so zero-cache will actually replicate rows out to clients. The plan's
-// permission model is **assertion-based inside mutators/queries**, not the
-// declarative `definePermissions` DSL. We keep this thin permissive layer
-// here only because zero-cache 1.3.0 refuses to sync data at all when no
-// permissions are deployed. Phase 2b adds proper auth checks (workspace
-// scoping, role checks) inside custom mutators / queries; this object stays
-// permissive (or gets removed entirely if a future Zero release drops the
-// requirement). DO NOT add granular row policies here — security lives in
-// the TS code, not in this file.
-export const permissions = await definePermissions<unknown, Schema>(schema, () => ({
-  user: ANYONE_CAN_DO_ANYTHING,
-  organization: ANYONE_CAN_DO_ANYTHING,
-  member: ANYONE_CAN_DO_ANYTHING,
-  customer: ANYONE_CAN_DO_ANYTHING,
-  ticket: ANYONE_CAN_DO_ANYTHING,
-  message: ANYONE_CAN_DO_ANYTHING,
-  attachment: ANYONE_CAN_DO_ANYTHING,
-  auditEvent: ANYONE_CAN_DO_ANYTHING,
-}));
+// Permissions
+// -----------
+// Zero 1.3.0 marks `definePermissions` and the row-level DSL `@deprecated` in
+// favour of `defineMutators` / `defineQueries`. The Zero docs state outright:
+// "Zero does not have (or need) a first-class permission system like RLS.
+// Instead, you implement permissions ... in your queries and mutators
+// endpoints, and creating a Context object that contains the user's ID."
+// (https://zero.rocicorp.dev/docs/auth.md)
+//
+// We rely entirely on:
+//   1. `applyWorkspaceScope` in `./queries.ts` (read-side filter)
+//   2. `assertCanModifyTicket` etc. in `@opendesk/mutators/auth` (write-side)
+//
+// No `definePermissions` shim is exported here. Verified locally: zero-cache
+// 1.3.0 syncs custom-query results without any deployed permissions object.
+// If a future Zero release re-introduces a permissions requirement, add the
+// thin shim back here — DO NOT use it as a real auth boundary.
 
 export const builder = createBuilder(schema);
 
@@ -336,9 +332,12 @@ export type AuthData = {
   role: 'owner' | 'admin' | 'agent' | null;
 };
 
+// Match zbugs's `shared/auth.ts:100-104`: context is `AuthData | undefined` so
+// queries/mutators can run on unauthenticated traffic (the assertions inside
+// reject it explicitly with `MutationError(NOT_LOGGED_IN)`).
 declare module '@rocicorp/zero' {
   interface DefaultTypes {
     schema: Schema;
-    context: AuthData;
+    context: AuthData | undefined;
   }
 }

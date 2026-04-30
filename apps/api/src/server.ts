@@ -1,12 +1,17 @@
 import { serve } from '@hono/node-server';
 import { SERVICE_NAME } from '@opendesk/core';
 import { authSchema, getDb } from '@opendesk/db';
+import { type AuthData, queries, schema } from '@opendesk/zero-schema';
+import { mustGetMutator, mustGetQuery, type ReadonlyJSONValue } from '@rocicorp/zero';
+import { handleMutateRequest, handleQueryRequest } from '@rocicorp/zero/server';
+import { zeroPostgresJS } from '@rocicorp/zero/server/adapters/postgresjs';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { auth } from './auth.js';
-import { buildJwtCookieHeader, issueOpendeskJwt } from './jwt.js';
+import { buildJwtCookieHeader, issueOpendeskJwt, readJwtCookie, verifyOpendeskJwt } from './jwt.js';
 import { authMiddleware, authOf, requireUser } from './middleware.js';
+import { createServerMutators } from './server-mutators.js';
 
 const app = new Hono();
 
@@ -107,6 +112,98 @@ app.post('/api/auth/switch-workspace', requireUser, async (c) => {
 //   organization/create, organization/set-active, organization/list, ...
 //   magic-link/sign-in/magic-link, callback/{provider}.
 app.on(['GET', 'POST'], '/api/auth/*', (c) => auth.handler(c.req.raw));
+
+// ---------------------------------------------------------------------------
+// Zero custom mutator + query endpoints.
+//
+// zero-cache is configured (via apps/zero-cache/.env) with
+//   ZERO_MUTATE_URL=http://localhost:3001/api/zero/mutate
+//   ZERO_QUERY_URL=http://localhost:3001/api/zero/query
+// and forwards the browser's `jwt` cookie verbatim
+// (ZERO_MUTATE_FORWARD_COOKIES / ZERO_QUERY_FORWARD_COOKIES). We verify that
+// JWT here and derive the AuthData ctx that mutators / queries see.
+//
+// Pattern from `/tmp/zero-mono/apps/zbugs/api/index.ts:160-228` adapted to
+// Hono and the postgres.js adapter.
+
+const upstreamDB = process.env.DATABASE_URL ?? '';
+let _zql: ReturnType<typeof zeroPostgresJS<typeof schema>> | undefined;
+function getZql() {
+  if (!_zql) {
+    if (!upstreamDB) throw new Error('DATABASE_URL is not set; cannot init Zero server adapter');
+    // Independent postgres.js client so server-mutator transactions are
+    // isolated from the @opendesk/db drizzle pool (different transaction
+    // semantics expected by Zero's adapter). Pass the connection string
+    // directly so the postgres types come from Zero's pinned `postgres@3.4.7`
+    // (avoids the duplicated `Sql<{}>` vs `Sql<Record<string, unknown>>`
+    // mismatch that arises when api itself imports the slightly newer
+    // postgres@3.4.9).
+    _zql = zeroPostgresJS(schema, upstreamDB);
+  }
+  return _zql;
+}
+
+async function authDataFromRequest(c: { req: { raw: Request } }): Promise<AuthData | undefined> {
+  const cookieHeader = c.req.raw.headers.get('cookie');
+  const token = readJwtCookie(cookieHeader);
+  if (!token) return undefined;
+  try {
+    const claims = await verifyOpendeskJwt(token);
+    return {
+      sub: claims.sub,
+      workspaceID: claims.workspaceID,
+      role: claims.role,
+    };
+  } catch (e) {
+    console.warn('[opendesk-api] zero endpoint: rejecting bad jwt', (e as Error).message);
+    return undefined;
+  }
+}
+
+app.post('/api/zero/mutate', async (c) => {
+  const authData = await authDataFromRequest(c);
+  const url = new URL(c.req.raw.url);
+  const queryString: Record<string, string> = {};
+  url.searchParams.forEach((v, k) => {
+    queryString[k] = v;
+  });
+  const body = (await c.req.raw.json()) as ReadonlyJSONValue;
+
+  const serverMutators = createServerMutators();
+
+  const response = await handleMutateRequest(
+    getZql(),
+    (transact) =>
+      // biome-ignore lint/suspicious/noExplicitAny: Zero's transact callback is generic-erased here
+      transact((tx: any, name: string, args: any) => {
+        const mutator = mustGetMutator(serverMutators, name);
+        return mutator.fn({ tx, args, ctx: authData });
+      }),
+    queryString,
+    body,
+    'info',
+  );
+
+  return c.json(response);
+});
+
+app.post('/api/zero/query', async (c) => {
+  const authData = await authDataFromRequest(c);
+  const body = (await c.req.raw.json()) as ReadonlyJSONValue;
+
+  const response = await handleQueryRequest(
+    // biome-ignore lint/suspicious/noExplicitAny: erased query name+args
+    (name: string, args: any) => {
+      const query = mustGetQuery(queries, name);
+      return query.fn({ args, ctx: authData });
+    },
+    schema,
+    body,
+    'info',
+  );
+
+  return c.json(response);
+});
 
 const port = Number.parseInt(process.env.PORT ?? '3001', 10);
 

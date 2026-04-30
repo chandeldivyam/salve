@@ -1,3 +1,4 @@
+import { mutators } from '@opendesk/mutators';
 import {
   Button,
   Card,
@@ -7,11 +8,13 @@ import {
   CardTitle,
   Logo,
 } from '@opendesk/ui';
-import { useQuery, useZero } from '@rocicorp/zero/react';
+import { queries } from '@opendesk/zero-schema';
+import { useQuery } from '@rocicorp/zero/react';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { authClient, switchWorkspace } from '@/lib/auth-client';
 import { fetchSession, listOrganizations, type SessionData } from '@/lib/session-loader';
+import { useZero } from '@/lib/zero';
 
 export const Route = createFileRoute('/app/')({
   component: AppHome,
@@ -118,31 +121,77 @@ function AppHome() {
 }
 
 /**
- * Phase 2a verification panel — runs a Zero `useQuery` against the live
- * workspace's tickets and reports the count. Confirms that the schema is
- * synced, the cookie-based auth is being forwarded by zero-cache, and the
- * client → view-syncer → upstream → IVM round-trip works.
+ * Phase 2b verification panel — uses the workspace-scoped `inboxOpen` custom
+ * query to read tickets (no more raw `.where(...)`); writes via the
+ * `ticket.create` custom mutator. Permissions live entirely in the mutator
+ * assertions + `applyWorkspaceScope` (see `packages/zero-schema/src/queries.ts`,
+ * `packages/mutators/src/auth.ts`).
  *
- * The query is a workspace-scoped `where` filter; permissions are wide-open
- * for Phase 2a (see `packages/zero-schema/src/schema.ts`). Phase 2b moves to
- * `defineQueries` helpers that bake `workspaceID` scoping into a single shared
- * helper instead of dotting `.where(...)` around the codebase.
+ * TEMP: removed in Phase 2c — replaced with the real inbox UI (TanStack Table
+ * + Tiptap composer).
  */
-function ZeroSyncPanel({
-  workspaceID,
-  workspaceName,
-}: {
-  workspaceID: string;
-  workspaceName: string;
-}) {
+function ZeroSyncPanel({ workspaceName }: { workspaceID: string; workspaceName: string }) {
   const z = useZero();
-  // useQuery returns [rows, status]; legacy queries are enabled in Phase 2a.
-  const [tickets, status] = useQuery(z.query.ticket.where('workspaceID', '=', workspaceID));
+  // `inboxOpen` takes no args — the validator in queries.ts is `z.undefined()`.
+  const [tickets, status] = useQuery(queries.inboxOpen());
   const ready = status?.type !== 'unknown';
+  const recent = tickets.slice(0, 5);
+
+  async function onCreateTestTicket() {
+    // Drizzle declared `ticket.id` as a Postgres `uuid`, so the client-side id
+    // must be a real RFC 4122 UUID — `nanoid()` would be rejected by the
+    // server-side replay with "invalid input syntax for type uuid". (Phase
+    // 2c will likely move id generation server-side anyway.)
+    const id = crypto.randomUUID();
+    // Modern Zero 1.x mutator-call shape: `z.mutate(mutators.ns.action(args))`.
+    // The mutator runs optimistically here, then again authoritatively on the
+    // server (`apps/api/src/server-mutators.ts`).
+    await z.mutate(
+      mutators.ticket.create({
+        id,
+        title: `Hello from agent (${new Date().toLocaleTimeString()})`,
+        description: 'Created via the Phase 2b verification button.',
+        priority: 'normal',
+      }),
+    );
+  }
+
   return (
-    <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50/50 px-3 py-2 text-sm text-emerald-900">
-      <span className="font-medium">Sync status:</span>{' '}
-      {ready ? `${tickets.length} ticket(s) in ${workspaceName}.` : 'connecting to zero-cache…'}
+    <div className="mt-3 grid gap-3">
+      <div className="rounded-md border border-emerald-200 bg-emerald-50/50 px-3 py-2 text-sm text-emerald-900">
+        <span className="font-medium">Sync status:</span>{' '}
+        {ready ? `${tickets.length} ticket(s) in ${workspaceName}.` : 'connecting to zero-cache…'}
+      </div>
+
+      {/* TEMP: removed in Phase 2c — replaced with real inbox UI. */}
+      <div className="grid gap-2">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-slate-700">Recent open tickets</h3>
+          <Button size="sm" onClick={onCreateTestTicket}>
+            Create test ticket
+          </Button>
+        </div>
+        {recent.length === 0 ? (
+          <p className="text-xs text-slate-500">No tickets yet — click the button above.</p>
+        ) : (
+          <ul className="divide-y divide-slate-200 rounded-md border border-slate-200 bg-white">
+            {recent.map((t) => (
+              <li
+                key={t.id}
+                className="grid grid-cols-[1fr_auto_auto] items-center gap-3 px-3 py-2 text-sm"
+              >
+                <span className="truncate font-medium text-slate-800">{t.title}</span>
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                  {t.status}
+                </span>
+                <span className="font-mono text-[11px] text-slate-400">
+                  {new Date(t.createdAt).toLocaleTimeString()}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }

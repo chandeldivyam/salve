@@ -16,10 +16,12 @@
     "@opendesk/db": "workspace:*",
     "@opendesk/mutators": "workspace:*",
     "@opendesk/zero-schema": "workspace:*",
+    "@rocicorp/zero": "1.3.0",
     "better-auth": "1.6.9",
     "drizzle-orm": "0.45.2",
     "hono": "4.12.15",
     "jose": "6.2.3",
+    "nanoid": "5.1.9",
     "postgres": "3.4.9",
     "zod": "4.4.1"
   },

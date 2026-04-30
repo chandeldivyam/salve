@@ -10,9 +10,19 @@
 // `ZERO_MUTATE_FORWARD_COOKIES=true`.
 
 import { schema } from '@opendesk/zero-schema/schema';
+import { useZero as useZeroBase } from '@rocicorp/zero/react';
 
 export const ZERO_CACHE_URL =
   // Vite-injected env override; defaults to local zero-cache-dev.
   (import.meta.env.VITE_ZERO_CACHE_URL as string | undefined) ?? 'http://localhost:4848';
+
+/**
+ * Re-export `useZero` so callers don't all import from `@rocicorp/zero/react`
+ * directly. With the modern mutator API the call shape is
+ * `z.mutate(mutators.namespace.action(args))` — `mutators.*(args)` is what
+ * provides the typed-args, NOT the `useZero` generics. The default
+ * `useZero()` (no generic params) is what zbugs itself uses.
+ */
+export const useZero = useZeroBase;
 
 export { schema };
