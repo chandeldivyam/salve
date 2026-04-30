@@ -6,6 +6,7 @@
 // apps/zero-cache/.env).
 
 import { mutators } from '@opendesk/mutators';
+import { TooltipProvider } from '@opendesk/ui';
 import { schema } from '@opendesk/zero-schema/schema';
 import { ZeroProvider } from '@rocicorp/zero/react';
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
@@ -50,7 +51,9 @@ function AppLayout() {
 
   return (
     <ZeroProvider {...zeroOpts}>
-      <Outlet />
+      <TooltipProvider delayDuration={150}>
+        <Outlet />
+      </TooltipProvider>
     </ZeroProvider>
   );
 }

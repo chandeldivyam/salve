@@ -102,6 +102,18 @@ export const queries = defineQueries({
   ticketCountByStatus: defineQuery(emptyArg, ({ ctx: auth }) =>
     applyTicketRead(builder.ticket, auth),
   ),
+
+  /**
+   * Members of the caller's workspace, with their `user` row joined for
+   * display. Reads from the auth-mirror `member` table (better-auth org
+   * plugin) and scopes by `organizationId = auth.workspaceID`. Used in the
+   * Phase-2c assignee dropdown.
+   */
+  workspaceMembers: defineQuery(emptyArg, ({ ctx: auth }) =>
+    builder.member
+      .where('organizationId', '=', auth?.workspaceID ?? '__no-workspace__')
+      .related('user'),
+  ),
 });
 
 export type Queries = typeof queries;

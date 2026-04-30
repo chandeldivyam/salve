@@ -59,12 +59,22 @@ export type SnoozeTicketArgs = z.infer<typeof snoozeTicketArgsSchema>;
 
 export const ticketIdOnlyArgsSchema = z.object({ id: idArg });
 
+export const messageAttachmentSchema = z.object({
+  id: idArg,
+  s3Key: z.string().min(1),
+  filename: z.string().min(1),
+  mimeType: z.string().min(1),
+  sizeBytes: z.number().int().nonnegative(),
+});
+export type MessageAttachmentInput = z.infer<typeof messageAttachmentSchema>;
+
 export const sendMessageArgsSchema = z.object({
   id: idArg,
   ticketID: idArg,
   bodyHTML: z.string(),
   bodyText: z.string(),
   isInternal: z.boolean().optional(),
+  attachments: z.array(messageAttachmentSchema).optional(),
 });
 export type SendMessageArgs = z.infer<typeof sendMessageArgsSchema>;
 
@@ -350,6 +360,25 @@ export const mutators = defineMutators({
         isInternal,
         createdAt: ts,
       });
+
+      // Phase 2c: persist any uploaded-but-unattached attachments. Mutator
+      // runs on both client (optimistic) and server — same code path. The
+      // S3 object was already PUT by the browser via the /api/files/presign
+      // URL; we only stamp the DB row here.
+      if (args.attachments?.length) {
+        for (const a of args.attachments) {
+          await tx.mutate.attachment.insert({
+            id: a.id,
+            workspaceID: auth.workspaceID,
+            messageID: args.id,
+            s3Key: a.s3Key,
+            filename: a.filename,
+            mimeType: a.mimeType,
+            sizeBytes: a.sizeBytes,
+            createdAt: ts,
+          });
+        }
+      }
 
       // Bump ticket activity; stamp first_response_at if this is the first
       // agent reply.

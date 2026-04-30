@@ -11,6 +11,8 @@
     "check": "biome check ."
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "3.957.0",
+    "@aws-sdk/s3-request-presigner": "3.957.0",
     "@hono/node-server": "2.0.0",
     "@opendesk/core": "workspace:*",
     "@opendesk/db": "workspace:*",

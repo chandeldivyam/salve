@@ -9,8 +9,9 @@ import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { auth } from './auth.js';
+import { handleGetSigned, handlePresign } from './files.js';
 import { buildJwtCookieHeader, issueOpendeskJwt, readJwtCookie, verifyOpendeskJwt } from './jwt.js';
-import { authMiddleware, authOf, requireUser } from './middleware.js';
+import { authMiddleware, authOf, requireUser, requireWorkspace } from './middleware.js';
 import { createServerMutators } from './server-mutators.js';
 
 const app = new Hono();
@@ -106,6 +107,12 @@ app.post('/api/auth/switch-workspace', requireUser, async (c) => {
 
   return c.body(null, 204);
 });
+
+// File presign endpoints (Phase 2c). Both require an active workspace —
+// the s3Key is namespaced under `workspaces/<workspaceID>/`. See
+// `apps/api/src/files.ts`.
+app.post('/api/files/presign', requireWorkspace, handlePresign);
+app.post('/api/files/get', requireWorkspace, handleGetSigned);
 
 // Mount better-auth's full handler at /api/auth/*. Better-auth handles:
 //   sign-up/email, sign-in/email, sign-out, get-session,
