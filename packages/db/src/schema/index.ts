@@ -1,4 +1,8 @@
 // Drizzle schema barrel — what `drizzle-kit` reads to generate migrations.
-// Split by concern. Phase 2 adds workspace.ts content (tickets, messages, etc.).
+// Split by concern.
+//   - auth.ts   : better-auth core + organization plugin tables
+//   - domain.ts : help-desk entities (Phase 2a — customer, ticket, message,
+//                 attachment, audit_event); all carry workspace_id.
 export * from './auth.js';
+export * from './domain.js';
 export * from './workspace.js';

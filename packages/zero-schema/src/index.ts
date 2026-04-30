@@ -1,9 +1,22 @@
-// @opendesk/zero-schema — Zero schema, custom queries, and permission helpers.
-// Shared between apps/web (typed Zero client) and apps/api (zero-cache + permission deploy).
+// @opendesk/zero-schema — public surface.
 //
-// TODO Phase 2: Define the real schema.ts mirroring packages/db (Drizzle source-of-truth).
-// Until then this file just exports the schema name; zero-cache-dev is intentionally NOT
-// wired into `pnpm dev` yet — it has nothing to read.
+// `schema.ts` defines the Zero schema (mirroring `packages/db/src/schema/
+// domain.ts`). Phase 2b will add `mutators.ts` and `queries.ts` here.
 
 export const ZERO_SCHEMA_NAME = 'opendesk' as const;
-export const ZERO_SCHEMA_VERSION = 0 as const;
+export const ZERO_SCHEMA_VERSION = 1 as const;
+
+export {
+  type Attachment,
+  type AuditEvent,
+  type AuthData,
+  builder,
+  type Customer,
+  type Member,
+  type Message,
+  type Organization,
+  type Schema,
+  schema,
+  type Ticket,
+  type User,
+} from './schema.js';

@@ -1,0 +1,6 @@
+# dev-only zero replica db (rebuildable from upstream postgres).
+zero.db
+zero.db-*
+sync-replica.db
+sync-replica.db-*
+.env.local

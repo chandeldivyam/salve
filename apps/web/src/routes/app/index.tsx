@@ -7,6 +7,7 @@ import {
   CardTitle,
   Logo,
 } from '@opendesk/ui';
+import { useQuery, useZero } from '@rocicorp/zero/react';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { authClient, switchWorkspace } from '@/lib/auth-client';
@@ -79,12 +80,13 @@ function AppHome() {
           </Button>
         </div>
       </header>
-      <main className="mx-auto max-w-3xl p-8">
+      <main className="mx-auto grid max-w-3xl gap-6 p-8">
         <Card>
           <CardHeader>
-            <CardTitle>Phase 1 — auth + workspace bootstrap</CardTitle>
+            <CardTitle>Phase 2a — Zero sync</CardTitle>
             <CardDescription>
-              You're signed in. Phase 2 lights up the inbox, tickets, and Zero sync.
+              Reads through zero-cache-dev. Phase 2b adds the inbox UI + custom mutators on top of
+              this.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-2 text-sm">
@@ -105,9 +107,42 @@ function AppHome() {
                 Create your first workspace →
               </Link>
             ) : null}
+            {activeID ? (
+              <ZeroSyncPanel workspaceID={activeID} workspaceName={active?.name ?? activeID} />
+            ) : null}
           </CardContent>
         </Card>
       </main>
+    </div>
+  );
+}
+
+/**
+ * Phase 2a verification panel — runs a Zero `useQuery` against the live
+ * workspace's tickets and reports the count. Confirms that the schema is
+ * synced, the cookie-based auth is being forwarded by zero-cache, and the
+ * client → view-syncer → upstream → IVM round-trip works.
+ *
+ * The query is a workspace-scoped `where` filter; permissions are wide-open
+ * for Phase 2a (see `packages/zero-schema/src/schema.ts`). Phase 2b moves to
+ * `defineQueries` helpers that bake `workspaceID` scoping into a single shared
+ * helper instead of dotting `.where(...)` around the codebase.
+ */
+function ZeroSyncPanel({
+  workspaceID,
+  workspaceName,
+}: {
+  workspaceID: string;
+  workspaceName: string;
+}) {
+  const z = useZero();
+  // useQuery returns [rows, status]; legacy queries are enabled in Phase 2a.
+  const [tickets, status] = useQuery(z.query.ticket.where('workspaceID', '=', workspaceID));
+  const ready = status?.type !== 'unknown';
+  return (
+    <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50/50 px-3 py-2 text-sm text-emerald-900">
+      <span className="font-medium">Sync status:</span>{' '}
+      {ready ? `${tickets.length} ticket(s) in ${workspaceName}.` : 'connecting to zero-cache…'}
     </div>
   );
 }
