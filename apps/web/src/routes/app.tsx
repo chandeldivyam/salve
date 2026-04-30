@@ -11,10 +11,10 @@ import { schema } from '@opendesk/zero-schema/schema';
 import { ZeroProvider } from '@rocicorp/zero/react';
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
 import { useEffect, useMemo } from 'react';
+import { BrandSplash } from '@/components/brand-splash';
 import {
   RouteErrorFeedback,
   RouteNotFoundFeedback,
-  RoutePendingFeedback,
 } from '@/components/route-feedback';
 import { fetchSession, type SessionData } from '@/lib/session-loader';
 import { useZero, ZERO_CACHE_URL } from '@/lib/zero';
@@ -28,7 +28,7 @@ export const Route = createFileRoute('/app')({
     }
     return { session };
   },
-  pendingComponent: RoutePendingFeedback,
+  pendingComponent: BrandSplash,
   errorComponent: RouteErrorFeedback,
   notFoundComponent: RouteNotFoundFeedback,
   component: AppLayout,

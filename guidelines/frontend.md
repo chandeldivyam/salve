@@ -845,6 +845,22 @@ In order of preference:
 
 The skeleton renders only on the truly first mount (no IDB cache yet). Once a query has been subscribed once with a TTL, subsequent navigations and reloads hit IDB synchronously and the skeleton path is bypassed entirely. If you ever see the skeleton flicker on a route the user has already visited, that's a bug — check that the `useQuery` has a TTL and that the query is in `preloadWorkspace`.
 
+### Pre-React splash for the auth window
+
+There is one window we cannot cover with skeletons or IDB: the time between the browser fetching the HTML and React mounting. On a hard reload, this is anywhere from 50ms (warm) to 800ms (cold) — long enough to see a white flash, then a route-pending state, then real content. Three transitions, three different visuals.
+
+The fix is a single brand splash that paints from the very first frame and stays continuous through every hand-off:
+
+1. **Inline in `index.html`** — `<div id="initial-splash">` with the leaf glyph + dot animation declared inline (no Tailwind / no bundle dependency). Painted on the very first frame, before any JS executes.
+2. **As `defaultPendingComponent`** in `main.tsx` — the React `<BrandSplash>` component (`apps/web/src/components/brand-splash.tsx`) is visually identical to the inline one, so when React takes over rendering it's seamless.
+3. **Hidden via CSS** the moment React paints into `#root`: `#root:not(:empty) ~ #initial-splash { opacity: 0 }`. The React splash takes over at the same z-index. No flash.
+
+Rules:
+- The inline splash markup in `index.html` and the `<BrandSplash>` component MUST stay visually identical. If you change one, change the other. Animation timings live in `styles.css` (`@keyframes brand-splash-*`).
+- Use `BrandSplash` (full-screen) only for **auth-gating** pending states — `__root.tsx` and `routes/app.tsx`. Nested route transitions inside the app shell use `RoutePendingFeedback` (the card variant) so the user keeps the surrounding chrome.
+- The inline splash uses raw `oklch(...)` colours, not CSS variables, because variables aren't available before the stylesheet loads. Match them to `--background` / `--brand-600` for both light and dark mode.
+- `prefers-reduced-motion` cancels the animation in both copies.
+
 ### Animations
 
 - 150–200 ms `ease-out` for entry, 80–120 ms for exit.
