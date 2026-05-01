@@ -9,6 +9,24 @@ export const ZERO_SCHEMA_NAME = 'opendesk' as const;
 // customer-scoped audit events.
 export const ZERO_SCHEMA_VERSION = 6 as const;
 
+export {
+  ALL_TICKET_MESSAGE_LIMIT,
+  CUSTOMER_EVENT_LIMIT,
+  CUSTOMER_NOTE_LIMIT,
+  CUSTOMER_TICKET_LIMIT,
+  DEFAULT_CUSTOMER_EVENT_LIMIT,
+  DEFAULT_CUSTOMER_LIST_LIMIT,
+  DEFAULT_RELATED_TICKET_LIMIT,
+  INBOX_INITIAL_PAGE,
+  INBOX_PAGE_GROWTH,
+  INITIAL_TICKET_MESSAGE_LIMIT,
+  MAX_INBOX_LIMIT,
+  MAX_LIST_LIMIT,
+  MAX_LIST_LIMIT_QUERY,
+  PAGE,
+  TICKET_ANCHOR_LIMIT,
+} from './consts.js';
+
 /**
  * Channel-agnostic event names. Server-side wrappers and Inngest functions use
  * these strings directly; none of them encode an email-specific queue kind.

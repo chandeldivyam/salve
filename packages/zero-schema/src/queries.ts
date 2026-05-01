@@ -14,6 +14,17 @@ import {
   type QueryResultType,
 } from '@rocicorp/zero';
 import { z } from 'zod';
+import {
+  ALL_TICKET_MESSAGE_LIMIT,
+  CUSTOMER_TICKET_LIMIT,
+  DEFAULT_CUSTOMER_EVENT_LIMIT,
+  DEFAULT_CUSTOMER_LIST_LIMIT,
+  DEFAULT_RELATED_TICKET_LIMIT,
+  INBOX_INITIAL_PAGE,
+  MAX_INBOX_LIMIT,
+  MAX_LIST_LIMIT_QUERY,
+  TICKET_ANCHOR_LIMIT,
+} from './consts.js';
 import type { AuthData } from './schema.js';
 import { builder } from './schema.js';
 
@@ -99,25 +110,26 @@ const customFieldCategoryArg = z.object({
 
 // `inboxOpen` accepts an optional `limit` so the inbox view can grow the
 // window via infinite scroll without round-tripping a different query
-// shape. Default cap matches zbugs `issuePreloadV2`'s 1000-row preload
-// (`shared/queries.ts:99-130`) — large enough that most workspaces never
-// hit it, small enough that the initial subscription is bounded.
-const inboxOpenArg = z.object({ limit: z.number().int().min(1).max(2000).optional() }).optional();
-const DEFAULT_INBOX_LIMIT = 200;
-const MAX_INBOX_LIMIT = 2000;
-const DEFAULT_TIMELINE_LIMIT = 200;
-const MAX_TIMELINE_LIMIT = 2000;
-const DEFAULT_TICKET_ANCHOR_LIMIT = 51;
-const MAX_TICKET_ANCHOR_LIMIT = 2000;
-const DEFAULT_CUSTOMER_EVENT_LIMIT = 50;
-const DEFAULT_RELATED_TICKET_LIMIT = 5;
-const DEFAULT_CUSTOMER_LIST_LIMIT = 50;
+// shape. The inbox uses an absolute window (no `+1` sentinel) — see the
+// note in `consts.ts`.
+const inboxOpenArg = z
+  .object({ limit: z.number().int().min(1).max(MAX_INBOX_LIMIT).optional() })
+  .optional();
 
-const boundedTimelineLimit = z.number().int().min(1).max(MAX_TIMELINE_LIMIT).optional();
+// `boundedListLimit` is for paginated list queries that use the `+1`
+// sentinel (e.g. `customerList`). Cap = MAX_LIST_LIMIT + 1 so the sentinel
+// fits without exceeding the schema.
+const boundedListLimit = z.number().int().min(1).max(MAX_LIST_LIMIT_QUERY).optional();
+
+// `boundedTimelineLimit` is for "fetch a bounded slab" queries that pass an
+// absolute limit (no sentinel) — `ticketMessagesAll`, `ticketActivitiesAll`,
+// `customerNotes`, `customerEvents`. Cap = ALL_TICKET_MESSAGE_LIMIT.
+const boundedTimelineLimit = z.number().int().min(1).max(ALL_TICKET_MESSAGE_LIMIT).optional();
+
 const ticketAnchorArg = z.object({
   id: z.string(),
-  messageLimit: z.number().int().min(1).max(MAX_TICKET_ANCHOR_LIMIT).optional(),
-  activityLimit: z.number().int().min(1).max(MAX_TICKET_ANCHOR_LIMIT).optional(),
+  messageLimit: z.number().int().min(1).max(ALL_TICKET_MESSAGE_LIMIT).optional(),
+  activityLimit: z.number().int().min(1).max(ALL_TICKET_MESSAGE_LIMIT).optional(),
 });
 const ticketTimelineRowsArg = z.object({
   ticketID: z.string(),
@@ -125,14 +137,14 @@ const ticketTimelineRowsArg = z.object({
 });
 const customerListArg = z.object({
   search: z.string().trim().max(120).optional(),
-  limit: boundedTimelineLimit,
+  limit: boundedListLimit,
 });
 const customerTicketSummariesArg = z
   .object({
     customerID: z.string(),
     before: z.number().optional(),
     after: z.number().optional(),
-    limit: z.number().int().min(1).max(200).optional(),
+    limit: z.number().int().min(1).max(CUSTOMER_TICKET_LIMIT).optional(),
   })
   .refine((args) => args.before === undefined || args.after === undefined, {
     message: 'customerTicketSummaries accepts either before or after, not both',
@@ -149,7 +161,7 @@ const relatedTicketsArg = z.object({
   customerID: z.string(),
   excludeTicketID: z.string().optional(),
   includeClosed: z.boolean().optional(),
-  limit: z.number().int().min(1).max(200).optional(),
+  limit: z.number().int().min(1).max(CUSTOMER_TICKET_LIMIT).optional(),
 });
 
 // ---------- Queries ----------
@@ -217,7 +229,7 @@ export const queries = defineQueries({
    * before being used in ILIKE patterns.
    */
   customerList: defineQuery(customerListArg, ({ args, ctx: auth }) => {
-    const limit = Math.min(args.limit ?? DEFAULT_CUSTOMER_LIST_LIMIT, MAX_TIMELINE_LIMIT);
+    const limit = Math.min(args.limit ?? DEFAULT_CUSTOMER_LIST_LIMIT, ALL_TICKET_MESSAGE_LIMIT);
     const search = args.search?.trim();
     let q = applyWorkspaceScope(builder.customer, auth).related('tags', (ct) =>
       ct
@@ -249,12 +261,12 @@ export const queries = defineQueries({
    */
   ticketAnchor: defineQuery(ticketAnchorArg, ({ args, ctx: auth }) => {
     const messageLimit = Math.min(
-      args.messageLimit ?? DEFAULT_TICKET_ANCHOR_LIMIT,
-      MAX_TICKET_ANCHOR_LIMIT,
+      args.messageLimit ?? TICKET_ANCHOR_LIMIT,
+      ALL_TICKET_MESSAGE_LIMIT,
     );
     const activityLimit = Math.min(
-      args.activityLimit ?? DEFAULT_TICKET_ANCHOR_LIMIT,
-      MAX_TICKET_ANCHOR_LIMIT,
+      args.activityLimit ?? TICKET_ANCHOR_LIMIT,
+      ALL_TICKET_MESSAGE_LIMIT,
     );
     return applyTicketRead(builder.ticket.where('id', '=', args.id), auth)
       .related('customer')
@@ -309,10 +321,10 @@ export const queries = defineQueries({
 
   /**
    * Explicit bounded fetch for older/all messages in a conversation. The UI can
-   * raise `limit` up to MAX_TIMELINE_LIMIT when "show earlier" is clicked.
+   * raise `limit` up to ALL_TICKET_MESSAGE_LIMIT when "show earlier" is clicked.
    */
   ticketMessagesAll: defineQuery(ticketTimelineRowsArg, ({ args, ctx: auth }) => {
-    const limit = Math.min(args.limit ?? MAX_TIMELINE_LIMIT, MAX_TIMELINE_LIMIT);
+    const limit = Math.min(args.limit ?? ALL_TICKET_MESSAGE_LIMIT, ALL_TICKET_MESSAGE_LIMIT);
     return applyWorkspaceScope(builder.message.where('ticketID', '=', args.ticketID), auth)
       .related('attachments')
       .related('authorUser')
@@ -333,7 +345,7 @@ export const queries = defineQueries({
    * Explicit bounded fetch for ticket activities in a conversation.
    */
   ticketActivitiesAll: defineQuery(ticketTimelineRowsArg, ({ args, ctx: auth }) => {
-    const limit = Math.min(args.limit ?? MAX_TIMELINE_LIMIT, MAX_TIMELINE_LIMIT);
+    const limit = Math.min(args.limit ?? ALL_TICKET_MESSAGE_LIMIT, ALL_TICKET_MESSAGE_LIMIT);
     return applyWorkspaceScope(
       builder.auditEvent.where('ticketID', '=', args.ticketID).where('kind', 'LIKE', 'ticket.%'),
       auth,
@@ -383,7 +395,7 @@ export const queries = defineQueries({
    * Customer-level and ticket-scoped notes for a customer timeline/profile.
    */
   customerNotes: defineQuery(customerNotesArg, ({ args, ctx: auth }) => {
-    const limit = Math.min(args.limit ?? DEFAULT_TIMELINE_LIMIT, MAX_TIMELINE_LIMIT);
+    const limit = Math.min(args.limit ?? CUSTOMER_TICKET_LIMIT, ALL_TICKET_MESSAGE_LIMIT);
     return applyWorkspaceScope(
       builder.customerNote.where('customerID', '=', args.customerID).where('deletedAt', 'IS', null),
       auth,
@@ -399,7 +411,7 @@ export const queries = defineQueries({
    * Customer custom events, newest first.
    */
   customerEvents: defineQuery(customerEventsArg, ({ args, ctx: auth }) => {
-    const limit = Math.min(args.limit ?? DEFAULT_CUSTOMER_EVENT_LIMIT, MAX_TIMELINE_LIMIT);
+    const limit = Math.min(args.limit ?? DEFAULT_CUSTOMER_EVENT_LIMIT, ALL_TICKET_MESSAGE_LIMIT);
     return applyWorkspaceScope(builder.customEvent.where('customerID', '=', args.customerID), auth)
       .orderBy('occurredAt', 'desc')
       .orderBy('id', 'desc')
@@ -437,7 +449,7 @@ export const queries = defineQueries({
    * grows the limit as the user scrolls.
    */
   inboxOpen: defineQuery(inboxOpenArg, ({ args, ctx: auth }) => {
-    const limit = Math.min(args?.limit ?? DEFAULT_INBOX_LIMIT, MAX_INBOX_LIMIT);
+    const limit = Math.min(args?.limit ?? INBOX_INITIAL_PAGE, MAX_INBOX_LIMIT);
     return applyTicketRead(
       builder.ticket.where(({ cmp, or }) =>
         or(

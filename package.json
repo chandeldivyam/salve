@@ -20,6 +20,7 @@
     "format:check": "biome format .",
     "check": "biome check .",
     "check:fix": "biome check --write .",
+    "check:file-sizes": "node scripts/check-file-sizes.mjs",
     "db:generate": "pnpm --filter @opendesk/db db:generate",
     "db:migrate": "pnpm --filter @opendesk/db db:migrate",
     "db:push": "pnpm --filter @opendesk/db db:push",

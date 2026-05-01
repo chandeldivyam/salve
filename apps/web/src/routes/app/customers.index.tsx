@@ -13,55 +13,102 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
-  initialsFromName,
   Input,
+  initialsFromName,
 } from '@opendesk/ui';
-import { queries } from '@opendesk/zero-schema';
+import { MAX_LIST_LIMIT, PAGE, queries } from '@opendesk/zero-schema';
 import { useQuery } from '@rocicorp/zero/react';
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { ArrowDownAZ, ArrowDownWideNarrow, Calendar, ChevronDown, Search } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { z } from 'zod';
+import { DataList } from '@/components/data-list/data-list';
+import { PageHeader } from '@/components/page-header';
 import { customerName, relativeTime } from '@/components/timeline/timeline-format';
-import type { TimelineCustomer, TimelineTag, TimelineTagRelation } from '@/components/timeline/types';
+import type {
+  TimelineCustomer,
+  TimelineTag,
+  TimelineTagRelation,
+} from '@/components/timeline/types';
+import { paginate } from '@/lib/paginate';
 import { useShortcut } from '@/lib/shortcuts';
 import { CACHE_TICKET_DETAIL } from '@/lib/zero-cache';
 
-export const Route = createFileRoute('/app/customers/')({
-  component: CustomersIndexRoute,
-});
-
-const PAGE = 50;
-
 type SortKey = 'recent' | 'name' | 'first-seen';
 
-const SORT_OPTIONS: Array<{ id: SortKey; label: string; icon: typeof ArrowDownWideNarrow }> = [
-  { id: 'recent', label: 'Recently active', icon: ArrowDownWideNarrow },
+// Display ceiling stops below the query schema's MAX_LIST_LIMIT_QUERY so the
+// `+ 1` sentinel (limit + 1 = MAX_LIST_LIMIT + 1) still validates.
+const customersSearchSchema = z.object({
+  q: z.string().optional().catch(undefined),
+  sort: z.enum(['recent', 'name', 'first-seen']).optional().catch(undefined),
+  limit: z.coerce.number().int().positive().max(MAX_LIST_LIMIT).optional().catch(undefined),
+});
+
+export const Route = createFileRoute('/app/customers/')({
+  component: CustomersIndexRoute,
+  validateSearch: customersSearchSchema,
+});
+
+type SortOption = { id: SortKey; label: string; icon: typeof ArrowDownWideNarrow };
+
+const RECENT_SORT: SortOption = {
+  id: 'recent',
+  label: 'Recently active',
+  icon: ArrowDownWideNarrow,
+};
+const SORT_OPTIONS: ReadonlyArray<SortOption> = [
+  RECENT_SORT,
   { id: 'name', label: 'Name (A → Z)', icon: ArrowDownAZ },
   { id: 'first-seen', label: 'First seen', icon: Calendar },
 ];
 
 function CustomersIndexRoute() {
-  const navigate = useNavigate();
-  const [query, setQuery] = useState('');
-  const [limit, setLimit] = useState(PAGE);
-  const [sort, setSort] = useState<SortKey>('recent');
+  const navigate = useNavigate({ from: Route.fullPath });
+  const search = useSearch({ from: Route.fullPath });
+  const query = search.q ?? '';
+  const sort: SortKey = search.sort ?? 'recent';
+  const limit: number = search.limit ?? PAGE;
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Reset paging when the search query changes — otherwise growing limit
-  // accumulates state from a stale query.
-  useEffect(() => {
-    setLimit(PAGE);
-    setSelectedIndex(-1);
-  }, [query]);
+  const setQuery = useCallback(
+    (next: string) => {
+      // Reset paging on query change. Use replace so each keystroke doesn't
+      // create a history entry.
+      navigate({
+        search: (prev) => ({ ...prev, q: next || undefined, limit: PAGE }),
+        replace: true,
+      });
+      setSelectedIndex(-1);
+    },
+    [navigate],
+  );
+
+  const setSort = useCallback(
+    (next: SortKey) => {
+      navigate({ search: (prev) => ({ ...prev, sort: next }) });
+    },
+    [navigate],
+  );
+
+  const setLimit = useCallback(
+    (updater: (current: number) => number) => {
+      navigate({
+        search: (prev) => ({
+          ...prev,
+          limit: Math.min(MAX_LIST_LIMIT, updater(prev.limit ?? PAGE)),
+        }),
+      });
+    },
+    [navigate],
+  );
 
   const [rawRows, status] = useQuery(
     queries.customerList({ search: query.trim() || undefined, limit: limit + 1 }),
     CACHE_TICKET_DETAIL,
   );
   const rows = rawRows as ReadonlyArray<TimelineCustomer>;
-  const hasMore = rows.length > limit;
-  const visible = useMemo(() => rows.slice(0, limit), [rows, limit]);
+  const { visible, hasMore } = useMemo(() => paginate(rows, limit), [rows, limit]);
   const sorted = useMemo(() => sortCustomers(visible, sort), [visible, sort]);
   const totalShownLabel = `${sorted.length}${hasMore ? '+' : ''}`;
 
@@ -100,68 +147,54 @@ function CustomersIndexRoute() {
 
   return (
     <div className="flex h-full min-w-0 flex-1 flex-col bg-bg-canvas">
-      <header className="shrink-0 border-b border-line-default bg-bg-panel px-4 py-3 lg:px-6">
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="truncate text-[18px] font-semibold text-fg-primary">Customers</h1>
-            <p className="text-[12px] text-fg-tertiary">
-              {showSkeleton ? 'Loading…' : `${totalShownLabel} in this workspace`}
-            </p>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
+      <PageHeader
+        title="Customers"
+        description={showSkeleton ? 'Loading…' : `${totalShownLabel} in this workspace`}
+        actions={
+          <>
             <SortMenu sort={sort} onChange={setSort} />
             <Button asChild size="sm" variant="outline">
               <Link to="/app/inbox">Inbox</Link>
             </Button>
+          </>
+        }
+        search={
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-tertiary" />
+            <Input
+              ref={searchInputRef}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              className="h-9 pl-8 text-[13px]"
+              placeholder="Search customer email or name (/ to focus)"
+            />
           </div>
-        </div>
-        <div className="relative mt-3 max-w-md">
-          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-tertiary" />
-          <Input
-            ref={searchInputRef}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            className="h-9 pl-8 text-[13px]"
-            placeholder="Search customer email or name (/ to focus)"
-          />
-        </div>
-      </header>
+        }
+      />
 
       <main className="min-h-0 flex-1 overflow-y-auto px-4 py-4 lg:px-6">
-        <div className="mx-auto flex max-w-4xl flex-col">
-          <ColumnHeader />
-          <div className="rounded-lg bg-bg-panel ring-1 ring-line-default">
-            {showSkeleton ? (
-              <CustomerListSkeleton />
-            ) : sorted.length === 0 ? (
-              <div className="px-4 py-10 text-center text-[13px] text-fg-tertiary">
-                No customers match this view yet.
-              </div>
-            ) : (
-              <div className="divide-y divide-line-quiet">
-                {sorted.map((customer, index) => (
-                  <CustomerRow
-                    key={customer.id}
-                    customer={customer}
-                    selected={index === selectedIndex}
-                    onMouseEnter={() => setSelectedIndex(index)}
-                  />
-                ))}
-              </div>
+        <div className="mx-auto max-w-4xl">
+          <DataList
+            rows={sorted}
+            isLoading={showSkeleton}
+            hasMore={hasMore}
+            onLoadMore={() => setLimit((current) => current + PAGE)}
+            renderHeader={<ColumnHeader />}
+            renderRow={(customer, index) => (
+              <CustomerRow
+                key={customer.id}
+                customer={customer}
+                selected={index === selectedIndex}
+                onMouseEnter={() => setSelectedIndex(index)}
+              />
             )}
-            {hasMore ? (
-              <div className="flex justify-center border-t border-line-quiet p-3">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setLimit((current) => current + PAGE)}
-                >
-                  Show more
-                </Button>
+            empty={
+              <div className="px-4 py-10 text-center text-[13px] text-fg-tertiary">
+                No customers match this view.
               </div>
-            ) : null}
-          </div>
+            }
+            skeleton={<CustomerListSkeleton />}
+          />
         </div>
       </main>
     </div>
@@ -169,8 +202,7 @@ function CustomersIndexRoute() {
 }
 
 function SortMenu({ sort, onChange }: { sort: SortKey; onChange: (next: SortKey) => void }) {
-  const current: (typeof SORT_OPTIONS)[number] =
-    SORT_OPTIONS.find((option) => option.id === sort) ?? SORT_OPTIONS[0]!;
+  const current = SORT_OPTIONS.find((option) => option.id === sort) ?? RECENT_SORT;
   const Icon = current.icon;
   return (
     <DropdownMenu>

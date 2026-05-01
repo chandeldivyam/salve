@@ -19,7 +19,14 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@opendesk/ui';
-import { queries } from '@opendesk/zero-schema';
+import {
+  ALL_TICKET_MESSAGE_LIMIT,
+  CUSTOMER_EVENT_LIMIT,
+  CUSTOMER_NOTE_LIMIT,
+  CUSTOMER_TICKET_LIMIT,
+  MAX_INBOX_LIMIT,
+  queries,
+} from '@opendesk/zero-schema';
 import { useQuery } from '@rocicorp/zero/react';
 import { Link, useNavigate, useRouteContext } from '@tanstack/react-router';
 import { formatDistanceToNow } from 'date-fns';
@@ -46,6 +53,7 @@ import { CustomerProfileCard } from '@/components/customer/profile-card';
 import { BackToInbox } from '@/components/inbox/back-to-inbox';
 import { TicketDetailSkeleton } from '@/components/skeletons';
 import { WorkbenchLink } from '@/components/workbench/workbench-link';
+import { TIMELINE_NEWER_VISIBLE, TIMELINE_OLDER_VISIBLE } from '@/lib/list-constants';
 import type { SessionData } from '@/lib/session-loader';
 import { useShortcut } from '@/lib/shortcuts';
 import { useWorkbenchStore } from '@/lib/workbench';
@@ -136,17 +144,17 @@ function SingleTicketTimeline({ ticketID }: { ticketID: string }) {
   const ticket = rawTicket as TimelineTicket | undefined;
   const customerID = ticket?.customer?.id ?? ticket?.customerID ?? '';
   const [members] = useQuery(queries.workspaceMembers(), CACHE_FOREVER);
-  const [inboxList] = useQuery(queries.inboxOpen({ limit: 2000 }), CACHE_FOREVER);
+  const [inboxList] = useQuery(queries.inboxOpen({ limit: MAX_INBOX_LIMIT }), CACHE_FOREVER);
   const [customerTicketRows] = useQuery(
-    queries.customerTicketSummaries({ customerID, limit: 200 }),
+    queries.customerTicketSummaries({ customerID, limit: CUSTOMER_TICKET_LIMIT }),
     CACHE_TICKET_DETAIL,
   );
   const [customerNoteRows] = useQuery(
-    queries.customerNotes({ customerID, limit: 200 }),
+    queries.customerNotes({ customerID, limit: CUSTOMER_NOTE_LIMIT }),
     CACHE_TICKET_DETAIL,
   );
   const [customerEventRows] = useQuery(
-    queries.customerEvents({ customerID, limit: 50 }),
+    queries.customerEvents({ customerID, limit: CUSTOMER_EVENT_LIMIT }),
     CACHE_TICKET_DETAIL,
   );
   const [outboundRows] = useQuery(queries.outboundMessagesByTicket({ id: ticketID }), CACHE_NAV);
@@ -156,17 +164,17 @@ function SingleTicketTimeline({ ticketID }: { ticketID: string }) {
     CACHE_NAV,
   );
   const [profileOpen, setProfileOpen] = useState(false);
-  const [olderVisible, setOlderVisible] = useState(2);
-  const [newerVisible, setNewerVisible] = useState(3);
+  const [olderVisible, setOlderVisible] = useState(TIMELINE_OLDER_VISIBLE);
+  const [newerVisible, setNewerVisible] = useState(TIMELINE_NEWER_VISIBLE);
   const [showAllInThread, setShowAllInThread] = useState(false);
-  const [allMessageRows] = useQuery(queries.ticketMessagesAll({ ticketID, limit: 2000 }), {
-    ...CACHE_TICKET_DETAIL,
-    enabled: showAllInThread,
-  });
-  const [allActivityRows] = useQuery(queries.ticketActivitiesAll({ ticketID, limit: 2000 }), {
-    ...CACHE_TICKET_DETAIL,
-    enabled: showAllInThread,
-  });
+  const [allMessageRows] = useQuery(
+    queries.ticketMessagesAll({ ticketID, limit: ALL_TICKET_MESSAGE_LIMIT }),
+    { ...CACHE_TICKET_DETAIL, enabled: showAllInThread },
+  );
+  const [allActivityRows] = useQuery(
+    queries.ticketActivitiesAll({ ticketID, limit: ALL_TICKET_MESSAGE_LIMIT }),
+    { ...CACHE_TICKET_DETAIL, enabled: showAllInThread },
+  );
 
   const ticketsForCustomer = useMemo(() => {
     if (!customerID) return ticket ? [ticket] : [];
@@ -178,9 +186,7 @@ function SingleTicketTimeline({ ticketID }: { ticketID: string }) {
     // Sort by createdAt so a ticket's position in the timeline is anchored
     // to when it was opened, not when it was last touched. Otherwise an
     // assignment / status flip yanks the anchor to the bottom of the rail.
-    return [...byID.values()].sort(
-      (a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id),
-    );
+    return [...byID.values()].sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
   }, [customerID, customerTicketRows, ticket]);
 
   const anchorIndex = useMemo(
@@ -230,8 +236,7 @@ function SingleTicketTimeline({ ticketID }: { ticketID: string }) {
     sendableEmailAddresses as ReadonlyArray<TimelineEmailAddress>,
   );
   const ticketForRender =
-    showAllInThread &&
-    (allMessageRows.length > 0 || allActivityRows.length > 0)
+    showAllInThread && (allMessageRows.length > 0 || allActivityRows.length > 0)
       ? {
           ...ticket,
           messages: allMessageRows.length > 0 ? allMessageRows : ticket.messages,
@@ -315,10 +320,7 @@ function SingleTicketTimeline({ ticketID }: { ticketID: string }) {
       />
       <div className="flex min-h-0 flex-1">
         <main className="relative min-w-0 flex-1 overflow-y-auto">
-          <NewMessagesIndicator
-            messages={ticket.messages ?? []}
-            currentUserID={currentUserID}
-          />
+          <NewMessagesIndicator messages={ticket.messages ?? []} currentUserID={currentUserID} />
           <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-4 py-4 lg:px-6">
             {neighbours.older.length > 0 ? (
               <TimelineSectionLabel label={`Earlier conversations (${neighbours.older.length})`} />
@@ -357,9 +359,7 @@ function SingleTicketTimeline({ ticketID }: { ticketID: string }) {
                 ) : null
               }
               noteComposer={
-                customerID ? (
-                  <TicketNoteToggle customerID={customerID} ticketID={ticketID} />
-                ) : null
+                customerID ? <TicketNoteToggle customerID={customerID} ticketID={ticketID} /> : null
               }
               onReopen={() => setStatus('open')}
               composer={
@@ -437,15 +437,15 @@ function CustomerTimeline({ customerID }: { customerID: string }) {
   );
   const customer = rawCustomer as TimelineTicket['customer'] | undefined;
   const [rows] = useQuery(
-    queries.customerTicketSummaries({ customerID, limit: 200 }),
+    queries.customerTicketSummaries({ customerID, limit: CUSTOMER_TICKET_LIMIT }),
     CACHE_TICKET_DETAIL,
   );
   const [customerNoteRows] = useQuery(
-    queries.customerNotes({ customerID, limit: 200 }),
+    queries.customerNotes({ customerID, limit: CUSTOMER_NOTE_LIMIT }),
     CACHE_TICKET_DETAIL,
   );
   const [customerEventRows] = useQuery(
-    queries.customerEvents({ customerID, limit: 100 }),
+    queries.customerEvents({ customerID, limit: CUSTOMER_EVENT_LIMIT }),
     CACHE_TICKET_DETAIL,
   );
   const [expandedIDs, setExpandedIDs] = useState<ReadonlySet<string>>(new Set());
@@ -453,7 +453,7 @@ function CustomerTimeline({ customerID }: { customerID: string }) {
   const tickets = useMemo(
     () =>
       (rows as ReadonlyArray<TimelineTicket>)
-        .slice(0, 200)
+        .slice(0, CUSTOMER_TICKET_LIMIT)
         .sort((a, b) => b.updatedAt - a.updatedAt || a.id.localeCompare(b.id)),
     [rows],
   );
@@ -644,12 +644,12 @@ function ExpandedCustomerTimelineConversation({
     CACHE_NAV,
   );
   const [showAllInThread, setShowAllInThread] = useState(false);
-  const [allMessageRows] = useQuery(queries.ticketMessagesAll({ ticketID: ticket.id, limit: 2000 }), {
-    ...CACHE_TICKET_DETAIL,
-    enabled: showAllInThread,
-  });
+  const [allMessageRows] = useQuery(
+    queries.ticketMessagesAll({ ticketID: ticket.id, limit: ALL_TICKET_MESSAGE_LIMIT }),
+    { ...CACHE_TICKET_DETAIL, enabled: showAllInThread },
+  );
   const [allActivityRows] = useQuery(
-    queries.ticketActivitiesAll({ ticketID: ticket.id, limit: 2000 }),
+    queries.ticketActivitiesAll({ ticketID: ticket.id, limit: ALL_TICKET_MESSAGE_LIMIT }),
     { ...CACHE_TICKET_DETAIL, enabled: showAllInThread },
   );
   const fullTicket = (detail as TimelineTicket | undefined) ?? ticket;
@@ -720,13 +720,7 @@ function ExpandedCustomerTimelineConversation({
   );
 }
 
-function TicketNoteToggle({
-  customerID,
-  ticketID,
-}: {
-  customerID: string;
-  ticketID: string;
-}) {
+function TicketNoteToggle({ customerID, ticketID }: { customerID: string; ticketID: string }) {
   const [open, setOpen] = useState(false);
   if (!customerID) return null;
   if (open) {

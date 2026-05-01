@@ -119,8 +119,8 @@ function TagsSettingsPage() {
           {empty ? (
             <EmptyState
               icon={Tags}
-              title="No tags yet"
-              description="Group tickets so agents can filter and macros can target."
+              title="No tags"
+              description="Tag tickets so agents can filter the inbox and macros can target work."
               action={
                 <Button size="sm" onClick={() => setSheet({ kind: 'create-group' })}>
                   <Plus className="h-3.5 w-3.5" />

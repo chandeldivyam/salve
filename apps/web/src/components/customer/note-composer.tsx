@@ -43,6 +43,7 @@ export function NoteComposer({
     }
   }, [autoFocus]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-run on body change to autoresize
   useEffect(() => {
     autoresize(textareaRef.current);
   }, [body]);
@@ -139,9 +140,6 @@ export function NoteComposer({
               {pinned ? 'Pinned' : 'Pin'}
             </button>
           ) : null}
-          <span className="ml-1 hidden text-[11px] text-fg-quaternary sm:inline">
-            ⌘↵ to save · esc to cancel
-          </span>
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {onClose ? (
@@ -219,9 +217,6 @@ function autoresize(textarea: HTMLTextAreaElement | null) {
 }
 
 function textToHtml(text: string) {
-  const escaped = text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+  const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   return `<p>${escaped.replace(/\n+/g, '</p><p>')}</p>`;
 }

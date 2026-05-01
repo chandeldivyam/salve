@@ -3,8 +3,8 @@
 // Reads `inboxOpen` (workspace-scoped) with a growing window for infinite
 // scroll, applies `filter` + `search` client-side, and renders rows from
 // IndexedDB immediately on mount so a hard reload never flashes a loading
-// state. The query is paged: initial limit `INITIAL_PAGE`, grown by
-// `PAGE_GROWTH` whenever the user scrolls within `LOAD_MORE_THRESHOLD` of
+// state. The query is paged: initial limit `INBOX_INITIAL_PAGE`, grown by
+// `INBOX_PAGE_GROWTH` whenever the user scrolls within `LOAD_MORE_THRESHOLD` of
 // the bottom. Mirrors zbugs `issueListV2` cursor pattern in spirit (limit
 // instead of cursor, since Zero already de-duplicates an expanded window
 // efficiently).
@@ -16,7 +16,13 @@
 
 import { mutators } from '@opendesk/mutators';
 import { Button, cn, Input, Tooltip, TooltipContent, TooltipTrigger } from '@opendesk/ui';
-import { type InboxRow as InboxRowData, queries } from '@opendesk/zero-schema';
+import {
+  INBOX_INITIAL_PAGE,
+  INBOX_PAGE_GROWTH,
+  type InboxRow as InboxRowData,
+  MAX_INBOX_LIMIT,
+  queries,
+} from '@opendesk/zero-schema';
 import { useQuery } from '@rocicorp/zero/react';
 import { Link, useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -25,6 +31,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BulkActionBar } from '@/components/inbox/bulk-action-bar';
 import { InboxRow } from '@/components/inbox/inbox-row';
 import { useInboxSelectionStore } from '@/lib/inbox-selection';
+import { INBOX_ROW_HEIGHT, LOAD_MORE_THRESHOLD } from '@/lib/list-constants';
 import { useSetupProgress } from '@/lib/setup-progress';
 import { isMod, useShortcut } from '@/lib/shortcuts';
 import { useZero } from '@/lib/zero';
@@ -45,17 +52,6 @@ const FILTERS: Array<{ id: InboxFilter; label: string }> = [
   { id: 'resolved', label: 'Resolved' },
 ];
 
-// Pagination knobs. Initial page mirrors the zbugs `issueListV2` window
-// (small enough to render quickly on a cold IDB), growth doubles until we
-// hit MAX_INBOX_LIMIT in the schema (2000). Most workspaces never grow
-// past the initial page.
-const INITIAL_PAGE = 200;
-const PAGE_GROWTH = 200;
-const PAGE_CEILING = 2000;
-const LOAD_MORE_THRESHOLD = 16; // grow when within this many rows of the bottom
-
-const ROW_HEIGHT = 36;
-
 interface SavedInboxState {
   offset: number;
   pageLimit: number;
@@ -68,7 +64,7 @@ function scrollKeyFor(workspaceID: string | null) {
 }
 
 function readSavedInboxState(workspaceID: string | null): SavedInboxState {
-  const fallback: SavedInboxState = { offset: 0, pageLimit: INITIAL_PAGE };
+  const fallback: SavedInboxState = { offset: 0, pageLimit: INBOX_INITIAL_PAGE };
   if (typeof window === 'undefined') return fallback;
   const raw = window.sessionStorage.getItem(scrollKeyFor(workspaceID));
   if (!raw) return fallback;
@@ -78,10 +74,10 @@ function readSavedInboxState(workspaceID: string | null): SavedInboxState {
       Number.isFinite(parsed.offset) && (parsed.offset ?? 0) > 0 ? Number(parsed.offset) : 0;
     const limit =
       Number.isFinite(parsed.pageLimit) &&
-      (parsed.pageLimit ?? 0) >= INITIAL_PAGE &&
-      (parsed.pageLimit ?? 0) <= PAGE_CEILING
+      (parsed.pageLimit ?? 0) >= INBOX_INITIAL_PAGE &&
+      (parsed.pageLimit ?? 0) <= MAX_INBOX_LIMIT
         ? Number(parsed.pageLimit)
-        : INITIAL_PAGE;
+        : INBOX_INITIAL_PAGE;
     return { offset, pageLimit: limit };
   } catch {
     return fallback;
@@ -104,7 +100,7 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
 
   // Both `pageLimit` and the virtualizer's initial scroll offset are
   // restored from sessionStorage at mount. Without rehydrating pageLimit
-  // the list resets to INITIAL_PAGE rows on back-nav, the content isn't
+  // the list resets to INBOX_INITIAL_PAGE rows on back-nav, the content isn't
   // tall enough for the saved offset, and the virtualizer's scroll clamps
   // to the last visible row — defeating the restore.
   const restored = useMemo(() => readSavedInboxState(workspaceID), [workspaceID]);
@@ -182,7 +178,7 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
   const virtualizer = useVirtualizer({
     count: filtered.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => ROW_HEIGHT,
+    estimateSize: () => INBOX_ROW_HEIGHT,
     overscan: 8,
     initialOffset: restored.offset,
   });
@@ -289,7 +285,7 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
 
   // Infinite scroll — when the last virtualized row index is within
   // LOAD_MORE_THRESHOLD of the end, grow the query window. Capped at
-  // PAGE_CEILING (also enforced server-side via MAX_INBOX_LIMIT in the
+  // MAX_INBOX_LIMIT (also enforced server-side in the
   // schema). Done via the virtualizer's reported items so we don't have
   // to attach our own scroll listener.
   const virtualItems = virtualizer.getVirtualItems();
@@ -297,9 +293,9 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
   useEffect(() => {
     if (!ready) return;
     if (tickets.length < pageLimit) return; // server has fewer rows than the cap → fully loaded
-    if (pageLimit >= PAGE_CEILING) return;
+    if (pageLimit >= MAX_INBOX_LIMIT) return;
     if (filtered.length - lastVirtualIndex <= LOAD_MORE_THRESHOLD) {
-      setPageLimit((p) => Math.min(PAGE_CEILING, p + PAGE_GROWTH));
+      setPageLimit((p) => Math.min(MAX_INBOX_LIMIT, p + INBOX_PAGE_GROWTH));
     }
   }, [ready, tickets.length, pageLimit, filtered.length, lastVirtualIndex]);
 

@@ -99,8 +99,8 @@ function CustomFieldsSettingsPage() {
           {activeFields.length === 0 ? (
             <EmptyState
               icon={Settings2}
-              title={`No ${category} fields yet`}
-              description={`Add structured ${category} attributes — they appear in the ${category === 'ticket' ? 'conversation' : 'customer'} sidebar for agents.`}
+              title={`No ${category} fields`}
+              description={`Capture operational data on every ${category}. Fields appear in the ${category === 'ticket' ? 'conversation' : 'customer'} sidebar.`}
               action={
                 <Button size="sm" onClick={() => setSheet({ kind: 'create' })}>
                   <Plus className="h-3.5 w-3.5" />

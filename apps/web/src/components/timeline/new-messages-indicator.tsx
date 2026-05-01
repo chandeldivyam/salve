@@ -64,7 +64,12 @@ export function NewMessagesIndicator({ messages, currentUserID }: NewMessagesInd
               node.scrollIntoView({ behavior: 'smooth', block: 'center' });
               node.classList.add('ring-2', 'ring-ring', 'ring-offset-2', 'ring-offset-bg-canvas');
               window.setTimeout(() => {
-                node.classList.remove('ring-2', 'ring-ring', 'ring-offset-2', 'ring-offset-bg-canvas');
+                node.classList.remove(
+                  'ring-2',
+                  'ring-ring',
+                  'ring-offset-2',
+                  'ring-offset-bg-canvas',
+                );
               }, 1500);
             }
           }

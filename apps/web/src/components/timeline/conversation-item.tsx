@@ -136,12 +136,7 @@ export function ConversationItem({
             </div>
           ) : (
             <div className="flex flex-col gap-3 py-3">
-              {renderStream(
-                stream,
-                currentUserID,
-                deliveryByMessage,
-                inboundAuthByMessageID,
-              )}
+              {renderStream(stream, currentUserID, deliveryByMessage, inboundAuthByMessageID)}
             </div>
           )}
           {noteComposer ? <div className="pt-1 pb-2">{noteComposer}</div> : null}

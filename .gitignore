@@ -31,7 +31,11 @@ sync-replica.db-*
 !.vscode/extensions.json
 !.vscode/settings.json
 .idea
+.zed/
 *.swp
+
+# Local message stores (per-developer SQLite — never commit)
+store/
 
 # TanStack Router generated
 **/routeTree.gen.ts

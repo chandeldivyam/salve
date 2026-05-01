@@ -112,8 +112,8 @@ function AddressesTab() {
           {noDomains ? (
             <EmptyState
               icon={Mail}
-              title="Add a domain first"
-              description="Create at least one sending domain before configuring receive addresses."
+              title="Add a sending domain"
+              description="You'll need a verified domain before configuring receive addresses."
               action={
                 <Button asChild size="sm">
                   <Link to="/app/settings/channels/email/domains">
@@ -125,8 +125,8 @@ function AddressesTab() {
           ) : noAddresses && !showForm ? (
             <EmptyState
               icon={Inbox}
-              title="No addresses yet"
-              description="Once a domain is verified, add support@ or comms@ so customers can reach you."
+              title="No addresses"
+              description="Add support@ or comms@ so customers can reach you."
               action={
                 <Button size="sm" onClick={() => setShowForm(true)}>
                   <Plus className="h-3.5 w-3.5" /> Add address

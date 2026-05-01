@@ -9,9 +9,9 @@ import {
 } from '@opendesk/ui';
 import { MoreHorizontal, Pencil, Pin, PinOff, StickyNote, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import { showError } from '@/lib/feedback';
 import { relativeTime } from '@/components/timeline/timeline-format';
 import type { TimelineCustomerNote } from '@/components/timeline/types';
+import { showError } from '@/lib/feedback';
 import { useZero } from '@/lib/zero';
 import { NoteComposer } from './note-composer';
 
@@ -27,8 +27,7 @@ export function NoteCard({ note, currentUserID, variant = 'default', className }
   const [editing, setEditing] = useState(false);
   const isAuthor = note.createdByID === currentUserID;
   const author = note.createdBy?.name ?? note.createdBy?.email ?? null;
-  const labelPrefix =
-    note.objectType === 'ticket' ? 'Conversation note' : 'Customer note';
+  const labelPrefix = note.objectType === 'ticket' ? 'Conversation note' : 'Customer note';
   const compact = variant === 'compact';
 
   if (editing) {
@@ -84,9 +83,7 @@ export function NoteCard({ note, currentUserID, variant = 'default', className }
             <span className="text-[12px] font-medium text-fg-primary">
               {note.pinned ? `Pinned ${labelPrefix.toLowerCase()}` : labelPrefix}
             </span>
-            {author ? (
-              <span className="text-[11px] text-fg-tertiary">· {author}</span>
-            ) : null}
+            {author ? <span className="text-[11px] text-fg-tertiary">· {author}</span> : null}
             <span className="text-[11px] tabular-nums text-fg-tertiary">
               · {relativeTime(note.createdAt)}
             </span>
