@@ -128,38 +128,40 @@ function CustomersIndexRoute() {
       </header>
 
       <main className="min-h-0 flex-1 overflow-y-auto px-4 py-4 lg:px-6">
-        <div className="mx-auto max-w-4xl rounded-lg bg-bg-panel ring-1 ring-line-default">
+        <div className="mx-auto flex max-w-4xl flex-col">
           <ColumnHeader />
-          {showSkeleton ? (
-            <CustomerListSkeleton />
-          ) : sorted.length === 0 ? (
-            <div className="px-4 py-10 text-center text-[13px] text-fg-tertiary">
-              No customers match this view yet.
-            </div>
-          ) : (
-            <div className="divide-y divide-line-quiet">
-              {sorted.map((customer, index) => (
-                <CustomerRow
-                  key={customer.id}
-                  customer={customer}
-                  selected={index === selectedIndex}
-                  onMouseEnter={() => setSelectedIndex(index)}
-                />
-              ))}
-            </div>
-          )}
-          {hasMore ? (
-            <div className="flex justify-center border-t border-line-quiet p-3">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => setLimit((current) => current + PAGE)}
-              >
-                Show more
-              </Button>
-            </div>
-          ) : null}
+          <div className="rounded-lg bg-bg-panel ring-1 ring-line-default">
+            {showSkeleton ? (
+              <CustomerListSkeleton />
+            ) : sorted.length === 0 ? (
+              <div className="px-4 py-10 text-center text-[13px] text-fg-tertiary">
+                No customers match this view yet.
+              </div>
+            ) : (
+              <div className="divide-y divide-line-quiet">
+                {sorted.map((customer, index) => (
+                  <CustomerRow
+                    key={customer.id}
+                    customer={customer}
+                    selected={index === selectedIndex}
+                    onMouseEnter={() => setSelectedIndex(index)}
+                  />
+                ))}
+              </div>
+            )}
+            {hasMore ? (
+              <div className="flex justify-center border-t border-line-quiet p-3">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setLimit((current) => current + PAGE)}
+                >
+                  Show more
+                </Button>
+              </div>
+            ) : null}
+          </div>
         </div>
       </main>
     </div>
@@ -194,7 +196,7 @@ function SortMenu({ sort, onChange }: { sort: SortKey; onChange: (next: SortKey)
 
 function ColumnHeader() {
   return (
-    <div className="sticky top-0 z-[1] grid grid-cols-[1fr_minmax(0,160px)_minmax(80px,120px)] items-center gap-3 rounded-t-lg border-b border-line-quiet bg-bg-panel px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-fg-quaternary md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(80px,120px)]">
+    <div className="grid grid-cols-[1fr_minmax(80px,120px)] items-center gap-3 px-3 pb-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-fg-quaternary md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(80px,120px)]">
       <span>Customer</span>
       <span className="hidden md:block">Tags</span>
       <span className="text-right">Last seen</span>
@@ -219,7 +221,7 @@ function CustomerRow({
       params={{ customerId: customer.id }}
       onMouseEnter={onMouseEnter}
       className={cn(
-        'grid h-12 grid-cols-[1fr_minmax(0,160px)_minmax(80px,120px)] items-center gap-3 px-3 transition-colors hover:bg-bg-elevated md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(80px,120px)]',
+        'grid h-12 grid-cols-[1fr_minmax(80px,120px)] items-center gap-3 px-3 transition-colors hover:bg-bg-elevated md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(80px,120px)]',
         selected && 'bg-bg-elevated',
       )}
     >
