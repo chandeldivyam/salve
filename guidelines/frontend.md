@@ -1239,6 +1239,16 @@ When in settings, the rail shows:
 
 The central item registry is `@/components/settings/items.ts → buildSettingsSidebarGroups()`. Add new sidebar entries there, not in component-local lists.
 
+### Page surface (variant C, locked)
+
+Every settings page renders one shape. Don't invent alternatives — if a page needs a new pattern, extend a primitive in `@/components/settings`.
+
+- **Section title** (rendered by `FormSection`): `text-[15px] font-semibold tracking-[-0.011em] text-fg-primary`, with a single `border-b border-line-quiet pb-3` hairline beneath. The description sits directly under the title at `text-[12px] text-fg-tertiary`. Nothing else earns a divider inside the section.
+- **Stat tiles / summary cards**: `rounded-md bg-bg-elevated px-4 py-3 transition-colors hover:bg-bg-popover`. The whole tile is the link — no separate "Manage" button. Headline number is `text-[24px] font-semibold tabular-nums`. Sub-label is `text-[12px] text-fg-tertiary`.
+- **List rows**: `flex h-9 items-center gap-2 rounded-md px-2 text-[13px]` with `hover:bg-bg-elevated/40`. No row borders, no card outlines.
+- **List section labels** (`ListSection` title): `text-[11px] font-semibold uppercase tracking-[0.06em] text-fg-quaternary`. Optional count next to it at the same scale, `tabular-nums`.
+- **Inline copy/code targets** (DNS records, API hosts): wrap in a small framed area `rounded-md bg-bg-elevated px-4 py-3` so copy-and-paste affordances visually anchor without needing a card border.
+
 ### Creation tiers (pick one per entity)
 
 | Tier | When | How |

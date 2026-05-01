@@ -5,7 +5,7 @@
 //     `signatureToPlainText`.
 //   - Forwarding/inbound addresses use <CopyValue inline>.
 
-import { Badge, Button, Card, CardContent, CopyValue } from '@opendesk/ui';
+import { Badge, Button, CopyValue } from '@opendesk/ui';
 import { queries } from '@opendesk/zero-schema';
 import { useQuery } from '@rocicorp/zero/react';
 import { createFileRoute, Link, useRouteContext, useSearch } from '@tanstack/react-router';
@@ -173,10 +173,10 @@ function AddressRow({ address }: { address: EmailAddress }) {
   const signatureRaw = getAddressSignature(address);
   const signaturePlain = signatureRaw ? signatureToPlainText(signatureRaw) : null;
   return (
-    <div className="grid gap-3 px-4 py-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)]">
+    <div className="grid gap-3 px-3 py-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)]">
       <div className="min-w-0">
-        <p className="break-all text-sm font-medium text-foreground">{address.fullAddress}</p>
-        <div className="mt-1 flex flex-wrap gap-1.5">
+        <p className="break-all text-[13px] font-medium text-fg-primary">{address.fullAddress}</p>
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
           {address.isDefault ? <Badge variant="default">Default</Badge> : null}
           <Badge variant={address.canSend === false ? 'muted' : 'success'}>
             {address.canSend === false ? 'receive only' : 'send'}
@@ -187,33 +187,33 @@ function AddressRow({ address }: { address: EmailAddress }) {
           {address.label ? <Badge variant="muted">{address.label}</Badge> : null}
         </div>
       </div>
-      <div className="min-w-0 text-xs text-muted-foreground">
-        <p className="flex items-center gap-1.5 font-medium text-foreground">
-          <Inbox className="h-3.5 w-3.5 text-brand-600" />
+      <div className="min-w-0 text-[12px] text-fg-tertiary">
+        <p className="flex items-center gap-1.5 text-[12px] font-medium text-fg-primary">
+          <Inbox className="h-3.5 w-3.5 text-fg-tertiary" />
           Forwarding
         </p>
-        <div className="mt-1">
+        <div className="mt-1.5">
           <CopyValue
             value={inboundForwardingTarget(address)}
             label={`Forwarding for ${address.fullAddress}`}
           />
         </div>
-        <p className="mt-1 inline-flex items-center gap-1.5">
+        <p className="mt-1.5 inline-flex items-center gap-1.5">
           <Reply className="h-3 w-3" /> Replies through{' '}
-          <code className="font-mono text-[11px] text-foreground">*@{replyEmailDomain}</code>
+          <code className="font-mono text-[11px] text-fg-primary">*@{replyEmailDomain}</code>
         </p>
       </div>
-      <div className="min-w-0 text-xs text-muted-foreground">
-        <p className="flex items-center gap-1.5 font-medium text-foreground">
-          <Signature className="h-3.5 w-3.5 text-brand-600" />
+      <div className="min-w-0 text-[12px] text-fg-tertiary">
+        <p className="flex items-center gap-1.5 text-[12px] font-medium text-fg-primary">
+          <Signature className="h-3.5 w-3.5 text-fg-tertiary" />
           Signature
         </p>
         {signaturePlain ? (
-          <pre className="mt-1 max-h-24 overflow-auto whitespace-pre-wrap break-words text-[12px] text-foreground">
+          <pre className="mt-1.5 max-h-24 overflow-auto whitespace-pre-wrap break-words text-[12px] text-fg-primary">
             {signaturePlain}
           </pre>
         ) : (
-          <p className="mt-1 text-muted-foreground">No address signature override</p>
+          <p className="mt-1.5">No address signature override</p>
         )}
       </div>
     </div>

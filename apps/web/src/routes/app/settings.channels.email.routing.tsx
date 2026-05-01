@@ -1,10 +1,8 @@
 // /app/settings/channels/email/routing — list of inbound routing rules,
 // grouped by destination address, with an inline RoutingRuleForm for
-// adding new rules. Slice 3:
-//   - The team-id field is gone; the form surfaces a help line about the
-//     forthcoming team-picker.
+// adding new rules. Variant C: flat sections, no card outlines.
 
-import { Badge, Button, Card, CardContent } from '@opendesk/ui';
+import { Badge, Button } from '@opendesk/ui';
 import { queries } from '@opendesk/zero-schema';
 import { useQuery } from '@rocicorp/zero/react';
 import { createFileRoute, Link } from '@tanstack/react-router';
@@ -51,74 +49,81 @@ function RoutingTab() {
         description="Decide priority and default assignee for each receive address."
       />
       <SettingsBody maxWidth="wide">
-      {noAddresses ? (
-        <EmptyState
-          icon={RouteIcon}
-          title="No routing rules yet"
-          description="By default all inbound goes to the workspace inbox. Add a receive address first, then configure how its messages are handled."
-          action={
-            <Button asChild size="sm">
-              <Link to="/app/settings/channels/email/addresses">
-                Manage addresses <ArrowRight className="h-3 w-3" />
-              </Link>
-            </Button>
-          }
-        />
-      ) : (
-        <div className="grid gap-4">
-          {addresses.map((address) => {
-            const addressRules = rules.filter((r) => routingRuleAddressID(r) === address.id);
-            const isActive = activeAddressID === address.id;
-            return (
-              <Card key={address.id} className="overflow-hidden">
-                <CardContent className="p-4">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-foreground">
+        {noAddresses ? (
+          <EmptyState
+            icon={RouteIcon}
+            title="No routing rules yet"
+            description="By default all inbound goes to the workspace inbox. Add a receive address first, then configure how its messages are handled."
+            action={
+              <Button asChild size="sm">
+                <Link to="/app/settings/channels/email/addresses">
+                  Manage addresses <ArrowRight className="h-3 w-3" />
+                </Link>
+              </Button>
+            }
+          />
+        ) : (
+          <div className="flex flex-col gap-6">
+            {addresses.map((address) => {
+              const addressRules = rules.filter((r) => routingRuleAddressID(r) === address.id);
+              const isActive = activeAddressID === address.id;
+              return (
+                <section key={address.id} className="flex flex-col gap-2">
+                  <header className="flex h-7 items-center justify-between gap-2 px-1 pb-1">
+                    <div className="min-w-0 flex items-baseline gap-2">
+                      <p className="truncate text-[11px] font-semibold uppercase tracking-[0.06em] text-fg-quaternary">
                         {address.fullAddress}
                       </p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        {addressRules.length === 0
-                          ? 'No routing rule — inbox default applies.'
-                          : `${addressRules.length} rule${addressRules.length === 1 ? '' : 's'}`}
-                      </p>
+                      <span className="tabular-nums text-[11px] text-fg-quaternary">
+                        {addressRules.length}
+                      </span>
                     </div>
                     <Button
                       size="sm"
-                      variant={isActive ? 'default' : 'outline'}
+                      variant={isActive ? 'outline' : 'default'}
                       onClick={() => setActiveAddressID(isActive ? null : address.id)}
+                      className="h-7"
                     >
                       <Plus className="h-3.5 w-3.5" />
                       {isActive ? 'Close form' : 'Add rule'}
                     </Button>
-                  </div>
+                  </header>
 
-                  {addressRules.length > 0 ? (
-                    <ul className="mt-3 space-y-1 text-xs">
-                      {addressRules.map((rule) => (
-                        <li
-                          key={rule.id}
-                          className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface-muted px-2 py-1.5"
-                        >
-                          <Badge variant="muted">{routingRulePriority(rule) ?? 'normal'}</Badge>
-                          {(() => {
-                            const agentID = routingRuleAgentID(rule);
-                            return agentID ? (
-                              <span className="text-muted-foreground">
-                                Assign to{' '}
-                                <span className="text-foreground">{shortID(agentID)}</span>
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground">Any agent</span>
-                            );
-                          })()}
-                          <Badge variant={rule.enabled === false ? 'muted' : 'success'}>
-                            {rule.enabled === false ? 'disabled' : 'enabled'}
-                          </Badge>
-                        </li>
-                      ))}
+                  {addressRules.length === 0 ? (
+                    <p className="px-2 text-[12px] text-fg-tertiary">
+                      No routing rule — inbox default applies.
+                    </p>
+                  ) : (
+                    <ul className="flex flex-col">
+                      {addressRules.map((rule) => {
+                        const agentID = routingRuleAgentID(rule);
+                        return (
+                          <li
+                            key={rule.id}
+                            className="flex h-9 items-center gap-2 rounded-md px-2 text-[13px] text-fg-primary transition-colors hover:bg-bg-elevated/40"
+                          >
+                            <Badge variant="muted">{routingRulePriority(rule) ?? 'normal'}</Badge>
+                            <span className="text-fg-tertiary">
+                              {agentID ? (
+                                <>
+                                  Assign to{' '}
+                                  <span className="text-fg-primary">{shortID(agentID)}</span>
+                                </>
+                              ) : (
+                                'Any agent'
+                              )}
+                            </span>
+                            <Badge
+                              variant={rule.enabled === false ? 'muted' : 'success'}
+                              className="ml-auto"
+                            >
+                              {rule.enabled === false ? 'disabled' : 'enabled'}
+                            </Badge>
+                          </li>
+                        );
+                      })}
                     </ul>
-                  ) : null}
+                  )}
 
                   {isActive ? (
                     <RoutingRuleForm
@@ -127,12 +132,11 @@ function RoutingTab() {
                       onCancel={() => setActiveAddressID(null)}
                     />
                   ) : null}
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
+                </section>
+              );
+            })}
+          </div>
+        )}
       </SettingsBody>
     </>
   );

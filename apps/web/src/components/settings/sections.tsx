@@ -43,18 +43,20 @@ export function FormSection({
   className?: string;
 }) {
   return (
-    <section className={cn('flex flex-col gap-3', className)}>
+    <section className={cn('flex flex-col gap-5 pt-2', className)}>
       {title || description ? (
-        <div className="flex flex-col gap-0.5">
+        <div className="border-b border-line-quiet pb-3">
           {title ? (
-            <h2 className="text-[13px] font-semibold text-fg-primary">{title}</h2>
+            <h2 className="text-[15px] font-semibold tracking-[-0.011em] text-fg-primary">
+              {title}
+            </h2>
           ) : null}
           {description ? (
-            <p className="text-[12px] text-fg-tertiary">{description}</p>
+            <p className="mt-1 text-[12px] text-fg-tertiary">{description}</p>
           ) : null}
         </div>
       ) : null}
-      <div className="flex flex-col gap-3">{children}</div>
+      <div className="flex flex-col gap-6">{children}</div>
     </section>
   );
 }

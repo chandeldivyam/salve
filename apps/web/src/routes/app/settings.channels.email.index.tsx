@@ -2,7 +2,7 @@
 // sub-routes plus the inbound forwarding + reply addresses, both rendered
 // with CopyValue.
 
-import { Badge, Button, CopyValue } from '@opendesk/ui';
+import { Badge, CopyValue } from '@opendesk/ui';
 import { queries } from '@opendesk/zero-schema';
 import { useQuery } from '@rocicorp/zero/react';
 import { createFileRoute, Link, useRouteContext } from '@tanstack/react-router';
@@ -50,7 +50,7 @@ function OverviewTab() {
         description="Manage outbound domains, receiving addresses, routing, and suppressed recipients for this workspace."
       />
       <SettingsBody maxWidth="wide">
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-8">
           <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <SummaryCard
               icon={Mail}
@@ -154,7 +154,10 @@ function SummaryCard({
   tone?: 'default' | 'warning';
 }) {
   return (
-    <div className="flex flex-col gap-2 rounded-md bg-surface px-4 py-3.5">
+    <Link
+      to={to}
+      className="flex flex-col gap-2 rounded-md bg-bg-elevated px-4 py-3 transition-colors hover:bg-bg-popover"
+    >
       <div className="flex items-center justify-between">
         <span className="inline-flex items-center gap-2 text-[12px] font-medium text-fg-tertiary">
           <Icon className="h-3.5 w-3.5" />
@@ -162,18 +165,13 @@ function SummaryCard({
         </span>
         {tone === 'warning' ? <Badge variant="warning">Review</Badge> : null}
       </div>
-      <p className="text-[22px] font-semibold tabular-nums tracking-[-0.018em] text-fg-primary">
+      <p className="text-[24px] font-semibold tabular-nums tracking-[-0.018em] text-fg-primary">
         {primary}
       </p>
-      <p className="text-[12px] text-fg-tertiary">{secondary}</p>
-      <div className="mt-1 pt-2">
-        <Button asChild size="sm" variant="outline" className="w-full">
-          <Link to={to}>
-            Manage
-            <ArrowRight className="h-3 w-3" />
-          </Link>
-        </Button>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[12px] text-fg-tertiary">{secondary}</p>
+        <ArrowRight className="h-3 w-3 text-fg-quaternary" />
       </div>
-    </div>
+    </Link>
   );
 }

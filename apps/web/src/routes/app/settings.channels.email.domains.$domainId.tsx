@@ -1,12 +1,6 @@
 // /app/settings/channels/email/domains/$domainId — DNS records the tenant
-// must add. Slice 3 changes:
-//   - Every DNS value uses the shared <CopyValue> primitive (block variant
-//     for the long ones, inline for hosts).
-//   - The "Verify DNS" button calls the real Inngest-driven verification
-//     endpoint (re-emits the cron event) when one exists. Until that
-//     wiring lands, the button is labeled "Verify DNS (dev)" and is only
-//     rendered in development builds. See the report for the deferred
-//     backend item.
+// must add. Variant C: SettingsHeader/Body shell, flat record sections,
+// hairline separators, copy-value primitives.
 
 import { Badge, Button, CopyValue } from '@opendesk/ui';
 import { queries, type SendingDomainDetailRow } from '@opendesk/zero-schema';
@@ -17,6 +11,7 @@ import { ArrowLeft, Check, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
 import { domainStatusVariant, postEmpty } from '@/components/email-settings/types';
 import { RouteErrorFeedback, RoutePendingFeedback } from '@/components/route-feedback';
+import { FormSection, SettingsBody, SettingsHeader } from '@/components/settings';
 import { showError, showSuccess } from '@/lib/feedback';
 import { CACHE_NAV } from '@/lib/zero-cache';
 
@@ -26,37 +21,44 @@ export const Route = createFileRoute('/app/settings/channels/email/domains/$doma
   errorComponent: RouteErrorFeedback,
 });
 
-// `SendingDomainDetailRow` is `QueryResultType<typeof queries.sendingDomainByID>`
-// — a `.one()` query, so the type is the row itself, not an array.
 type DomainDetailRow = NonNullable<SendingDomainDetailRow>;
 
 function DomainDetail() {
   const { domainId } = Route.useParams();
   const [d, status] = useQuery(queries.sendingDomainByID({ id: domainId }), CACHE_NAV);
   const [busy, setBusy] = useState(false);
+  const [showRecords, setShowRecords] = useState(false);
 
   if (status?.type === 'unknown') {
-    return <div className="p-8 text-sm text-muted-foreground">Loading…</div>;
+    return (
+      <>
+        <SettingsHeader title="Domain" />
+        <SettingsBody>
+          <p className="text-[13px] text-fg-tertiary">Loading…</p>
+        </SettingsBody>
+      </>
+    );
   }
   if (!d) {
     return (
-      <div className="mx-auto w-full max-w-3xl px-8 py-8">
-        <Link
-          to="/app/settings/channels/email/domains"
-          className="text-xs text-muted-foreground hover:text-foreground"
-        >
-          ← Back to domains
-        </Link>
-        <p className="mt-4 text-sm text-muted-foreground">Domain not found.</p>
-      </div>
+      <>
+        <SettingsHeader title="Domain" />
+        <SettingsBody>
+          <Link
+            to="/app/settings/channels/email/domains"
+            className="inline-flex items-center gap-1 text-[12px] text-fg-tertiary hover:text-fg-primary"
+          >
+            <ArrowLeft className="h-3 w-3" /> Back to domains
+          </Link>
+          <p className="mt-3 text-[13px] text-fg-tertiary">Domain not found.</p>
+        </SettingsBody>
+      </>
     );
   }
 
   async function onVerifyDev() {
     setBusy(true);
     try {
-      // Phase 3a only ships the dev-override endpoint. When the real
-      // DNS-verification HTTP endpoint exists this should call it instead.
       await postEmpty([
         `/api/settings/channels/email/domains/${domainId}/verify-dev`,
         `/api/settings/email/domains/${domainId}/verify-dev`,
@@ -72,134 +74,109 @@ function DomainDetail() {
   const records = buildDnsRecords(d);
   const isVerified = d.dnsStatus === 'verified';
 
-  return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-8">
-      <Link
-        to="/app/settings/channels/email/domains"
-        className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-3 w-3" /> Back to domains
-      </Link>
+  const verifyButton = isVerified ? (
+    <Button size="sm" variant="outline" disabled>
+      <Check className="h-3.5 w-3.5" /> Verified
+    </Button>
+  ) : import.meta.env.DEV ? (
+    <Button size="sm" onClick={onVerifyDev} disabled={busy}>
+      {busy ? 'Verifying…' : 'Verify DNS (dev)'}
+    </Button>
+  ) : (
+    <Button size="sm" variant="outline" disabled>
+      Verifying via DNS…
+    </Button>
+  );
 
-      <header className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-lg font-semibold text-foreground">{d.domain}</h1>
-          <div className="mt-1 flex flex-wrap items-center gap-2">
-            <Badge variant={domainStatusVariant(d.dnsStatus)}>DNS: {d.dnsStatus}</Badge>
-            <Badge variant={d.dmarcStatus === 'present' ? 'success' : 'warning'}>
-              DMARC: {d.dmarcStatus}
-            </Badge>
-            <span className="text-xs text-muted-foreground">
-              Added {format(new Date(d.createdAt), 'MMM d, yyyy')}
+  return (
+    <>
+      <SettingsHeader
+        title={d.domain}
+        description={`Added ${format(new Date(d.createdAt), 'MMM d, yyyy')}`}
+        actions={verifyButton}
+      />
+      <SettingsBody maxWidth="wide">
+        <Link
+          to="/app/settings/channels/email/domains"
+          className="-mt-2 inline-flex items-center gap-1 text-[12px] text-fg-tertiary hover:text-fg-primary"
+        >
+          <ArrowLeft className="h-3 w-3" /> Back to domains
+        </Link>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <Badge variant={domainStatusVariant(d.dnsStatus)}>DNS: {d.dnsStatus}</Badge>
+          <Badge variant={d.dmarcStatus === 'present' ? 'success' : 'warning'}>
+            DMARC: {d.dmarcStatus}
+          </Badge>
+          {isVerified && d.lastVerifiedAt ? (
+            <span className="text-[12px] text-fg-tertiary">
+              Last checked {format(new Date(d.lastVerifiedAt), 'MMM d, yyyy')}
             </span>
+          ) : null}
+        </div>
+
+        {isVerified ? (
+          <div className="mt-6 flex flex-col gap-6">
+            <div className="flex items-start gap-3 rounded-md bg-bg-elevated px-4 py-3">
+              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-fg-tertiary" aria-hidden="true" />
+              <div className="min-w-0">
+                <p className="text-[13px] font-medium text-fg-primary">DNS records configured</p>
+                <p className="mt-0.5 text-[12px] text-fg-tertiary">
+                  Replies are DKIM-signed from {d.domain}.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowRecords((s) => !s)}
+              className="self-start text-[12px] font-medium text-fg-tertiary underline-offset-2 hover:text-fg-primary hover:underline"
+            >
+              {showRecords ? 'Hide DNS records' : 'Review DNS records'}
+            </button>
+
+            {showRecords ? <DnsRecordList records={records} /> : null}
+          </div>
+        ) : (
+          <div className="mt-6 flex flex-col gap-6">
+            <FormSection
+              title="DNS records"
+              description={`Add the records below to your DNS provider. Once they propagate, replies will be DKIM-signed as support@${d.domain}.`}
+            >
+              <DnsRecordList records={records} />
+              <p className="text-[11px] text-fg-tertiary">
+                DNS propagation can take up to an hour. After updating your records, the next
+                verification cron run will pick them up automatically.
+              </p>
+            </FormSection>
+          </div>
+        )}
+      </SettingsBody>
+    </>
+  );
+}
+
+function DnsRecordList({
+  records,
+}: {
+  records: Array<{ kind: string; host: string; type: 'CNAME' | 'TXT' | 'MX'; value: string }>;
+}) {
+  return (
+    <div className="flex flex-col gap-4">
+      {records.map((r) => (
+        <div key={`${r.kind}-${r.host}`} className="flex flex-col gap-2 rounded-md bg-bg-elevated px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[13px] font-medium text-fg-primary">{r.kind}</p>
+            <Badge variant="muted">{r.type}</Badge>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-[120px_minmax(0,1fr)] sm:items-start">
+            <span className="text-[11px] uppercase tracking-[0.06em] text-fg-quaternary">Host</span>
+            <CopyValue value={r.host} label={`${r.kind} host`} />
+            <span className="text-[11px] uppercase tracking-[0.06em] text-fg-quaternary">Value</span>
+            <CopyValue value={r.value} label={`${r.kind} value`} variant="block" />
           </div>
         </div>
-        <div className="flex shrink-0 flex-wrap gap-2">
-          {isVerified ? (
-            <Button size="sm" variant="outline" disabled>
-              <Check className="h-3.5 w-3.5" /> Verified
-            </Button>
-          ) : import.meta.env.DEV ? (
-            <Button size="sm" onClick={onVerifyDev} disabled={busy}>
-              {busy ? 'Verifying...' : 'Verify DNS (dev)'}
-            </Button>
-          ) : (
-            <Button size="sm" variant="outline" disabled>
-              Verifying via DNS…
-            </Button>
-          )}
-        </div>
-      </header>
-
-      {isVerified ? (
-        // Verified domains shouldn't read as a setup task. Replace the
-        // "Add the records below" framing with a calmer status block, and
-        // tuck the actual record table behind a disclosure so it stays
-        // self-documenting (still copyable) without dominating the page.
-        <>
-          <section className="mt-4 flex items-start gap-3 rounded-lg border border-success-border bg-success-soft p-4 text-sm text-success-soft-foreground">
-            <ShieldCheck className="h-5 w-5 shrink-0" aria-hidden="true" />
-            <div className="min-w-0">
-              <p className="font-medium">DNS records configured</p>
-              <p className="mt-1 text-xs">
-                {d.domain} is verified
-                {d.lastVerifiedAt
-                  ? ` (last checked ${format(new Date(d.lastVerifiedAt), 'MMM d, yyyy')})`
-                  : ''}
-                . Replies are DKIM-signed.
-              </p>
-            </div>
-          </section>
-
-          <details className="group mt-4 rounded-lg border border-border bg-surface">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-sm font-medium text-foreground hover:bg-surface-muted">
-              <span>Review DNS records</span>
-              <span className="text-xs text-muted-foreground group-open:hidden">Show</span>
-              <span className="hidden text-xs text-muted-foreground group-open:inline">Hide</span>
-            </summary>
-            <div className="space-y-4 border-t border-border p-4">
-              {records.map((r) => (
-                <div
-                  key={`${r.kind}-${r.host}`}
-                  className="rounded-lg border border-border bg-surface p-4 shadow-sm"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-sm font-medium text-foreground">{r.kind}</p>
-                    <Badge variant="muted">{r.type}</Badge>
-                  </div>
-                  <div className="mt-3 grid gap-3 sm:grid-cols-[120px_minmax(0,1fr)] sm:items-start">
-                    <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                      Host
-                    </span>
-                    <CopyValue value={r.host} label={`${r.kind} host`} />
-                    <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                      Value
-                    </span>
-                    <CopyValue value={r.value} label={`${r.kind} value`} variant="block" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </details>
-        </>
-      ) : (
-        <>
-          <p className="mt-3 max-w-xl text-sm text-muted-foreground">
-            Add the records below to your DNS provider. Once they propagate, replies will be
-            DKIM-signed as{' '}
-            <code className="rounded bg-muted px-1 py-0.5 text-[12px]">support@{d.domain}</code>.
-          </p>
-
-          <section className="mt-6 space-y-4">
-            {records.map((r) => (
-              <div
-                key={`${r.kind}-${r.host}`}
-                className="rounded-lg border border-border bg-surface p-4 shadow-sm"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-sm font-medium text-foreground">{r.kind}</p>
-                  <Badge variant="muted">{r.type}</Badge>
-                </div>
-                <div className="mt-3 grid gap-3 sm:grid-cols-[120px_minmax(0,1fr)] sm:items-start">
-                  <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                    Host
-                  </span>
-                  <CopyValue value={r.host} label={`${r.kind} host`} />
-                  <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                    Value
-                  </span>
-                  <CopyValue value={r.value} label={`${r.kind} value`} variant="block" />
-                </div>
-              </div>
-            ))}
-          </section>
-
-          <p className="mt-4 text-xs text-muted-foreground">
-            DNS propagation can take up to an hour. After updating your records, the next
-            verification cron run will pick them up automatically.
-          </p>
-        </>
-      )}
+      ))}
     </div>
   );
 }

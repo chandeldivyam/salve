@@ -1,8 +1,8 @@
 // /app/settings/channels/email/suppressions — recipients we never email.
 // Read-only list; entries are added by the bounce/complaint webhook in
-// the API.
+// the API. Variant C: flat rows with hairline separators, no card.
 
-import { Badge, Card, CardContent, cn } from '@opendesk/ui';
+import { Badge } from '@opendesk/ui';
 import { queries } from '@opendesk/zero-schema';
 import { useQuery } from '@rocicorp/zero/react';
 import { createFileRoute } from '@tanstack/react-router';
@@ -28,55 +28,41 @@ function SuppressionsTab() {
         description="Recipients Salve will not email — added automatically when a delivery hard-bounces or a recipient marks a message as spam."
       />
       <SettingsBody maxWidth="wide">
-      {rows.length === 0 ? (
-        <EmptyState
-          icon={ShieldOff}
-          title="No suppressed recipients"
-          description="Bounces and spam complaints land here automatically so the same address is never re-emailed."
-        />
-      ) : (
-        <Card className="overflow-hidden">
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[620px] text-left text-[13px]">
-                <thead>
-                  <tr className="border-b border-border bg-surface-muted text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                    <th className="px-3 py-2">Target</th>
-                    <th className="px-3 py-2">Reason</th>
-                    <th className="px-3 py-2">Channel</th>
-                    <th className="px-3 py-2">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row, index) => {
-                    const target = row.target ?? 'unknown';
-                    // Suppressions can apply workspace-wide (no channel) or to a
-                    // specific channel; the related row carries the channel
-                    // kind we want to render.
-                    const channel = row.channel?.kind ?? 'all channels';
-                    const status: 'active' | 'inactive' = 'active';
-                    return (
-                      <tr
-                        key={row.id}
-                        className={cn(index !== rows.length - 1 && 'border-b border-border')}
-                      >
-                        <td className="max-w-[240px] truncate px-3 py-2.5 font-medium text-foreground">
-                          {target}
-                        </td>
-                        <td className="px-3 py-2.5 text-muted-foreground">{row.reason}</td>
-                        <td className="px-3 py-2.5 text-muted-foreground">{channel}</td>
-                        <td className="px-3 py-2.5">
-                          <Badge variant={status === 'active' ? 'danger' : 'muted'}>{status}</Badge>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+        {rows.length === 0 ? (
+          <EmptyState
+            icon={ShieldOff}
+            title="No suppressed recipients"
+            description="Bounces and spam complaints land here automatically so the same address is never re-emailed."
+          />
+        ) : (
+          <section className="flex flex-col">
+            <header className="grid h-7 items-center gap-3 px-2 pb-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-fg-quaternary lg:grid-cols-[minmax(0,2fr)_minmax(0,2fr)_minmax(0,1fr)_minmax(0,0.6fr)]">
+              <span>Target</span>
+              <span>Reason</span>
+              <span>Channel</span>
+              <span className="text-right">Status</span>
+            </header>
+            <ul className="flex flex-col">
+              {rows.map((row) => {
+                const target = row.target ?? 'unknown';
+                const channel = row.channel?.kind ?? 'all channels';
+                return (
+                  <li
+                    key={row.id}
+                    className="grid items-center gap-3 rounded-md px-2 py-2 text-[13px] transition-colors hover:bg-bg-elevated/40 lg:grid-cols-[minmax(0,2fr)_minmax(0,2fr)_minmax(0,1fr)_minmax(0,0.6fr)]"
+                  >
+                    <span className="truncate font-medium text-fg-primary">{target}</span>
+                    <span className="truncate text-fg-tertiary">{row.reason}</span>
+                    <span className="truncate text-fg-tertiary">{channel}</span>
+                    <span className="lg:text-right">
+                      <Badge variant="danger">active</Badge>
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
       </SettingsBody>
     </>
   );
