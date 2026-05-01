@@ -1,101 +1,55 @@
-// /app/settings — sidebar layout for workspace settings. Phase 3a ships the
-// canonical Email Channel screen; legacy `/settings/email/domains` routes stay
-// mounted so older links keep working.
-//
-// File-based routing: this is the parent of `settings.channels.email` and the
-// older `settings.email.domains` route family.
+// /app/settings — single workbench tab with a horizontal section strip.
 
-import {
-  createFileRoute,
-  Link,
-  Outlet,
-  useLocation,
-  useRouteContext,
-} from '@tanstack/react-router';
+import { createFileRoute, Outlet } from '@tanstack/react-router';
 import { ListChecks, Mail, Settings2, Tags } from 'lucide-react';
-import type { ReactNode } from 'react';
-import type { SessionData } from '@/lib/session-loader';
-import { useSetupProgress } from '@/lib/setup-progress';
+import { SectionStrip, type SectionStripItem } from '@/components/workbench/section-strip';
 
 export const Route = createFileRoute('/app/settings')({
   component: SettingsLayout,
 });
 
+const SETTINGS_SECTIONS: readonly SectionStripItem[] = [
+  {
+    to: '/app/settings/setup',
+    label: 'Setup',
+    icon: ListChecks,
+    match: (pathname) => pathname.startsWith('/app/settings/setup'),
+  },
+  {
+    to: '/app/settings/channels/email',
+    label: 'Email',
+    icon: Mail,
+    match: (pathname) =>
+      pathname.startsWith('/app/settings/channels/email') ||
+      pathname.startsWith('/app/settings/email/domains'),
+  },
+  {
+    to: '/app/settings/tags',
+    label: 'Tags',
+    icon: Tags,
+    match: (pathname) => pathname.startsWith('/app/settings/tags'),
+  },
+  {
+    to: '/app/settings/custom-fields',
+    label: 'Custom fields',
+    icon: Settings2,
+    match: (pathname) => pathname.startsWith('/app/settings/custom-fields'),
+  },
+];
+
 function SettingsLayout() {
-  const location = useLocation();
-  const { session } = useRouteContext({ from: '/app' }) as { session: SessionData };
-  const workspaceID = session.session.activeOrganizationId ?? null;
-  const progress = useSetupProgress(workspaceID);
-
-  const isEmailChannel =
-    location.pathname.startsWith('/app/settings/channels/email') ||
-    location.pathname.startsWith('/app/settings/email/domains');
-  const isSetup = location.pathname.startsWith('/app/settings/setup');
-  const isTags = location.pathname.startsWith('/app/settings/tags');
-  const isCustomFields = location.pathname.startsWith('/app/settings/custom-fields');
-
-  // Hide the Setup item only when the user finished and dismissed it.
-  const showSetup = !(progress.dismissed && progress.isComplete);
-
-  // App chrome (header) lives in `routes/app.tsx`; this layout owns only
-  // the settings sidebar + outlet. The parent flex container in /app
-  // already gives us a row layout.
   return (
-    <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
-      <aside className="flex shrink-0 flex-col gap-1 border-b border-border bg-surface px-3 py-4 sm:w-[240px] sm:border-r sm:border-b-0 sm:py-5">
-        <p className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:pb-2">
-          Settings
+    <div className="flex min-h-0 flex-1 flex-col bg-background">
+      <header className="flex shrink-0 flex-col gap-1 border-b border-border bg-surface px-4 py-4 sm:px-8">
+        <h1 className="text-lg font-semibold text-foreground">Settings</h1>
+        <p className="max-w-2xl text-sm text-muted-foreground">
+          Configure workspace setup, channels, routing, tags, and customer metadata.
         </p>
-        {showSetup ? (
-          <SettingsLink to="/app/settings/setup" active={isSetup}>
-            <ListChecks className="h-3.5 w-3.5" />
-            <span className="flex-1">Setup</span>
-            {progress.ready && !progress.isComplete ? (
-              <span className="rounded-full bg-brand-soft px-1.5 py-0.5 text-[10px] font-semibold text-brand-soft-foreground ring-1 ring-brand-border">
-                {progress.completedCount}/{progress.total}
-              </span>
-            ) : null}
-          </SettingsLink>
-        ) : null}
-        <SettingsLink to="/app/settings/channels/email" active={isEmailChannel}>
-          <Mail className="h-3.5 w-3.5" />
-          <span className="flex-1">Email channel</span>
-        </SettingsLink>
-        <SettingsLink to="/app/settings/tags" active={isTags}>
-          <Tags className="h-3.5 w-3.5" />
-          <span className="flex-1">Tags</span>
-        </SettingsLink>
-        <SettingsLink to="/app/settings/custom-fields" active={isCustomFields}>
-          <Settings2 className="h-3.5 w-3.5" />
-          <span className="flex-1">Custom fields</span>
-        </SettingsLink>
-      </aside>
+      </header>
+      <SectionStrip label="Settings sections" items={SETTINGS_SECTIONS} />
       <main className="flex min-w-0 flex-1 flex-col bg-background">
         <Outlet />
       </main>
     </div>
-  );
-}
-
-function SettingsLink({
-  to,
-  active,
-  children,
-}: {
-  to: string;
-  active: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <Link
-      to={to}
-      className={
-        active
-          ? 'flex items-center gap-2 rounded-md bg-brand-soft px-2 py-1.5 text-sm font-medium text-brand-soft-foreground ring-1 ring-brand-border'
-          : 'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-surface-muted hover:text-foreground'
-      }
-    >
-      {children}
-    </Link>
   );
 }

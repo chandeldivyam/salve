@@ -35,6 +35,7 @@ import { sortedTagsFromRelations, type TagRow, tagPillStyle } from '@/lib/suppor
 import { useZero } from '@/lib/zero';
 import { CACHE_FOREVER } from '@/lib/zero-cache';
 import { InboxListSkeleton } from './skeletons';
+import { WorkbenchLink } from './workbench/workbench-link';
 
 type InboxFilter = 'all' | 'unassigned' | 'mine' | 'resolved';
 
@@ -136,7 +137,7 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
   const virtualizer = useVirtualizer({
     count: filtered.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 96,
+    estimateSize: () => 74,
     overscan: 8,
   });
 
@@ -215,7 +216,7 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
 
   return (
     <div className="flex h-full w-full flex-col bg-surface">
-      <div className="flex shrink-0 flex-col gap-2 border-b border-border px-4 py-3">
+      <div className="flex shrink-0 flex-col gap-2 border-b border-border px-3 py-2.5">
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -398,9 +399,9 @@ function InboxListRow({ ticket, isSelected }: { ticket: TicketRow; isSelected: b
   const rowTags = sortedTagsFromRelations((ticket as unknown as Record<string, unknown>).tags);
 
   return (
-    <Link
-      to="/app/inbox/t/$ticketId"
-      params={{ ticketId: ticket.id }}
+    <WorkbenchLink
+      href={`/app/inbox/t/${ticket.id}`}
+      source="ticket-row"
       className={cn(
         'group block border-b border-border transition-colors',
         isSelected
@@ -408,7 +409,7 @@ function InboxListRow({ ticket, isSelected }: { ticket: TicketRow; isSelected: b
           : 'border-l-4 border-l-transparent hover:bg-surface-muted',
       )}
     >
-      <div className="flex items-start gap-3 px-4 py-3">
+      <div className="flex items-start gap-2.5 px-3 py-2">
         {isUrgent ? (
           <span
             aria-hidden="true"
@@ -483,7 +484,7 @@ function InboxListRow({ ticket, isSelected }: { ticket: TicketRow; isSelected: b
           </div>
         </div>
       </div>
-    </Link>
+    </WorkbenchLink>
   );
 }
 

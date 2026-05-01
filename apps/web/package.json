@@ -12,6 +12,9 @@
     "check": "biome check ."
   },
   "dependencies": {
+    "@dnd-kit/core": "6.3.1",
+    "@dnd-kit/sortable": "10.0.0",
+    "@dnd-kit/utilities": "3.2.2",
     "@hookform/resolvers": "5.2.2",
     "@opendesk/core": "workspace:^",
     "@opendesk/mutators": "workspace:*",
@@ -25,6 +28,7 @@
     "@tiptap/react": "2.27.2",
     "@tiptap/starter-kit": "2.27.2",
     "better-auth": "1.6.9",
+    "cmdk": "1.1.1",
     "date-fns": "4.1.0",
     "jose": "6.2.3",
     "js-cookie": "3.0.5",

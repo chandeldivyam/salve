@@ -20,6 +20,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from '@opendesk/ui';
+import { useRouteContext } from '@tanstack/react-router';
 import Link from '@tiptap/extension-link';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -43,6 +44,9 @@ import {
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useComposerDraftsStore } from '@/lib/composer-drafts';
+import type { SessionData } from '@/lib/session-loader';
+import { isMod, useShortcut } from '@/lib/shortcuts';
 
 export interface ComposerAttachment {
   id: string;
@@ -77,6 +81,8 @@ export interface ComposerSendArgs {
 
 interface ComposerProps {
   ticketID: string;
+  userID?: string;
+  workspaceID?: string | null;
   disabled?: boolean;
   disabledReason?: string;
   emailAddresses?: ComposerEmailAddress[];
@@ -94,7 +100,13 @@ interface PendingUpload {
   error?: string;
 }
 
+interface DraftBodySnapshot {
+  bodyHTML: string;
+  bodyText: string;
+}
+
 const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? '';
+const EMPTY_DRAFT_BODY: DraftBodySnapshot = { bodyHTML: '', bodyText: '' };
 
 async function presignFile(file: File, ticketID: string) {
   const res = await fetch(`${apiBase}/api/files/presign`, {
@@ -123,18 +135,36 @@ async function uploadToS3(putUrl: string, file: File) {
 
 export function Composer({
   ticketID,
+  userID: userIDProp,
+  workspaceID: workspaceIDProp,
   disabled,
   disabledReason,
   emailAddresses = [],
   preferredEmailAddressID,
   onSend,
 }: ComposerProps) {
+  const { session } = useRouteContext({ from: '/app' }) as { session: SessionData };
+  const userID = userIDProp ?? session.user.id;
+  const workspaceID = workspaceIDProp ?? session.session.activeOrganizationId ?? null;
+  const draftKey = workspaceID ? `${workspaceID}:${ticketID}` : null;
+  const initializeDrafts = useComposerDraftsStore((state) => state.initializeDrafts);
+  const getDraft = useComposerDraftsStore((state) => state.getDraft);
+  const setDraft = useComposerDraftsStore((state) => state.setDraft);
+  const clearDraft = useComposerDraftsStore((state) => state.clearDraft);
   const [tab, setTab] = useState<'reply' | 'note'>('reply');
   const [uploads, setUploads] = useState<PendingUpload[]>([]);
   const [sending, setSending] = useState(false);
   const [selectedEmailAddressID, setSelectedEmailAddressID] = useState<string | null>(null);
+  const [bodySnapshot, setBodySnapshot] = useState<DraftBodySnapshot>(EMPTY_DRAFT_BODY);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const dropRef = useRef<HTMLDivElement | null>(null);
+  const draftDirtyRef = useRef(false);
+  const suppressNextEditorUpdateRef = useRef(false);
+  const latestDraftRef = useRef({
+    bodySnapshot,
+    isInternal: tab === 'note',
+    selectedEmailAddressID,
+  });
 
   const preferredEmailAddress =
     (preferredEmailAddressID
@@ -168,13 +198,120 @@ export function Composer({
     },
   });
 
-  // Wipe the editor when switching tickets. `ticketID` is the actual trigger;
-  // `editor` is referenced inside but is stable per-Composer instance.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: ticketID drives the reset
   useEffect(() => {
-    editor?.commands.clearContent(true);
+    latestDraftRef.current = {
+      bodySnapshot,
+      isInternal: tab === 'note',
+      selectedEmailAddressID,
+    };
+  }, [bodySnapshot, selectedEmailAddressID, tab]);
+
+  const markDraftDirty = useCallback(() => {
+    draftDirtyRef.current = true;
+  }, []);
+
+  const selectTab = useCallback(
+    (next: 'reply' | 'note') => {
+      if (tab !== next) markDraftDirty();
+      setTab(next);
+    },
+    [markDraftDirty, tab],
+  );
+
+  const selectEmailAddress = useCallback(
+    (id: string) => {
+      setSelectedEmailAddressID(id);
+      markDraftDirty();
+    },
+    [markDraftDirty],
+  );
+
+  useEffect(() => {
+    initializeDrafts(userID);
+  }, [initializeDrafts, userID]);
+
+  // Restore the per-ticket draft on mount/reload and when switching tickets.
+  useEffect(() => {
+    if (!editor) return;
+
+    const draft = getDraft(workspaceID, ticketID);
+    if (draft?.bodyHTML) {
+      editor.commands.setContent(draft.bodyHTML, false);
+    } else {
+      editor.commands.clearContent(false);
+    }
+
+    setBodySnapshot(
+      draft ? { bodyHTML: draft.bodyHTML, bodyText: draft.bodyText } : EMPTY_DRAFT_BODY,
+    );
+    setTab(draft?.isInternal ? 'note' : 'reply');
+    setSelectedEmailAddressID(draft?.selectedAddressID ?? null);
     setUploads([]);
-  }, [ticketID]);
+    draftDirtyRef.current = false;
+    suppressNextEditorUpdateRef.current = false;
+  }, [editor, getDraft, ticketID, workspaceID]);
+
+  useEffect(() => {
+    if (!editor) return;
+
+    const handleUpdate = () => {
+      setBodySnapshot({
+        bodyHTML: editor.getHTML(),
+        bodyText: editor.getText(),
+      });
+      if (suppressNextEditorUpdateRef.current) {
+        suppressNextEditorUpdateRef.current = false;
+        return;
+      }
+      markDraftDirty();
+    };
+
+    editor.on('update', handleUpdate);
+    return () => {
+      editor.off('update', handleUpdate);
+    };
+  }, [editor, markDraftDirty]);
+
+  useEffect(() => {
+    if (!userID || !draftKey || !draftDirtyRef.current) return;
+
+    const timeoutID = window.setTimeout(() => {
+      setDraft(workspaceID, ticketID, {
+        bodyHTML: bodySnapshot.bodyHTML,
+        bodyText: bodySnapshot.bodyText,
+        isInternal: tab === 'note',
+        ...(selectedEmailAddressID ? { selectedAddressID: selectedEmailAddressID } : {}),
+        updatedAt: Date.now(),
+      });
+    }, 300);
+
+    return () => window.clearTimeout(timeoutID);
+  }, [
+    bodySnapshot,
+    draftKey,
+    selectedEmailAddressID,
+    setDraft,
+    tab,
+    ticketID,
+    userID,
+    workspaceID,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      if (!userID || !draftKey || !draftDirtyRef.current) return;
+      const latest = latestDraftRef.current;
+      setDraft(workspaceID, ticketID, {
+        bodyHTML: latest.bodySnapshot.bodyHTML,
+        bodyText: latest.bodySnapshot.bodyText,
+        isInternal: latest.isInternal,
+        ...(latest.selectedEmailAddressID
+          ? { selectedAddressID: latest.selectedEmailAddressID }
+          : {}),
+        updatedAt: Date.now(),
+      });
+    };
+  }, [draftKey, setDraft, ticketID, userID, workspaceID]);
 
   useEffect(() => {
     if (!emailAddresses.length) {
@@ -182,10 +319,10 @@ export function Composer({
       return;
     }
     setSelectedEmailAddressID((current) =>
-      preferredEmailAddress?.id
-        ? preferredEmailAddress.id
-        : current && emailAddresses.some((address) => address.id === current)
-          ? current
+      current && emailAddresses.some((address) => address.id === current)
+        ? current
+        : preferredEmailAddress?.id
+          ? preferredEmailAddress.id
           : (fallbackEmailAddress?.id ?? null),
     );
   }, [emailAddresses, fallbackEmailAddress?.id, preferredEmailAddress?.id]);
@@ -268,27 +405,38 @@ export function Composer({
         emailAddressID: tab === 'reply' ? (selectedEmailAddress?.id ?? undefined) : undefined,
         attachments,
       });
+      clearDraft(workspaceID, ticketID);
+      draftDirtyRef.current = false;
+      suppressNextEditorUpdateRef.current = true;
       editor.commands.clearContent(true);
+      setBodySnapshot(EMPTY_DRAFT_BODY);
       setUploads([]);
     } finally {
       setSending(false);
     }
-  }, [editor, sending, tab, uploads, onSend, selectedEmailAddress]);
+  }, [
+    clearDraft,
+    editor,
+    sending,
+    tab,
+    ticketID,
+    uploads,
+    onSend,
+    selectedEmailAddress,
+    workspaceID,
+  ]);
 
-  // Cmd/Ctrl+Enter submits.
-  useEffect(() => {
-    function onKey(ev: KeyboardEvent) {
-      if ((ev.metaKey || ev.ctrlKey) && ev.key === 'Enter') {
-        const target = ev.target as HTMLElement | null;
-        if (target && (target.closest('.tiptap-composer') || target.closest('textarea, input'))) {
-          ev.preventDefault();
-          onSendClick();
-        }
-      }
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onSendClick]);
+  useShortcut(
+    'Enter',
+    (event) => {
+      if (!isMod(event)) return;
+      const target = event.target as HTMLElement | null;
+      if (!target?.closest('.tiptap-composer')) return;
+      event.preventDefault();
+      onSendClick();
+    },
+    { allowInInputs: true, preventDefault: false },
+  );
 
   if (disabled) {
     return (
@@ -312,21 +460,21 @@ export function Composer({
           active={tab === 'reply'}
           icon={<MessageSquare className="h-3.5 w-3.5" />}
           label="Reply"
-          onClick={() => setTab('reply')}
+          onClick={() => selectTab('reply')}
         />
         <TabPill
           active={tab === 'note'}
           icon={<Lock className="h-3.5 w-3.5" />}
           label="Internal note"
           tone="amber"
-          onClick={() => setTab('note')}
+          onClick={() => selectTab('note')}
         />
         {tab === 'reply' ? (
           <FromPicker
             addresses={emailAddresses}
             selected={selectedEmailAddress}
             preferredEmailAddressID={preferredEmailAddressID}
-            onSelect={setSelectedEmailAddressID}
+            onSelect={selectEmailAddress}
           />
         ) : null}
         <span className="mx-2 h-5 w-px bg-border" />

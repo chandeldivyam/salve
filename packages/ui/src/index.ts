@@ -22,6 +22,18 @@ export {
 } from './card.js';
 export { CopyValue, type CopyValueProps } from './copy-value.js';
 export {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogOverlay,
+  DialogPortal,
+  DialogTitle,
+  DialogTrigger,
+} from './dialog.js';
+export {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,

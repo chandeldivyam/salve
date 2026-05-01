@@ -11,9 +11,9 @@ import { schema } from '@opendesk/zero-schema/schema';
 import { ZeroProvider } from '@rocicorp/zero/react';
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
 import { useEffect, useMemo } from 'react';
-import { AppHeader } from '@/components/app-header';
 import { BrandSplash } from '@/components/brand-splash';
 import { RouteErrorFeedback, RouteNotFoundFeedback } from '@/components/route-feedback';
+import { WorkbenchShell } from '@/components/workbench/shell';
 import { fetchSession, listOrganizations, type SessionData } from '@/lib/session-loader';
 import { useZero, ZERO_CACHE_URL } from '@/lib/zero';
 import { preloadWorkspace } from '@/lib/zero-preload';
@@ -22,9 +22,10 @@ export const Route = createFileRoute('/app')({
   beforeLoad: async () => {
     // Fetch session + org list in parallel. Both are cached at module
     // level (lib/session-loader) so subsequent navigations resolve
-    // synchronously and AppHeader can render without a useEffect-driven
-    // flicker. The org list is a hard prerequisite for the workspace
-    // switcher; failing the fetch is non-fatal (we just show no orgs).
+    // synchronously and the workbench shell can render without a
+    // useEffect-driven flicker. The org list is a hard prerequisite for
+    // the workspace switcher; failing the fetch is non-fatal (we just show
+    // no orgs).
     const [session] = await Promise.all([fetchSession(), listOrganizations()]);
     if (!session) {
       throw redirect({ to: '/auth/sign-in' });
@@ -61,21 +62,16 @@ function AppLayout() {
     [session.user.id, session.session.activeOrganizationId],
   );
 
-  // AppHeader lives here (not in each leaf layout) so it mounts ONCE for
-  // the lifetime of the /app subtree. Sub-route navigation
-  // (inbox → settings → tags) just swaps `<Outlet />` content; the header
-  // never re-renders from scratch, eliminating the email + workspace-
-  // switcher flicker we used to ship.
+  // WorkbenchShell lives here (not in each leaf layout) so it mounts ONCE
+  // for the lifetime of the /app subtree. The auth/Zero boundary stays
+  // intact; tabs and command search are a UI layer over normal routes.
   return (
     <ZeroProvider {...zeroOpts}>
       <TooltipProvider delayDuration={150}>
         <WorkspacePreloader />
-        <div className="flex h-dvh flex-col">
-          <AppHeader />
-          <div className="flex min-h-0 flex-1">
-            <Outlet />
-          </div>
-        </div>
+        <WorkbenchShell session={session}>
+          <Outlet />
+        </WorkbenchShell>
       </TooltipProvider>
     </ZeroProvider>
   );

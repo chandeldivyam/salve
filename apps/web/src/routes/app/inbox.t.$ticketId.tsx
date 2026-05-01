@@ -37,10 +37,12 @@ import {
   UserMinus,
   UserPlus,
 } from 'lucide-react';
+import { useEffect } from 'react';
 import { Composer, type ComposerEmailAddress, type ComposerSendArgs } from '@/components/composer';
 import { CustomFieldsBlock } from '@/components/conversation/custom-fields-block';
 import { TagsField } from '@/components/conversation/tags-field';
 import { TicketDetailSkeleton } from '@/components/skeletons';
+import { useWorkbenchStore } from '@/lib/workbench';
 import { useZero } from '@/lib/zero';
 import { CACHE_FOREVER, CACHE_NAV } from '@/lib/zero-cache';
 
@@ -153,9 +155,15 @@ function TicketDetail() {
   const { ticketId } = Route.useParams();
   const z = useZero();
   const { session } = Route.useRouteContext() as {
-    session: { user: { id: string; name: string; email: string } };
+    session: {
+      user: { id: string; name: string; email: string };
+      session: { activeOrganizationId: string | null };
+    };
   };
   const currentUserID = session.user.id;
+  const workspaceID = session.session.activeOrganizationId ?? null;
+  const setActiveTabTitle = useWorkbenchStore((state) => state.setActiveTabTitle);
+  const recordRecentTicket = useWorkbenchStore((state) => state.recordRecentTicket);
 
   const [ticket, ticketStatus] = useQuery(queries.ticketByID({ id: ticketId }), CACHE_NAV);
   const [members] = useQuery(queries.workspaceMembers(), CACHE_FOREVER);
@@ -171,6 +179,13 @@ function TicketDetail() {
   for (const r of outboundRows) {
     deliveryByMessage.set(r.messageID, { status: r.status, error: r.error });
   }
+
+  useEffect(() => {
+    if (!ticket) return;
+    const title = ticket.shortID > 0 ? `#${ticket.shortID} ${ticket.title}` : ticket.title;
+    setActiveTabTitle(workspaceID, title, 'ticket');
+    recordRecentTicket(workspaceID, ticketId);
+  }, [recordRecentTicket, setActiveTabTitle, ticket, ticketId, workspaceID]);
 
   // Distinguish "still hydrating" (don't claim not-found) from "server
   // confirmed empty" (truly not found). zbugs `issue-page.tsx` makes the
@@ -485,6 +500,8 @@ function TicketDetail() {
         <div className="shrink-0">
           <Composer
             ticketID={ticketId}
+            userID={currentUserID}
+            workspaceID={workspaceID}
             disabled={isClosed}
             disabledReason="This ticket is closed. Reopen it to reply."
             emailAddresses={sendableEmailAddresses}
