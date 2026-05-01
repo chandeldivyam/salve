@@ -32,6 +32,7 @@ The thread connecting both: **engineering quality is what makes design quality s
 17. [Testing](#17-testing)
 18. [Anti-patterns](#18-anti-patterns)
 19. [Reading list & libraries](#19-reading-list--libraries)
+20. [Settings pages](#20-settings-pages)
 
 ---
 
@@ -1138,6 +1139,10 @@ If you do any of these, expect to be asked to undo them in code review.
 44. **`prose` classes on the editor (or anywhere) without `@tailwindcss/typography` installed.** `prose prose-sm` is dead text — it renders nothing — unless the plugin is loaded via `@plugin` in `styles.css`. Compounds with Tailwind v4's preflight, which strips `list-style` and padding from `<ul>`/`<ol>` and removes default `<blockquote>` borders, so the editor *appears* to be broken (typing `- ` produces a real `<ul>` in the DOM but renders flat). Don't reach for `prose` — add scoped rules under `.ProseMirror` (or a similar class) in `styles.css`. See the `.ProseMirror` block in `apps/web/src/styles.css`.
 45. **Hover-revealed buttons that only toggle `opacity` (not `pointer-events`).** `opacity: 0` does NOT disable click capture — invisible-but-still-clickable buttons reserve hit area in their layout slot, intercepting clicks meant for siblings (e.g. the row's activate target). Always pair `opacity-0` with `pointer-events-none` and `group-hover:opacity-100` with `group-hover:pointer-events-auto`. See `tab-strip.tsx` close X / menu trigger.
 46. **Click handler scoped to one inner control when the whole row should be clickable.** If the wrapper has padding (`px-2`) or hover-revealed siblings, putting `onClick` on the inner `<button>` leaves dead zones that don't activate. Hoist the click handler to the outermost wrapper and `event.stopPropagation()` on the children that should NOT activate (close X, menu trigger, edit input). The whole row becomes a single hit target with carved-out exceptions.
+47. **Two stacked sidebars in settings.** PostHog-shape (workbench rail + settings sidebar both visible) doubles the chrome and halves the content area. Use Linear-shape: the workbench `LeftRail` swaps its nav to the settings sidebar when the route is under `/app/settings/*`, and a `← Back to inbox` link is the way out. See §20 and `apps/web/src/components/workbench/left-rail.tsx`.
+48. **Per-page bespoke header in settings.** Every settings sub-route renders its own `<h1>` + description + actions in a different shape, breaking visual rhythm across the section. Use `<SettingsHeader>` exclusively — it's the only header element a settings page declares. See §20.
+49. **Persistent inline create form on a settings page.** The create form glues itself to the right rail or the top of the list, taking real estate even when no one is creating. Use a tier-B `<SettingsSheet>` triggered from the page header CTA. See §20.
+50. **Per-row `Save` buttons when Zero mutators are optimistic.** The save button does nothing the auto-save wouldn't. Drop it; auto-save on blur. Reserve explicit Save for transactional units (inside a sheet, where half-filled state shouldn't survive accidental close). See §20.
 
 ---
 
@@ -1177,6 +1182,67 @@ If you do any of these, expect to be asked to undo them in code review.
 | Fonts | `@fontsource-variable/inter` |
 | Class merging | `clsx` + `tailwind-merge` (`cn()`) |
 | Variants | `class-variance-authority` |
+
+---
+
+## 20. Settings pages
+
+Settings get their own UX rules because they recur (every workspace feature gets a settings page) and the failure modes are predictable: persistent inline create-forms hogging the page, nested tab strips on top of section navigation, three-column editor layouts where one column would do. Read [docs/port/05-settings-ux-plan.md](../docs/port/05-settings-ux-plan.md) before adding a new settings sub-route.
+
+### Layout
+
+Single rail. The workbench `LeftRail` detects `/app/settings/*` and replaces its inbox/settings/new-workspace nav with the settings sidebar (Linear-shape takeover). Page body fills the rest — no second sidebar.
+
+When in settings, the rail shows:
+- Workspace switcher (kept)
+- `← Back to inbox` link (the way out)
+- Grouped sidebar: WORKSPACE / CHANNELS / CUSTOMIZATION / DEVELOPER / BILLING (only groups with visible items render)
+- Theme + account menu (kept)
+
+### Primitives (`@/components/settings`)
+
+| Component | Use for |
+|---|---|
+| `SettingsSidebar` | Renders just the grouped item list. Caller owns chrome. Lives inside `WorkbenchLeftRail`. |
+| `SettingsHeader` | Title + description + actions. **Every settings sub-page renders exactly one.** |
+| `SettingsBody` | Scrollable body with `maxWidth="narrow"` (720px, default — forms) or `"wide"` (1100px — tables, summary cards). |
+| `FormSection` | Editing one entity. Auto-save on blur, no save button. |
+| `ListSection` | Collections. Optional title + count + trailing CTA. |
+| `EmptyState` | Icon + title + description + one primary CTA. Use when the list is empty AND the user can fix that. |
+| `SettingsSheet` | Side-anchored Dialog (480px). Use for tier-B creation/edit. |
+
+The central item registry is `@/components/settings/items.ts → buildSettingsSidebarGroups()`. Add new sidebar entries there, not in component-local lists.
+
+### Creation tiers (pick one per entity)
+
+| Tier | When | How |
+|---|---|---|
+| A — inline row | Single field, no validation surface | Subtle `+ Add X` row at the bottom of the list. Click → input. `Enter` saves, `Esc` cancels. |
+| B — side sheet | 2–6 fields, contained edit | `<SettingsSheet>` 480px, autofocus first field, footer Cancel + Create. Optimistic; close on submit. |
+| C — dedicated route | DNS records, OAuth, multi-step, copy-to-clipboard flows | `/.../new` route. Stepper, copyable values, can switch tabs and come back. |
+| D — none | System-generated (suppressions, audit log, webhook events) | List is the surface; rows may have actions, but you don't author rows. |
+
+### Save semantics
+
+- Editing in `<FormSection>`: debounced auto-save (~400 ms after last change). Pencil → spinner → check.
+- Creating in side sheet: explicit `Create` button. Sheet is a transactional unit.
+- Inline tier-A: save on `Enter`/blur, cancel on `Esc`.
+- Destructive (archive, delete, type change): always confirm via `<AlertDialog>`, even one-flip changes.
+
+### Mobile
+
+Three breakpoints:
+- `≥1024 px` — rail full width.
+- `640–1023 px` — rail collapses to icon-only (existing collapse behavior).
+- `<640 px` — rail hides; page header shows a `Settings ▾` button that opens a drawer with the full sidebar. Side sheets become full-screen modals.
+
+### Anti-patterns specific to settings
+
+- Persistent inline create form on the page (the entity creator is a tier-B sheet).
+- Nested tab strip below the settings header (the sidebar is the only navigation).
+- Per-row `Save` buttons when Zero mutators are optimistic (auto-save instead).
+- Per-page bespoke header (use `SettingsHeader`).
+- Three-column "list / editor / preview" layouts (sheet + page is enough; preview lives inside the sheet).
 
 ---
 

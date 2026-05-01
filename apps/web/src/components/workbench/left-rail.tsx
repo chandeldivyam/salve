@@ -16,6 +16,7 @@ import {
 } from '@opendesk/ui';
 import { useLocation, useNavigate, useRouteContext } from '@tanstack/react-router';
 import {
+  ArrowLeft,
   Check,
   ChevronDown,
   Inbox,
@@ -31,6 +32,7 @@ import {
   Sun,
 } from 'lucide-react';
 import { useCallback, useState } from 'react';
+import { buildSettingsSidebarGroups, SettingsSidebar } from '@/components/settings';
 import { ThemeSwitcher } from '@/components/theme-switcher';
 import { authClient, switchWorkspace } from '@/lib/auth-client';
 import { resetDraftsForSignOut } from '@/lib/composer-drafts';
@@ -93,6 +95,13 @@ export function WorkbenchLeftRail({ workspaceID }: { workspaceID: string | null 
   }
 
   const pathname = location.pathname;
+  const inSettings = pathname === '/app/settings' || pathname.startsWith('/app/settings/');
+  const setupVisible = progress.ready && !(progress.dismissed && progress.isComplete);
+  const setupBadge =
+    progress.ready && !progress.isComplete
+      ? `${progress.completedCount}/${progress.total}`
+      : undefined;
+  const settingsGroups = buildSettingsSidebarGroups({ setupVisible, setupBadge });
 
   return (
     <aside
@@ -141,69 +150,85 @@ export function WorkbenchLeftRail({ workspaceID }: { workspaceID: string | null 
       </div>
 
       <nav
+        aria-label={inSettings ? 'Settings sections' : 'Workbench'}
         className={cn(
           'flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto',
           collapsed ? 'items-center px-1 py-2' : 'px-2 py-3',
         )}
       >
-        <div className={cn('w-full space-y-0.5', collapsed && 'flex flex-col items-center')}>
-          <RailItem
-            href="/app/inbox"
-            icon={Inbox}
-            label="Inbox"
-            collapsed={collapsed}
-            active={isActiveHref(pathname, '/app/inbox')}
-          />
-          <RailItem
-            href="/app/settings/setup"
-            icon={Settings}
-            label="Settings"
-            collapsed={collapsed}
-            active={isActiveHref(pathname, '/app/settings')}
-          />
-          <RailItem
-            href="/app/workspaces/new"
-            icon={Plus}
-            label="New workspace"
-            collapsed={collapsed}
-            active={isActiveHref(pathname, '/app/workspaces/new')}
-          />
-        </div>
-
-        {!collapsed && progress.ready && !(progress.dismissed && progress.isComplete) ? (
-          <WorkbenchLink
-            href="/app/settings/setup"
-            source="left-rail"
-            className={cn(
-              'relative overflow-hidden rounded-md bg-bg-elevated px-3 py-2 pb-2.5 text-xs text-fg-primary',
-              'hover:bg-bg-elevated/80',
-            )}
-          >
-            <span className="flex items-center gap-2 font-medium">
-              <ListChecks className="h-3.5 w-3.5" />
-              Setup
-              {!progress.isComplete ? (
-                <span className="ml-auto tabular-nums text-fg-tertiary">
-                  {progress.completedCount}/{progress.total}
-                </span>
-              ) : null}
-            </span>
-            <span className="mt-1 block text-[11px] text-fg-tertiary">
-              {progress.isComplete ? 'Workspace ready' : 'Finish workspace setup'}
-            </span>
-            <span
-              aria-hidden="true"
-              className="absolute inset-x-0 bottom-0 h-0.5 bg-bg-elevated"
-            >
-              <span
-                className="block h-full bg-brand-500 transition-[width] duration-200"
-                style={{
-                  width: `${Math.round((progress.completedCount / progress.total) * 100)}%`,
-                }}
+        {inSettings ? (
+          <>
+            <RailItem
+              href="/app/inbox"
+              icon={ArrowLeft}
+              label="Back to inbox"
+              collapsed={collapsed}
+              active={false}
+            />
+            <SettingsSidebar groups={settingsGroups} collapsed={collapsed} />
+          </>
+        ) : (
+          <>
+            <div className={cn('w-full space-y-0.5', collapsed && 'flex flex-col items-center')}>
+              <RailItem
+                href="/app/inbox"
+                icon={Inbox}
+                label="Inbox"
+                collapsed={collapsed}
+                active={isActiveHref(pathname, '/app/inbox')}
               />
-            </span>
-          </WorkbenchLink>
-        ) : null}
+              <RailItem
+                href="/app/settings/setup"
+                icon={Settings}
+                label="Settings"
+                collapsed={collapsed}
+                active={isActiveHref(pathname, '/app/settings')}
+              />
+              <RailItem
+                href="/app/workspaces/new"
+                icon={Plus}
+                label="New workspace"
+                collapsed={collapsed}
+                active={isActiveHref(pathname, '/app/workspaces/new')}
+              />
+            </div>
+
+            {!collapsed && progress.ready && !(progress.dismissed && progress.isComplete) ? (
+              <WorkbenchLink
+                href="/app/settings/setup"
+                source="left-rail"
+                className={cn(
+                  'relative overflow-hidden rounded-md bg-bg-elevated px-3 py-2 pb-2.5 text-xs text-fg-primary',
+                  'hover:bg-bg-elevated/80',
+                )}
+              >
+                <span className="flex items-center gap-2 font-medium">
+                  <ListChecks className="h-3.5 w-3.5" />
+                  Setup
+                  {!progress.isComplete ? (
+                    <span className="ml-auto tabular-nums text-fg-tertiary">
+                      {progress.completedCount}/{progress.total}
+                    </span>
+                  ) : null}
+                </span>
+                <span className="mt-1 block text-[11px] text-fg-tertiary">
+                  {progress.isComplete ? 'Workspace ready' : 'Finish workspace setup'}
+                </span>
+                <span
+                  aria-hidden="true"
+                  className="absolute inset-x-0 bottom-0 h-0.5 bg-bg-elevated"
+                >
+                  <span
+                    className="block h-full bg-brand-500 transition-[width] duration-200"
+                    style={{
+                      width: `${Math.round((progress.completedCount / progress.total) * 100)}%`,
+                    }}
+                  />
+                </span>
+              </WorkbenchLink>
+            ) : null}
+          </>
+        )}
       </nav>
 
       <div

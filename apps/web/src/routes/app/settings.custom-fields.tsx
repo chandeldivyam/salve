@@ -1,8 +1,10 @@
+// /app/settings/custom-fields — single-column list of fields, with the
+// in-page Ticket | Customer pill for category. Create + edit live in a side
+// sheet (tier B). Key and type are locked after creation.
+
 import {
   Badge,
   Button,
-  Card,
-  CardContent,
   cn,
   DropdownMenu,
   DropdownMenuContent,
@@ -14,10 +16,17 @@ import {
 } from '@opendesk/ui';
 import { useQuery } from '@rocicorp/zero/react';
 import { createFileRoute } from '@tanstack/react-router';
-import { Archive, Check, ChevronDown, Plus, RotateCcw, Settings2 } from 'lucide-react';
+import { Archive, ChevronDown, Plus, RotateCcw, Settings2 } from 'lucide-react';
 import { type FormEvent, useEffect, useState } from 'react';
 import { CustomFieldsBlock } from '@/components/conversation/custom-fields-block';
 import { RouteErrorFeedback, RoutePendingFeedback } from '@/components/route-feedback';
+import {
+  EmptyState,
+  ListSection,
+  SettingsBody,
+  SettingsHeader,
+  SettingsSheet,
+} from '@/components/settings';
 import {
   type CustomFieldCategory,
   type CustomFieldRow,
@@ -53,43 +62,16 @@ const FIELD_TYPES: CustomFieldType[] = [
   'dynamic_multi_select',
 ];
 
+type SheetState =
+  | { kind: 'closed' }
+  | { kind: 'create' }
+  | { kind: 'edit'; field: CustomFieldRow };
+
 function CustomFieldsSettingsPage() {
   const [category, setCategory] = useState<CustomFieldCategory>('ticket');
+  const [sheet, setSheet] = useState<SheetState>({ kind: 'closed' });
+  const [showArchived, setShowArchived] = useState(false);
 
-  return (
-    <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-4 px-4 py-6 sm:px-8">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-base font-semibold text-foreground">Custom fields</h1>
-          <p className="text-xs text-muted-foreground">
-            Define operational ticket and customer attributes for agents to maintain.
-          </p>
-        </div>
-        <div className="inline-flex w-fit rounded-md border border-border bg-surface p-0.5">
-          {(['ticket', 'customer'] as const).map((item) => (
-            <button
-              key={item}
-              type="button"
-              onClick={() => setCategory(item)}
-              className={cn(
-                'rounded px-3 py-1.5 text-xs font-medium capitalize',
-                category === item
-                  ? 'bg-brand-soft text-brand-soft-foreground'
-                  : 'text-muted-foreground hover:bg-surface-muted hover:text-foreground',
-              )}
-            >
-              {item} fields
-            </button>
-          ))}
-        </div>
-      </div>
-      <CustomFieldCategoryPanel category={category} />
-    </div>
-  );
-}
-
-function CustomFieldCategoryPanel({ category }: { category: CustomFieldCategory }) {
-  const z = useZero();
   const [rawFields] = useQuery(
     supportMetadataQueries.customFieldsForSettings({ category }),
     CACHE_NAV,
@@ -99,108 +81,186 @@ function CustomFieldCategoryPanel({ category }: { category: CustomFieldCategory 
   );
   const activeFields = fields.filter(isCustomFieldActive);
   const archivedFields = fields.filter((field) => !isCustomFieldActive(field));
-  const [selectedID, setSelectedID] = useState<string | null>(null);
-  const selected = fields.find((field) => field.id === selectedID) ?? activeFields[0] ?? null;
-
-  useEffect(() => {
-    if (selectedID && fields.some((field) => field.id === selectedID)) return;
-    setSelectedID(activeFields[0]?.id ?? null);
-  }, [activeFields, fields, selectedID]);
-
-  async function archive(field: CustomFieldRow) {
-    await z.mutate(supportMetadataMutators.customField.archive({ id: field.id }));
-  }
-
-  async function restore(field: CustomFieldRow) {
-    await z.mutate(supportMetadataMutators.customField.update({ id: field.id, active: true }));
-  }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
-      <main className="grid content-start gap-4">
-        <CreateFieldForm category={category} existing={fields} onCreated={setSelectedID} />
+    <>
+      <SettingsHeader
+        title="Custom fields"
+        description="Define operational ticket and customer attributes for agents to maintain."
+        actions={
+          <>
+            <CategoryToggle value={category} onChange={setCategory} />
+            <Button size="sm" onClick={() => setSheet({ kind: 'create' })} className="h-8">
+              <Plus className="h-3.5 w-3.5" />
+              New field
+            </Button>
+          </>
+        }
+      />
+      <SettingsBody>
+        <div className="flex flex-col gap-4">
+          {activeFields.length === 0 ? (
+            <EmptyState
+              icon={Settings2}
+              title={`No ${category} fields yet`}
+              description={`Add structured ${category} attributes — they appear in the ${category === 'ticket' ? 'conversation' : 'customer'} sidebar for agents.`}
+              action={
+                <Button size="sm" onClick={() => setSheet({ kind: 'create' })}>
+                  <Plus className="h-3.5 w-3.5" />
+                  New field
+                </Button>
+              }
+            />
+          ) : (
+            <ListSection title="Active" count={activeFields.length}>
+              {activeFields.map((field) => (
+                <FieldRow
+                  key={field.id}
+                  field={field}
+                  onEdit={() => setSheet({ kind: 'edit', field })}
+                />
+              ))}
+            </ListSection>
+          )}
 
-        <Card className="overflow-hidden">
-          <CardContent className="p-0">
-            <div className="flex items-center justify-between border-b border-border bg-surface-muted px-4 py-2">
-              <p className="text-xs font-semibold text-foreground">Active fields</p>
-              <Badge variant="muted">{activeFields.length}</Badge>
+          {archivedFields.length > 0 ? (
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => setShowArchived((s) => !s)}
+                className="self-start text-[12px] text-fg-tertiary underline-offset-2 hover:text-fg-primary hover:underline"
+              >
+                {showArchived ? 'Hide archived' : `Show archived (${archivedFields.length})`}
+              </button>
+              {showArchived ? (
+                <ListSection title="Archived" count={archivedFields.length}>
+                  {archivedFields.map((field) => (
+                    <FieldRow
+                      key={field.id}
+                      field={field}
+                      onEdit={() => setSheet({ kind: 'edit', field })}
+                    />
+                  ))}
+                </ListSection>
+              ) : null}
             </div>
-            {activeFields.length === 0 ? (
-              <div className="px-4 py-8 text-center text-xs text-muted-foreground">
-                No active {category} fields.
-              </div>
-            ) : (
-              <div className="divide-y divide-border">
-                {activeFields.map((field) => (
-                  <FieldRow
-                    key={field.id}
-                    field={field}
-                    selected={field.id === selected?.id}
-                    onSelect={() => setSelectedID(field.id)}
-                    onArchive={() => archive(field)}
-                  />
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+          ) : null}
 
-        <Card className="overflow-hidden">
-          <CardContent className="p-0">
-            <div className="flex items-center justify-between border-b border-border bg-surface-muted px-4 py-2">
-              <p className="text-xs font-semibold text-foreground">Archived fields</p>
-              <Badge variant="muted">{archivedFields.length}</Badge>
-            </div>
-            {archivedFields.length === 0 ? (
-              <div className="px-4 py-4 text-xs text-muted-foreground">No archived fields.</div>
-            ) : (
-              <div className="divide-y divide-border">
-                {archivedFields.map((field) => (
-                  <FieldRow
-                    key={field.id}
-                    field={field}
-                    selected={field.id === selected?.id}
-                    onSelect={() => setSelectedID(field.id)}
-                    onRestore={() => restore(field)}
-                  />
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </main>
+          <PreviewSection category={category} />
+        </div>
+      </SettingsBody>
 
-      <aside className="grid content-start gap-4">
-        {selected ? (
-          <FieldDetail field={selected} />
-        ) : (
-          <Card>
-            <CardContent className="flex items-center gap-3 p-4 text-xs text-muted-foreground">
-              <Settings2 className="h-4 w-4" />
-              Select a field to edit.
-            </CardContent>
-          </Card>
-        )}
-        <CustomFieldsBlock
-          entity={category}
-          entityID={null}
-          record={{ customFieldValues: [] }}
-          title="Input preview"
-        />
-      </aside>
+      <CreateFieldSheet
+        open={sheet.kind === 'create'}
+        category={category}
+        existing={fields}
+        onClose={() => setSheet({ kind: 'closed' })}
+      />
+      <EditFieldSheet
+        open={sheet.kind === 'edit'}
+        field={sheet.kind === 'edit' ? sheet.field : null}
+        onClose={() => setSheet({ kind: 'closed' })}
+      />
+    </>
+  );
+}
+
+function CategoryToggle({
+  value,
+  onChange,
+}: {
+  value: CustomFieldCategory;
+  onChange: (next: CustomFieldCategory) => void;
+}) {
+  return (
+    <div className="inline-flex h-8 rounded-md border border-line-default bg-surface p-0.5">
+      {(['ticket', 'customer'] as const).map((item) => (
+        <button
+          key={item}
+          type="button"
+          onClick={() => onChange(item)}
+          className={cn(
+            'rounded px-2.5 text-[12px] font-medium capitalize transition-colors',
+            value === item
+              ? 'bg-bg-elevated text-fg-primary'
+              : 'text-fg-tertiary hover:text-fg-primary',
+          )}
+        >
+          {item}
+        </button>
+      ))}
     </div>
   );
 }
 
-function CreateFieldForm({
+function FieldRow({ field, onEdit }: { field: CustomFieldRow; onEdit: () => void }) {
+  const z = useZero();
+  const active = isCustomFieldActive(field);
+  return (
+    <div className="flex h-12 items-center gap-3 border-b border-line-quiet px-3 last:border-b-0">
+      <button type="button" onClick={onEdit} className="min-w-0 flex-1 text-left">
+        <div className="flex items-center gap-1.5">
+          <p className="truncate text-[13px] font-medium text-fg-primary">{field.displayName}</p>
+          <Badge variant="muted">{typeLabel(field.type)}</Badge>
+          {field.required ? <Badge variant="warning">Required</Badge> : null}
+          {!active ? <Badge variant="muted">Archived</Badge> : null}
+        </div>
+        <p className="mt-0.5 font-mono text-[11px] text-fg-tertiary">{field.key}</p>
+      </button>
+      {active ? (
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7"
+          onClick={() => z.mutate(supportMetadataMutators.customField.archive({ id: field.id }))}
+        >
+          <Archive className="h-3 w-3" />
+          Archive
+        </Button>
+      ) : (
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7"
+          onClick={() =>
+            z.mutate(supportMetadataMutators.customField.update({ id: field.id, active: true }))
+          }
+        >
+          <RotateCcw className="h-3 w-3" />
+          Restore
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function PreviewSection({ category }: { category: CustomFieldCategory }) {
+  return (
+    <section className="rounded-md border border-line-quiet bg-surface p-4">
+      <p className="mb-2 text-[12px] font-semibold text-fg-primary">Input preview</p>
+      <p className="mb-3 text-[11px] text-fg-tertiary">
+        Live preview of how active fields render in the {category} sidebar.
+      </p>
+      <CustomFieldsBlock
+        entity={category}
+        entityID={null}
+        record={{ customFieldValues: [] }}
+        title={undefined}
+      />
+    </section>
+  );
+}
+
+function CreateFieldSheet({
+  open,
   category,
   existing,
-  onCreated,
+  onClose,
 }: {
+  open: boolean;
   category: CustomFieldCategory;
   existing: CustomFieldRow[];
-  onCreated: (id: string) => void;
+  onClose: () => void;
 }) {
   const z = useZero();
   const [displayName, setDisplayName] = useState('');
@@ -211,38 +271,39 @@ function CreateFieldForm({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!open) {
+      setDisplayName('');
+      setKey('');
+      setType('text');
+      setRequired(false);
+      setOptions('');
+      setError(null);
+    }
+  }, [open]);
+
+  useEffect(() => {
     if (key || !displayName) return;
     setKey(slugKey(displayName));
   }, [displayName, key]);
 
-  async function create(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const nextKey = slugKey(key);
-    if (!displayName.trim()) {
-      setError('Display name is required.');
-      return;
-    }
-    if (!nextKey) {
-      setError('Key is required.');
-      return;
-    }
-    if (existing.some((field) => field.key === nextKey && field.category === category)) {
-      setError('Key already exists for this category.');
-      return;
+    if (!displayName.trim()) return setError('Display name is required.');
+    if (!nextKey) return setError('Key is required.');
+    if (existing.some((f) => f.key === nextKey && f.category === category)) {
+      return setError('Key already exists for this category.');
     }
     const nextOptions = optionLines(options);
-    if ((type === 'list' || type === 'multi_select') && nextOptions.length === 0) {
-      setError('List fields require at least one option.');
-      return;
+    if (isOptionType(type) && nextOptions.length === 0) {
+      return setError('List fields require at least one option.');
     }
     if (new Set(nextOptions).size !== nextOptions.length) {
-      setError('Options must be unique.');
-      return;
+      return setError('Options must be unique.');
     }
-    const id = crypto.randomUUID();
     await z.mutate(
       supportMetadataMutators.customField.create({
-        id,
+        id: crypto.randomUUID(),
         key: nextKey,
         displayName: displayName.trim(),
         category,
@@ -253,146 +314,110 @@ function CreateFieldForm({
         sortOrder: existing.length + 1,
       }),
     );
-    setDisplayName('');
-    setKey('');
-    setOptions('');
-    setRequired(false);
-    setType('text');
-    setError(null);
-    onCreated(id);
+    onClose();
   }
 
   return (
-    <form noValidate onSubmit={create} className="rounded-lg border border-border bg-surface p-3">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <Plus className="h-4 w-4 text-brand-600" />
-          <p className="text-xs font-semibold text-foreground">Create {category} field</p>
-        </div>
-        <FieldTypeMenu value={type} onChange={setType} />
-      </div>
-      {error ? <p className="mb-2 text-xs text-danger">{error}</p> : null}
-      <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_180px]">
-        <Input
-          value={displayName}
-          onChange={(event) => setDisplayName(event.target.value)}
-          placeholder="Customer tier"
-          className="h-8 text-xs"
-          aria-invalid={error?.includes('Display') ?? false}
-        />
-        <Input
-          value={key}
-          onChange={(event) => setKey(event.target.value)}
-          onBlur={() => setKey(slugKey(key))}
-          placeholder="customer_tier"
-          className="h-8 font-mono text-xs"
-          aria-invalid={error?.includes('Key') ?? false}
-        />
-      </div>
-      {isOptionType(type) ? (
-        <Textarea
-          value={options}
-          onChange={(event) => setOptions(event.target.value)}
-          placeholder="One option per line"
-          className="mt-2 min-h-20 text-xs"
-        />
-      ) : null}
-      <div className="mt-3 flex items-center justify-between gap-3">
-        <label className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+    <SettingsSheet
+      open={open}
+      onOpenChange={(next) => (next ? null : onClose())}
+      title={`New ${category} field`}
+      description="Key and type are locked after the field is created."
+      footer={
+        <>
+          <Button size="sm" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button size="sm" type="submit" form="create-field-form">
+            Create field
+          </Button>
+        </>
+      }
+    >
+      <form id="create-field-form" onSubmit={submit} noValidate className="flex flex-col gap-3">
+        <FormRow label="Display name">
+          <Input
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            placeholder="Customer tier"
+            autoFocus
+          />
+        </FormRow>
+        <FormRow label="Key">
+          <Input
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
+            onBlur={() => setKey(slugKey(key))}
+            placeholder="customer_tier"
+            className="font-mono"
+          />
+        </FormRow>
+        <FormRow label="Type">
+          <FieldTypeMenu value={type} onChange={setType} />
+        </FormRow>
+        {isOptionType(type) ? (
+          <FormRow label="Options">
+            <Textarea
+              value={options}
+              onChange={(e) => setOptions(e.target.value)}
+              placeholder="One option per line"
+              className="min-h-24"
+            />
+          </FormRow>
+        ) : null}
+        <label className="inline-flex items-center gap-2 text-[12px] text-fg-secondary">
           <input
             type="checkbox"
             checked={required}
-            onChange={(event) => setRequired(event.target.checked)}
-            className="h-4 w-4 rounded border-border accent-brand-600"
+            onChange={(e) => setRequired(e.target.checked)}
+            className="h-4 w-4 rounded border-line-default accent-brand-500"
           />
           Required
         </label>
-        <Button type="submit" size="sm" className="h-8">
-          <Plus className="h-3.5 w-3.5" />
-          Create field
-        </Button>
-      </div>
-    </form>
+        {error ? <p className="text-[12px] text-danger">{error}</p> : null}
+      </form>
+    </SettingsSheet>
   );
 }
 
-function FieldRow({
+function EditFieldSheet({
+  open,
   field,
-  selected,
-  onSelect,
-  onArchive,
-  onRestore,
+  onClose,
 }: {
-  field: CustomFieldRow;
-  selected: boolean;
-  onSelect: () => void;
-  onArchive?: () => void;
-  onRestore?: () => void;
+  open: boolean;
+  field: CustomFieldRow | null;
+  onClose: () => void;
 }) {
-  return (
-    <div
-      className={cn(
-        'grid gap-3 px-4 py-3 md:grid-cols-[minmax(0,1fr)_auto]',
-        selected && 'bg-brand-soft/50',
-      )}
-    >
-      <button type="button" onClick={onSelect} className="min-w-0 text-left">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <p className="truncate text-sm font-medium text-foreground">{field.displayName}</p>
-          <Badge variant="muted">{typeLabel(field.type)}</Badge>
-          {field.required ? <Badge variant="warning">Required</Badge> : null}
-          {!isCustomFieldActive(field) ? <Badge variant="muted">Archived</Badge> : null}
-        </div>
-        <p className="mt-1 font-mono text-[11px] text-muted-foreground">{field.key}</p>
-      </button>
-      <div className="flex items-center justify-end gap-2">
-        {onArchive ? (
-          <Button size="sm" variant="outline" className="h-8" onClick={onArchive}>
-            <Archive className="h-3.5 w-3.5" />
-            Archive
-          </Button>
-        ) : null}
-        {onRestore ? (
-          <Button size="sm" variant="outline" className="h-8" onClick={onRestore}>
-            <RotateCcw className="h-3.5 w-3.5" />
-            Restore
-          </Button>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-function FieldDetail({ field }: { field: CustomFieldRow }) {
   const z = useZero();
-  const [displayName, setDisplayName] = useState(field.displayName);
-  const [description, setDescription] = useState(field.description ?? '');
-  const [required, setRequired] = useState(field.required);
-  const [active, setActive] = useState(isCustomFieldActive(field));
-  const [sortOrder, setSortOrder] = useState(String(field.sortOrder));
-  const [options, setOptions] = useState((field.options ?? []).join('\n'));
+  const [displayName, setDisplayName] = useState('');
+  const [description, setDescription] = useState('');
+  const [required, setRequired] = useState(false);
+  const [active, setActive] = useState(true);
+  const [sortOrder, setSortOrder] = useState('0');
+  const [options, setOptions] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setDisplayName(field.displayName);
-    setDescription(field.description ?? '');
-    setRequired(field.required);
-    setActive(isCustomFieldActive(field));
-    setSortOrder(String(field.sortOrder));
-    setOptions((field.options ?? []).join('\n'));
-    setError(null);
+    if (field) {
+      setDisplayName(field.displayName);
+      setDescription(field.description ?? '');
+      setRequired(field.required);
+      setActive(isCustomFieldActive(field));
+      setSortOrder(String(field.sortOrder));
+      setOptions((field.options ?? []).join('\n'));
+      setError(null);
+    }
   }, [field]);
 
   async function save() {
-    if (!displayName.trim()) return;
+    if (!field || !displayName.trim()) return;
     const nextOptions = optionLines(options);
-    if ((field.type === 'list' || field.type === 'multi_select') && nextOptions.length === 0) {
-      setError('List fields require at least one option.');
-      return;
+    if (isOptionType(field.type) && nextOptions.length === 0) {
+      return setError('List fields require at least one option.');
     }
     if (new Set(nextOptions).size !== nextOptions.length) {
-      setError('Options must be unique.');
-      return;
+      return setError('Options must be unique.');
     }
     await z.mutate(
       supportMetadataMutators.customField.update({
@@ -405,94 +430,91 @@ function FieldDetail({ field }: { field: CustomFieldRow }) {
         options: nextOptions,
       }),
     );
-    setError(null);
+    onClose();
+  }
+
+  if (!field) {
+    return (
+      <SettingsSheet
+        open={open}
+        onOpenChange={(next) => (next ? null : onClose())}
+        title="Edit field"
+      >
+        <span />
+      </SettingsSheet>
+    );
   }
 
   return (
-    <Card>
-      <CardContent className="grid gap-3 p-4">
-        <div>
-          <p className="text-xs font-semibold text-foreground">Field detail</p>
-          <p className="text-[11px] text-muted-foreground">
-            Key and type are locked after creation.
-          </p>
-        </div>
-        {error ? (
-          <p className="rounded-md bg-danger-soft px-2 py-1 text-xs text-danger">{error}</p>
-        ) : null}
-        <div className="grid gap-1.5">
-          <label htmlFor="field-display-name" className="text-xs font-medium text-foreground">
-            Display name
-          </label>
-          <Input
-            id="field-display-name"
-            value={displayName}
-            onChange={(event) => setDisplayName(event.target.value)}
-            aria-invalid={!displayName.trim()}
-            className="h-8 text-xs"
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <ReadonlyValue label="Key" value={field.key} mono />
-          <ReadonlyValue label="Type" value={typeLabel(field.type)} />
-        </div>
-        <div className="grid gap-1.5">
-          <label htmlFor="field-description" className="text-xs font-medium text-foreground">
-            Description
-          </label>
+    <SettingsSheet
+      open={open}
+      onOpenChange={(next) => (next ? null : onClose())}
+      title={`Edit ${field.displayName}`}
+      description="Key and type are locked after creation."
+      footer={
+        <>
+          <Button size="sm" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button size="sm" onClick={save} disabled={!displayName.trim()}>
+            Save
+          </Button>
+        </>
+      }
+    >
+      <FormRow label="Display name">
+        <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+      </FormRow>
+      <div className="grid grid-cols-2 gap-2">
+        <ReadonlyValue label="Key" value={field.key} mono />
+        <ReadonlyValue label="Type" value={typeLabel(field.type)} />
+      </div>
+      <FormRow label="Description">
+        <Textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          className="min-h-20"
+        />
+      </FormRow>
+      {isOptionType(field.type) ? (
+        <FormRow label="Options">
           <Textarea
-            id="field-description"
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
-            className="min-h-20 text-xs"
+            value={options}
+            onChange={(e) => setOptions(e.target.value)}
+            className="min-h-24"
           />
-        </div>
-        {isOptionType(field.type) ? (
-          <div className="grid gap-1.5">
-            <label htmlFor="field-options" className="text-xs font-medium text-foreground">
-              Options
-            </label>
-            <Textarea
-              id="field-options"
-              value={options}
-              onChange={(event) => setOptions(event.target.value)}
-              className="min-h-24 text-xs"
-            />
-          </div>
-        ) : null}
-        <div className="grid gap-2 sm:grid-cols-3">
-          <label className="inline-flex items-center gap-2 text-xs text-muted-foreground">
-            <input
-              type="checkbox"
-              checked={required}
-              onChange={(event) => setRequired(event.target.checked)}
-              className="h-4 w-4 rounded border-border accent-brand-600"
-            />
-            Required
-          </label>
-          <label className="inline-flex items-center gap-2 text-xs text-muted-foreground">
-            <input
-              type="checkbox"
-              checked={active}
-              onChange={(event) => setActive(event.target.checked)}
-              className="h-4 w-4 rounded border-border accent-brand-600"
-            />
-            Active
-          </label>
+        </FormRow>
+      ) : null}
+      <div className="flex flex-wrap items-center gap-4">
+        <label className="inline-flex items-center gap-2 text-[12px] text-fg-secondary">
+          <input
+            type="checkbox"
+            checked={required}
+            onChange={(e) => setRequired(e.target.checked)}
+            className="h-4 w-4 rounded border-line-default accent-brand-500"
+          />
+          Required
+        </label>
+        <label className="inline-flex items-center gap-2 text-[12px] text-fg-secondary">
+          <input
+            type="checkbox"
+            checked={active}
+            onChange={(e) => setActive(e.target.checked)}
+            className="h-4 w-4 rounded border-line-default accent-brand-500"
+          />
+          Active
+        </label>
+        <FormRow label="Sort order">
           <Input
             type="number"
             value={sortOrder}
-            onChange={(event) => setSortOrder(event.target.value)}
-            aria-label="Sort order"
-            className="h-8 text-xs"
+            onChange={(e) => setSortOrder(e.target.value)}
+            className="w-24"
           />
-        </div>
-        <Button size="sm" onClick={save} disabled={!displayName.trim()}>
-          <Check className="h-3.5 w-3.5" />
-          Save changes
-        </Button>
-      </CardContent>
-    </Card>
+        </FormRow>
+      </div>
+      {error ? <p className="text-[12px] text-danger">{error}</p> : null}
+    </SettingsSheet>
   );
 }
 
@@ -506,12 +528,12 @@ function FieldTypeMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button type="button" variant="outline" size="sm" className="h-8 text-xs">
+        <Button type="button" variant="outline" size="sm" className="h-8 justify-start">
           {typeLabel(value)}
-          <ChevronDown className="h-3.5 w-3.5" />
+          <ChevronDown className="ml-auto h-3.5 w-3.5" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="max-h-80 overflow-y-auto">
+      <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto">
         <DropdownMenuLabel>Field type</DropdownMenuLabel>
         {FIELD_TYPES.map((type) => (
           <DropdownMenuItem key={type} onSelect={() => onChange(type)}>
@@ -520,6 +542,15 @@ function FieldTypeMenu({
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+function FormRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="flex flex-col gap-1.5">
+      <span className="text-[12px] font-medium text-fg-primary">{label}</span>
+      {children}
+    </label>
   );
 }
 
@@ -533,11 +564,11 @@ function ReadonlyValue({
   mono?: boolean;
 }) {
   return (
-    <div className="rounded-md border border-border bg-surface-muted px-2 py-1.5">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+    <div className="rounded-md border border-line-quiet bg-bg-elevated/40 px-2 py-1.5">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-fg-quaternary">
         {label}
       </p>
-      <p className={cn('truncate text-xs text-foreground', mono && 'font-mono')}>{value}</p>
+      <p className={cn('truncate text-[12px] text-fg-primary', mono && 'font-mono')}>{value}</p>
     </div>
   );
 }

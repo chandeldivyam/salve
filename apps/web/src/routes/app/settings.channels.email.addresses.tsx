@@ -21,6 +21,7 @@ import {
   signatureToPlainText,
 } from '@/components/email-settings/types';
 import { RouteErrorFeedback, RoutePendingFeedback } from '@/components/route-feedback';
+import { SettingsBody, SettingsHeader } from '@/components/settings';
 import type { SessionData } from '@/lib/session-loader';
 import { CACHE_NAV } from '@/lib/zero-cache';
 
@@ -77,28 +78,26 @@ function AddressesTab() {
   const noAddresses = addresses.length === 0;
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-6 sm:px-8">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <h2 className="text-base font-semibold text-foreground">Addresses</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            One address per local part (e.g. <code className="font-mono">support@</code>,{' '}
-            <code className="font-mono">comms@</code>) on a verified domain.
-          </p>
-        </div>
-        {!noAddresses ? (
-          <Button
-            size="sm"
-            variant={showForm ? 'outline' : 'default'}
-            onClick={() => setShowForm((s) => !s)}
-            disabled={noDomains}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            {showForm ? 'Close form' : 'Add address'}
-          </Button>
-        ) : null}
-      </div>
-
+    <>
+      <SettingsHeader
+        title="Addresses"
+        description="One address per local part (e.g. support@, comms@) on a verified domain."
+        actions={
+          !noAddresses ? (
+            <Button
+              size="sm"
+              variant={showForm ? 'outline' : 'default'}
+              onClick={() => setShowForm((s) => !s)}
+              disabled={noDomains}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              {showForm ? 'Close form' : 'Add address'}
+            </Button>
+          ) : null
+        }
+      />
+      <SettingsBody maxWidth="wide">
+        <div className="flex flex-col gap-4">
       {showForm && !noDomains ? (
         <AddAddressForm
           domains={domains}
@@ -142,13 +141,13 @@ function AddressesTab() {
             return (
               <Card key={d.id} className="overflow-hidden">
                 <CardContent className="p-0">
-                  <div className="flex items-center justify-between gap-2 border-b border-border bg-surface-muted px-4 py-2">
-                    <p className="truncate text-xs font-medium text-foreground">{d.domain}</p>
+                  <div className="flex items-center justify-between gap-2 border-b border-line-quiet bg-bg-elevated/50 px-4 py-2">
+                    <p className="truncate text-[12px] font-medium text-fg-primary">{d.domain}</p>
                     <Badge variant={d.dnsStatus === 'verified' ? 'success' : 'warning'}>
                       DNS: {d.dnsStatus}
                     </Badge>
                   </div>
-                  <ul className="divide-y divide-border">
+                  <ul className="divide-y divide-line-quiet">
                     {list.map((a) => (
                       <li key={a.id}>
                         <AddressRow address={a} />
@@ -161,7 +160,9 @@ function AddressesTab() {
           })}
         </div>
       )}
-    </div>
+        </div>
+      </SettingsBody>
+    </>
   );
 }
 

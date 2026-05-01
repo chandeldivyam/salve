@@ -63,6 +63,17 @@ export { LoadingButton, type LoadingButtonProps } from './loading-button.js';
 export { Logo, type LogoProps } from './logo.js';
 export { ScrollArea } from './scroll-area.js';
 export { Separator } from './separator.js';
+export {
+  Sheet,
+  SheetBody,
+  SheetClose,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from './sheet.js';
 export { Skeleton } from './skeleton.js';
 export { Textarea, type TextareaProps } from './textarea.js';
 export { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './tooltip.js';

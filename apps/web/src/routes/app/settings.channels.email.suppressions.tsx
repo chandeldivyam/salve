@@ -9,6 +9,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { ShieldOff } from 'lucide-react';
 import { EmptyState } from '@/components/email-settings/empty-state';
 import { RouteErrorFeedback, RoutePendingFeedback } from '@/components/route-feedback';
+import { SettingsBody, SettingsHeader } from '@/components/settings';
 import { CACHE_NAV } from '@/lib/zero-cache';
 
 export const Route = createFileRoute('/app/settings/channels/email/suppressions')({
@@ -21,14 +22,12 @@ function SuppressionsTab() {
   const [rows] = useQuery(queries.suppressions(), CACHE_NAV);
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-6 sm:px-8">
-      <div>
-        <h2 className="text-base font-semibold text-foreground">Suppressions</h2>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          Recipients Salve will not email — added automatically when a delivery hard-bounces or a
-          recipient marks a message as spam.
-        </p>
-      </div>
+    <>
+      <SettingsHeader
+        title="Suppressions"
+        description="Recipients Salve will not email — added automatically when a delivery hard-bounces or a recipient marks a message as spam."
+      />
+      <SettingsBody maxWidth="wide">
       {rows.length === 0 ? (
         <EmptyState
           icon={ShieldOff}
@@ -78,6 +77,7 @@ function SuppressionsTab() {
           </CardContent>
         </Card>
       )}
-    </div>
+      </SettingsBody>
+    </>
   );
 }

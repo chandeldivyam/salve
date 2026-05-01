@@ -5,8 +5,9 @@ import { Button, cn } from '@opendesk/ui';
 import { queries } from '@opendesk/zero-schema';
 import { useQuery } from '@rocicorp/zero/react';
 import { createFileRoute, Link, useRouteContext } from '@tanstack/react-router';
-import { Check, Circle, ListChecks, Loader2 } from 'lucide-react';
+import { Check, Circle, Loader2 } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { ListSection, SettingsBody, SettingsHeader } from '@/components/settings';
 import type { SessionData } from '@/lib/session-loader';
 import { type SetupItemSnapshot, setSetupDismissed, useSetupProgress } from '@/lib/setup-progress';
 import { CACHE_NAV } from '@/lib/zero-cache';
@@ -21,127 +22,89 @@ function SetupPage() {
   const progress = useSetupProgress(workspaceID);
   const [domains] = useQuery(queries.sendingDomains(), CACHE_NAV);
 
-  if (!progress.ready) {
-    return (
-      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-6 sm:px-8">
-        <SetupHeader completedCount={0} total={progress.total} ready={false} />
-        <div className="overflow-hidden rounded-lg border border-border bg-surface shadow-sm">
-          {progress.items.map((item) => (
-            <SetupRow
-              key={item.id}
-              item={item}
-              ready={false}
-              actionDisabled
-              actionLabel={LABEL_FOR[item.id].action}
-              actionTo={null}
-              title={LABEL_FOR[item.id].title}
-              description={LABEL_FOR[item.id].description}
-            />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
   const verifiedDomain = domains.find((d) => d.dnsStatus === 'verified');
   const firstUnverified = domains.find((d) => d.dnsStatus !== 'verified');
   const dnsTarget = firstUnverified?.id ?? verifiedDomain?.id ?? domains[0]?.id ?? null;
   const verifiedCount = domains.filter((d) => d.dnsStatus === 'verified').length;
 
+  const ready = progress.ready;
+  const pct =
+    progress.total === 0 ? 0 : Math.round((progress.completedCount / progress.total) * 100);
+
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-6 sm:px-8">
-      <SetupHeader completedCount={progress.completedCount} total={progress.total} ready />
-
-      <div className="overflow-hidden rounded-lg border border-border bg-surface shadow-sm">
-        {progress.items.map((item) => (
-          <SetupRow
-            key={item.id}
-            item={item}
-            ready
-            title={LABEL_FOR[item.id].title}
-            description={LABEL_FOR[item.id].description}
-            actionLabel={LABEL_FOR[item.id].action}
-            actionDisabled={ACTION_DISABLED[item.id] ?? false}
-            actionTo={resolveActionTo(item.id, dnsTarget)}
-            actionCaption={ACTION_CAPTION[item.id]}
-          >
-            {item.id === 'dnsVerified' && domains.length > 1 ? (
-              <p className="mt-2 text-xs text-muted-foreground">
-                {verifiedCount} of {domains.length} domains verified
-              </p>
-            ) : null}
-          </SetupRow>
-        ))}
-      </div>
-
-      <div className="flex flex-col items-center gap-2 pt-2 text-xs text-muted-foreground">
-        {progress.dismissed ? (
-          <p>
-            Setup is hidden from the header.{' '}
-            <button
-              type="button"
-              onClick={() => setSetupDismissed(workspaceID, false)}
-              className="font-medium text-brand underline-offset-2 hover:underline"
+    <>
+      <SettingsHeader
+        title="Set up your workspace"
+        description="Get Salve ready to receive and route customer messages."
+      />
+      <SettingsBody>
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center gap-3">
+            <div
+              className="h-1.5 flex-1 overflow-hidden rounded-full bg-bg-elevated"
+              role="progressbar"
+              aria-label="Setup progress"
+              aria-valuenow={ready ? pct : 0}
+              aria-valuemin={0}
+              aria-valuemax={100}
             >
-              Show it again.
-            </button>
-          </p>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setSetupDismissed(workspaceID, true)}
-            className="font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-          >
-            Hide setup checklist
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
+              <div
+                className="h-full rounded-full bg-brand-500 transition-[width] duration-300"
+                style={{ width: `${ready ? pct : 0}%` }}
+              />
+            </div>
+            <span className="shrink-0 tabular-nums text-[12px] text-fg-tertiary">
+              {ready ? `${progress.completedCount} of ${progress.total} complete` : 'Loading…'}
+            </span>
+          </div>
 
-function SetupHeader({
-  completedCount,
-  total,
-  ready,
-}: {
-  completedCount: number;
-  total: number;
-  ready: boolean;
-}) {
-  const pct = total === 0 ? 0 : Math.round((completedCount / total) * 100);
-  return (
-    <header className="flex flex-col gap-3">
-      <div className="flex items-center gap-3">
-        <div className="grid h-9 w-9 place-items-center rounded-md bg-brand-soft text-brand-soft-foreground ring-1 ring-brand-border">
-          <ListChecks className="h-4 w-4" />
+          <ListSection>
+            {progress.items.map((item) => (
+              <SetupRow
+                key={item.id}
+                item={item}
+                ready={ready}
+                title={LABEL_FOR[item.id].title}
+                description={LABEL_FOR[item.id].description}
+                actionLabel={LABEL_FOR[item.id].action}
+                actionDisabled={!ready || (ACTION_DISABLED[item.id] ?? false)}
+                actionTo={ready ? resolveActionTo(item.id, dnsTarget) : null}
+                actionCaption={ACTION_CAPTION[item.id]}
+              >
+                {ready && item.id === 'dnsVerified' && domains.length > 1 ? (
+                  <p className="mt-1 text-[11px] text-fg-tertiary">
+                    {verifiedCount} of {domains.length} domains verified
+                  </p>
+                ) : null}
+              </SetupRow>
+            ))}
+          </ListSection>
+
+          <div className="flex justify-center pt-1 text-[11px] text-fg-tertiary">
+            {progress.dismissed ? (
+              <p>
+                Setup is hidden from the sidebar.{' '}
+                <button
+                  type="button"
+                  onClick={() => setSetupDismissed(workspaceID, false)}
+                  className="font-medium text-fg-primary underline-offset-2 hover:underline"
+                >
+                  Show it again.
+                </button>
+              </p>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setSetupDismissed(workspaceID, true)}
+                className="font-medium text-fg-tertiary underline-offset-2 hover:text-fg-primary hover:underline"
+              >
+                Hide setup checklist
+              </button>
+            )}
+          </div>
         </div>
-        <div className="min-w-0">
-          <h1 className="text-lg font-semibold text-foreground">Set up your workspace</h1>
-          <p className="text-sm text-muted-foreground">
-            Get Salve ready to receive and route customer messages.
-          </p>
-        </div>
-      </div>
-      <div className="flex items-center gap-3">
-        <div
-          className="h-2 flex-1 overflow-hidden rounded-full bg-muted"
-          role="progressbar"
-          aria-label="Setup progress"
-          aria-valuenow={ready ? pct : 0}
-          aria-valuemin={0}
-          aria-valuemax={100}
-        >
-          <div
-            className="h-full rounded-full bg-brand-600 transition-[width] duration-300"
-            style={{ width: `${ready ? pct : 0}%` }}
-          />
-        </div>
-        <span className="shrink-0 tabular-nums text-xs text-muted-foreground">
-          {ready ? `${completedCount} of ${total} complete` : 'Loading…'}
-        </span>
-      </div>
-    </header>
+      </SettingsBody>
+    </>
   );
 }
 
@@ -173,27 +136,27 @@ function SetupRow({
 }) {
   const completed = item.completed;
   return (
-    <div className="flex flex-col gap-3 border-b border-border px-4 py-4 last:border-b-0 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
-      <div className="flex min-w-0 items-start gap-3">
+    <div className="flex flex-col gap-3 border-b border-line-quiet px-4 py-3.5 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+      <div className="flex min-w-0 items-start gap-2.5">
         <StatusIcon ready={ready} completed={completed} />
         <div className="min-w-0">
           <p
             className={cn(
-              'text-sm font-medium',
-              completed ? 'text-muted-foreground line-through' : 'text-foreground',
+              'text-[13px] font-medium',
+              completed ? 'text-fg-tertiary line-through' : 'text-fg-primary',
             )}
           >
             {title}
             {completed ? <span className="sr-only"> (completed)</span> : null}
           </p>
-          <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
+          <p className="mt-0.5 text-[12px] text-fg-tertiary">{description}</p>
           {children}
         </div>
       </div>
       <div className="flex shrink-0 flex-col items-start gap-1 sm:items-end">
         {completed ? (
-          <span className="inline-flex h-9 items-center gap-1.5 rounded-md bg-success-soft px-3 text-xs font-medium text-success-soft-foreground">
-            <Check className="h-3.5 w-3.5" /> Done
+          <span className="inline-flex h-7 items-center gap-1 text-[11px] font-medium text-fg-tertiary">
+            <Check className="h-3 w-3" /> Done
           </span>
         ) : actionDisabled || !actionTo ? (
           <Button size="sm" variant="outline" disabled>
@@ -207,7 +170,7 @@ function SetupRow({
           </Button>
         )}
         {actionCaption && !completed ? (
-          <span className="text-[11px] text-muted-foreground">{actionCaption}</span>
+          <span className="text-[11px] text-fg-quaternary">{actionCaption}</span>
         ) : null}
       </div>
     </div>
@@ -217,21 +180,21 @@ function SetupRow({
 function StatusIcon({ ready, completed }: { ready: boolean; completed: boolean }) {
   if (!ready) {
     return (
-      <span className="mt-0.5 inline-flex h-5 w-5 items-center justify-center text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+      <span className="mt-0.5 inline-flex h-4 w-4 items-center justify-center text-fg-tertiary">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
       </span>
     );
   }
   if (completed) {
     return (
-      <span className="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-success text-success-foreground">
-        <Check className="h-3 w-3" aria-hidden />
+      <span className="mt-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-brand-500 text-white">
+        <Check className="h-2.5 w-2.5" aria-hidden />
       </span>
     );
   }
   return (
-    <span className="mt-0.5 inline-flex h-5 w-5 items-center justify-center text-border-strong">
-      <Circle className="h-4 w-4" strokeDasharray="3 3" aria-hidden />
+    <span className="mt-0.5 inline-flex h-4 w-4 items-center justify-center text-fg-quaternary">
+      <Circle className="h-3.5 w-3.5" strokeDasharray="3 3" aria-hidden />
     </span>
   );
 }

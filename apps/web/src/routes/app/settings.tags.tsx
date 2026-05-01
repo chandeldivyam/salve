@@ -1,9 +1,30 @@
-import { Badge, Button, Card, CardContent, Input } from '@opendesk/ui';
+// /app/settings/tags — single-column groups with inline tags and add-rows.
+// Group + tag creation use a side sheet (tier B). Renames auto-save on blur.
+// Color and group changes happen via the row's menu → edit sheet.
+
+import {
+  Badge,
+  Button,
+  cn,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  Input,
+} from '@opendesk/ui';
 import { useQuery } from '@rocicorp/zero/react';
 import { createFileRoute } from '@tanstack/react-router';
-import { Archive, Check, Folder, Plus, RotateCcw, Tags, X } from 'lucide-react';
-import { type FormEvent, useEffect, useMemo, useState } from 'react';
+import { Archive, ChevronDown, MoreHorizontal, Plus, RotateCcw, Tags } from 'lucide-react';
+import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { RouteErrorFeedback, RoutePendingFeedback } from '@/components/route-feedback';
+import {
+  EmptyState,
+  ListSection,
+  SettingsBody,
+  SettingsHeader,
+  SettingsSheet,
+} from '@/components/settings';
 import {
   isHexColor,
   normalizeHexColor,
@@ -23,10 +44,14 @@ export const Route = createFileRoute('/app/settings/tags')({
   errorComponent: RouteErrorFeedback,
 });
 
-type Selection = { kind: 'group'; id: string } | { kind: 'tag'; id: string } | null;
+type SheetState =
+  | { kind: 'closed' }
+  | { kind: 'create-group' }
+  | { kind: 'edit-group'; group: TagGroupRow }
+  | { kind: 'create-tag'; groupID: string | null }
+  | { kind: 'edit-tag'; tag: TagRow };
 
 function TagsSettingsPage() {
-  const z = useZero();
   const [rawGroups] = useQuery(supportMetadataQueries.tagGroupsForSettings(), CACHE_NAV);
   const [rawTags] = useQuery(supportMetadataQueries.tagsForSettings(), CACHE_NAV);
   const allGroups = useMemo(
@@ -48,21 +73,9 @@ function TagsSettingsPage() {
   const tags = useMemo(() => allTags.filter((tag) => !tag.archivedAt), [allTags]);
   const archivedTags = useMemo(() => allTags.filter((tag) => tag.archivedAt), [allTags]);
   const activeGroupIDs = useMemo(() => new Set(groups.map((group) => group.id)), [groups]);
-  const [selection, setSelection] = useState<Selection>(null);
-  const [groupLabel, setGroupLabel] = useState('');
-  const [groupColor, setGroupColor] = useState('#0f766e');
-  const [tagLabel, setTagLabel] = useState('');
-  const [tagGroupID, setTagGroupID] = useState<string | null>(null);
-  const [tagColor, setTagColor] = useState('');
-  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (selection) return;
-    const firstGroup = groups[0];
-    const firstTag = tags[0];
-    if (firstGroup) setSelection({ kind: 'group', id: firstGroup.id });
-    else if (firstTag) setSelection({ kind: 'tag', id: firstTag.id });
-  }, [groups, selection, tags]);
+  const [sheet, setSheet] = useState<SheetState>({ kind: 'closed' });
+  const [showArchived, setShowArchived] = useState(false);
 
   const tagsByGroup = useMemo(() => {
     const map = new Map<string, TagRow[]>();
@@ -73,296 +86,421 @@ function TagsSettingsPage() {
     return map;
   }, [activeGroupIDs, tags]);
 
-  const selectedGroup =
-    selection?.kind === 'group' ? groups.find((group) => group.id === selection.id) : null;
-  const selectedTag =
-    selection?.kind === 'tag' ? tags.find((tag) => tag.id === selection.id) : null;
-
-  async function createGroup(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const label = groupLabel.trim();
-    if (!label) {
-      setError('Group label is required.');
-      return;
-    }
-    if (!isHexColor(groupColor)) {
-      setError('Use a hex color like #0f766e.');
-      return;
-    }
-    const id = crypto.randomUUID();
-    await z.mutate(
-      supportMetadataMutators.tagGroup.create({
-        id,
-        label,
-        color: groupColor,
-        sortOrder: groups.length + 1,
-      }),
-    );
-    setGroupLabel('');
-    setError(null);
-    setSelection({ kind: 'group', id });
-  }
-
-  async function createTag(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const label = tagLabel.trim();
-    const color = tagColor.trim();
-    if (!label) {
-      setError('Tag label is required.');
-      return;
-    }
-    if (color && !isHexColor(color)) {
-      setError('Use a hex color like #0f766e.');
-      return;
-    }
-    const id = crypto.randomUUID();
-    await z.mutate(
-      supportMetadataMutators.tag.create({
-        id,
-        label,
-        groupID: tagGroupID,
-        color: color || null,
-        sortOrder: tags.length + 1,
-      }),
-    );
-    setTagLabel('');
-    setTagColor('');
-    setError(null);
-    setSelection({ kind: 'tag', id });
-  }
+  const empty = groups.length === 0 && tags.length === 0;
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-4 px-4 py-6 sm:px-8">
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-base font-semibold text-foreground">Tags</h1>
-          <p className="text-xs text-muted-foreground">
-            Organize tickets with grouped labels that agents can apply from the conversation view.
-          </p>
-        </div>
-        <Badge variant="muted">{tags.length} active tags</Badge>
-      </div>
-
-      {error ? (
-        <div className="rounded-md border border-danger-border bg-danger-soft px-3 py-2 text-xs text-danger-soft-foreground">
-          {error}
-        </div>
-      ) : null}
-
-      {groups.length === 0 && tags.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center gap-3 px-6 py-10 text-center">
-            <div className="grid h-10 w-10 place-items-center rounded-full bg-brand-soft text-brand-soft-foreground">
-              <Tags className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-foreground">No tags yet</p>
-              <p className="text-xs text-muted-foreground">Create your first tag group.</p>
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      <div className="grid min-h-[520px] gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
-        <aside className="rounded-lg border border-border bg-surface">
-          <div className="border-b border-border px-3 py-2">
-            <p className="text-xs font-semibold text-foreground">Groups</p>
-          </div>
-          <div className="max-h-[520px] overflow-y-auto p-2">
-            {groups.map((group) => (
-              <button
-                key={group.id}
-                type="button"
-                onClick={() => setSelection({ kind: 'group', id: group.id })}
-                className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs ${
-                  selection?.kind === 'group' && selection.id === group.id
-                    ? 'bg-brand-soft text-brand-soft-foreground'
-                    : 'text-foreground hover:bg-surface-muted'
-                }`}
+    <>
+      <SettingsHeader
+        title="Tags"
+        description="Organize tickets with grouped labels that agents can apply from the conversation view."
+        actions={
+          <>
+            {archivedGroups.length + archivedTags.length > 0 ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setShowArchived((s) => !s)}
+                className="h-8"
               >
-                <span
-                  className="h-2.5 w-2.5 rounded-full border"
-                  style={{
-                    backgroundColor: normalizeHexColor(group.color),
-                    borderColor: group.color,
-                  }}
-                />
-                <span className="min-w-0 flex-1 truncate">{group.label}</span>
-                <span className="text-[10px] text-muted-foreground">
-                  {tagsByGroup.get(group.id)?.length ?? 0}
-                </span>
-              </button>
-            ))}
-            <div className="mt-3 border-t border-border pt-3">
-              <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Ungrouped
-              </p>
-              {(tagsByGroup.get('ungrouped') ?? []).map((tag) => (
-                <button
-                  key={tag.id}
-                  type="button"
-                  onClick={() => setSelection({ kind: 'tag', id: tag.id })}
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-foreground hover:bg-surface-muted"
-                >
-                  <span className="h-2.5 w-2.5 rounded-full border" style={tagPillStyle(tag)} />
-                  <span className="min-w-0 flex-1 truncate">{tag.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </aside>
-
-        <main className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <section className="rounded-lg border border-border bg-surface">
-            <div className="flex items-center justify-between border-b border-border px-3 py-2">
-              <p className="text-xs font-semibold text-foreground">
-                {selectedGroup ? selectedGroup.label : selectedTag ? selectedTag.label : 'Tags'}
-              </p>
-            </div>
-            <div className="divide-y divide-border">
-              {selectedGroup ? (
-                <>
-                  <GroupEditor group={selectedGroup} />
-                  {(tagsByGroup.get(selectedGroup.id) ?? []).map((tag) => (
-                    <TagEditor
-                      key={tag.id}
-                      tag={tag}
-                      groups={groups}
-                      onSelect={() => setSelection({ kind: 'tag', id: tag.id })}
-                    />
-                  ))}
-                </>
-              ) : selectedTag ? (
-                <TagEditor tag={selectedTag} groups={groups} expanded />
-              ) : (
-                <p className="px-3 py-6 text-xs text-muted-foreground">Select a group or tag.</p>
-              )}
-            </div>
-          </section>
-
-          <aside className="grid content-start gap-4">
-            <form
-              noValidate
-              onSubmit={createGroup}
-              className="rounded-lg border border-border bg-surface p-3"
-            >
-              <div className="mb-3 flex items-center gap-2">
-                <Folder className="h-4 w-4 text-brand-600" />
-                <p className="text-xs font-semibold text-foreground">Create group</p>
-              </div>
-              <div className="grid gap-2">
-                <Input
-                  value={groupLabel}
-                  onChange={(event) => setGroupLabel(event.target.value)}
-                  placeholder="Billing"
-                  className="h-8 text-xs"
-                  aria-invalid={error?.includes('Group') ?? false}
-                />
-                <div className="grid grid-cols-[44px_minmax(0,1fr)] gap-2">
-                  <input
-                    type="color"
-                    value={groupColor}
-                    onChange={(event) => setGroupColor(event.target.value)}
-                    className="h-8 w-11 rounded-md border border-input bg-surface p-1"
-                    aria-label="Group color"
-                  />
-                  <Input
-                    value={groupColor}
-                    onChange={(event) => setGroupColor(event.target.value)}
-                    className="h-8 font-mono text-xs"
-                  />
-                </div>
-                <Button type="submit" size="sm" className="h-8">
+                {showArchived ? 'Hide archived' : `Show archived (${archivedGroups.length + archivedTags.length})`}
+              </Button>
+            ) : null}
+            <Button size="sm" onClick={() => setSheet({ kind: 'create-group' })} className="h-8">
+              <Plus className="h-3.5 w-3.5" />
+              New group
+            </Button>
+          </>
+        }
+      />
+      <SettingsBody>
+        <div className="flex flex-col gap-4">
+          {empty ? (
+            <EmptyState
+              icon={Tags}
+              title="No tags yet"
+              description="Group tickets so agents can filter and macros can target."
+              action={
+                <Button size="sm" onClick={() => setSheet({ kind: 'create-group' })}>
                   <Plus className="h-3.5 w-3.5" />
-                  Create group
+                  New tag group
                 </Button>
-              </div>
-            </form>
+              }
+            />
+          ) : null}
 
-            <form
-              noValidate
-              onSubmit={createTag}
-              className="rounded-lg border border-border bg-surface p-3"
+          {groups.map((group) => (
+            <GroupCard
+              key={group.id}
+              group={group}
+              tags={tagsByGroup.get(group.id) ?? []}
+              onAddTag={() => setSheet({ kind: 'create-tag', groupID: group.id })}
+              onEditGroup={() => setSheet({ kind: 'edit-group', group })}
+              onEditTag={(tag) => setSheet({ kind: 'edit-tag', tag })}
+            />
+          ))}
+
+          {(tagsByGroup.get('ungrouped') ?? []).length > 0 ? (
+            <UngroupedCard
+              tags={tagsByGroup.get('ungrouped') ?? []}
+              onAddTag={() => setSheet({ kind: 'create-tag', groupID: null })}
+              onEditTag={(tag) => setSheet({ kind: 'edit-tag', tag })}
+            />
+          ) : null}
+
+          {showArchived && (archivedGroups.length > 0 || archivedTags.length > 0) ? (
+            <ArchivedSection groups={archivedGroups} tags={archivedTags} />
+          ) : null}
+        </div>
+      </SettingsBody>
+
+      <CreateGroupSheet
+        open={sheet.kind === 'create-group'}
+        onClose={() => setSheet({ kind: 'closed' })}
+        existingCount={groups.length}
+      />
+      <EditGroupSheet
+        open={sheet.kind === 'edit-group'}
+        group={sheet.kind === 'edit-group' ? sheet.group : null}
+        onClose={() => setSheet({ kind: 'closed' })}
+      />
+      <CreateTagSheet
+        open={sheet.kind === 'create-tag'}
+        groups={groups}
+        defaultGroupID={sheet.kind === 'create-tag' ? sheet.groupID : null}
+        existingCount={tags.length}
+        onClose={() => setSheet({ kind: 'closed' })}
+      />
+      <EditTagSheet
+        open={sheet.kind === 'edit-tag'}
+        tag={sheet.kind === 'edit-tag' ? sheet.tag : null}
+        groups={groups}
+        onClose={() => setSheet({ kind: 'closed' })}
+      />
+    </>
+  );
+}
+
+function GroupCard({
+  group,
+  tags,
+  onAddTag,
+  onEditGroup,
+  onEditTag,
+}: {
+  group: TagGroupRow;
+  tags: TagRow[];
+  onAddTag: () => void;
+  onEditGroup: () => void;
+  onEditTag: (tag: TagRow) => void;
+}) {
+  const z = useZero();
+  return (
+    <section className="overflow-hidden rounded-md border border-line-quiet bg-surface">
+      <header className="flex h-9 items-center gap-2 border-b border-line-quiet px-3">
+        <span
+          className="h-2 w-2 shrink-0 rounded-full"
+          style={{ backgroundColor: normalizeHexColor(group.color) }}
+        />
+        <InlineLabel
+          value={group.label}
+          onSave={async (label) => {
+            if (!label.trim() || label === group.label) return;
+            await z.mutate(
+              supportMetadataMutators.tagGroup.update({
+                id: group.id,
+                label: label.trim(),
+                color: group.color,
+                sortOrder: group.sortOrder,
+              }),
+            );
+          }}
+        />
+        <span className="ml-auto tabular-nums text-[11px] text-fg-quaternary">{tags.length}</span>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label="Group actions"
+              className="grid h-6 w-6 place-items-center rounded-md text-fg-tertiary hover:bg-bg-elevated/60 hover:text-fg-primary"
             >
-              <div className="mb-3 flex items-center gap-2">
-                <Tags className="h-4 w-4 text-brand-600" />
-                <p className="text-xs font-semibold text-foreground">Create tag</p>
-              </div>
-              <div className="grid gap-2">
-                <Input
-                  value={tagLabel}
-                  onChange={(event) => setTagLabel(event.target.value)}
-                  placeholder="Refund"
-                  className="h-8 text-xs"
-                  aria-invalid={error?.includes('Tag') ?? false}
-                />
-                <GroupPicker groups={groups} value={tagGroupID} onChange={setTagGroupID} />
-                <Input
-                  value={tagColor}
-                  onChange={(event) => setTagColor(event.target.value)}
-                  placeholder="Optional color override"
-                  className="h-8 font-mono text-xs"
-                  aria-invalid={Boolean(tagColor && !isHexColor(tagColor))}
-                />
-                <Button type="submit" size="sm" className="h-8">
-                  <Plus className="h-3.5 w-3.5" />
-                  Create tag
-                </Button>
-              </div>
-            </form>
-          </aside>
-        </main>
-      </div>
+              <MoreHorizontal className="h-3.5 w-3.5" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={onEditGroup}>Edit group…</DropdownMenuItem>
+            <DropdownMenuItem onSelect={onAddTag}>
+              <Plus className="h-3.5 w-3.5" />
+              Add tag
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onSelect={() =>
+                z.mutate(supportMetadataMutators.tagGroup.archive({ id: group.id }))
+              }
+            >
+              <Archive className="h-3.5 w-3.5" />
+              Archive group
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </header>
+      {tags.map((tag) => (
+        <TagRowItem key={tag.id} tag={tag} onEdit={() => onEditTag(tag)} />
+      ))}
+      <button
+        type="button"
+        onClick={onAddTag}
+        className="flex h-9 items-center gap-2 border-t border-line-quiet px-3 text-[12px] text-fg-tertiary transition-colors hover:bg-bg-elevated/40 hover:text-fg-primary"
+      >
+        <Plus className="h-3.5 w-3.5" />
+        Add tag
+      </button>
+    </section>
+  );
+}
 
-      {archivedGroups.length > 0 || archivedTags.length > 0 ? (
-        <section className="rounded-lg border border-border bg-surface">
-          <div className="flex items-center justify-between border-b border-border px-3 py-2">
-            <p className="text-xs font-semibold text-foreground">Archived</p>
-            <Badge variant="muted">{archivedGroups.length + archivedTags.length}</Badge>
-          </div>
-          <div className="divide-y divide-border">
-            {archivedGroups.map((group) => (
-              <ArchivedRow
-                key={group.id}
-                label={group.label}
-                meta="Group"
-                color={group.color}
-                onRestore={() =>
-                  z.mutate(supportMetadataMutators.tagGroup.restore({ id: group.id }))
-                }
-              />
-            ))}
-            {archivedTags.map((tag) => (
-              <ArchivedRow
-                key={tag.id}
-                label={tag.label}
-                meta={tag.group?.label ?? 'Tag'}
-                color={tag.color || tag.group?.color || '#0f766e'}
-                onRestore={() => z.mutate(supportMetadataMutators.tag.restore({ id: tag.id }))}
-              />
-            ))}
-          </div>
-        </section>
-      ) : null}
+function UngroupedCard({
+  tags,
+  onAddTag,
+  onEditTag,
+}: {
+  tags: TagRow[];
+  onAddTag: () => void;
+  onEditTag: (tag: TagRow) => void;
+}) {
+  return (
+    <ListSection title="Ungrouped" count={tags.length}>
+      {tags.map((tag) => (
+        <TagRowItem key={tag.id} tag={tag} onEdit={() => onEditTag(tag)} />
+      ))}
+      <button
+        type="button"
+        onClick={onAddTag}
+        className="flex h-9 items-center gap-2 border-t border-line-quiet px-3 text-[12px] text-fg-tertiary transition-colors hover:bg-bg-elevated/40 hover:text-fg-primary"
+      >
+        <Plus className="h-3.5 w-3.5" />
+        Add tag
+      </button>
+    </ListSection>
+  );
+}
+
+function TagRowItem({ tag, onEdit }: { tag: TagRow; onEdit: () => void }) {
+  const z = useZero();
+  return (
+    <div className="flex h-9 items-center gap-2 border-b border-line-quiet px-3 last:border-b-0">
+      <button
+        type="button"
+        onClick={onEdit}
+        className="inline-flex max-w-[60%] items-center"
+        aria-label={`Edit ${tag.label}`}
+      >
+        <span
+          className="truncate rounded-full border px-2 py-0.5 text-[11px] font-medium"
+          style={tagPillStyle(tag)}
+        >
+          {tag.label}
+        </span>
+      </button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            aria-label="Tag actions"
+            className="ml-auto grid h-6 w-6 place-items-center rounded-md text-fg-tertiary hover:bg-bg-elevated/60 hover:text-fg-primary"
+          >
+            <MoreHorizontal className="h-3.5 w-3.5" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={onEdit}>Edit tag…</DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onSelect={() => z.mutate(supportMetadataMutators.tag.archive({ id: tag.id }))}
+          >
+            <Archive className="h-3.5 w-3.5" />
+            Archive
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }
 
-function GroupEditor({ group }: { group: TagGroupRow }) {
-  const z = useZero();
-  const [label, setLabel] = useState(group.label);
-  const [color, setColor] = useState(group.color);
-  const [sortOrder, setSortOrder] = useState(String(group.sortOrder));
-  const invalid = !label.trim() || !isHexColor(color);
+function InlineLabel({
+  value,
+  onSave,
+  compact = false,
+}: {
+  value: string;
+  onSave: (next: string) => Promise<void>;
+  compact?: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    setLabel(group.label);
-    setColor(group.color);
-    setSortOrder(String(group.sortOrder));
+    setDraft(value);
+  }, [value]);
+
+  useEffect(() => {
+    if (editing) inputRef.current?.focus();
+  }, [editing]);
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        className={cn(
+          'min-w-0 truncate rounded-sm px-1 text-left text-[13px] text-fg-primary hover:bg-bg-elevated/60',
+          compact && 'text-[12px] text-fg-tertiary',
+        )}
+      >
+        {value}
+      </button>
+    );
+  }
+
+  return (
+    <input
+      ref={inputRef}
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={async () => {
+        setEditing(false);
+        await onSave(draft);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          inputRef.current?.blur();
+        } else if (e.key === 'Escape') {
+          setDraft(value);
+          setEditing(false);
+        }
+      }}
+      className={cn(
+        'min-w-0 flex-1 rounded-sm bg-bg-elevated px-1 text-[13px] text-fg-primary outline-none ring-1 ring-line-default',
+        compact && 'text-[12px]',
+      )}
+    />
+  );
+}
+
+function CreateGroupSheet({
+  open,
+  onClose,
+  existingCount,
+}: {
+  open: boolean;
+  onClose: () => void;
+  existingCount: number;
+}) {
+  const z = useZero();
+  const [label, setLabel] = useState('');
+  const [color, setColor] = useState('#0f766e');
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      setLabel('');
+      setColor('#0f766e');
+      setError(null);
+    }
+  }, [open]);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!label.trim()) {
+      setError('Label is required.');
+      return;
+    }
+    if (!isHexColor(color)) {
+      setError('Use a hex color like #0f766e.');
+      return;
+    }
+    await z.mutate(
+      supportMetadataMutators.tagGroup.create({
+        id: crypto.randomUUID(),
+        label: label.trim(),
+        color,
+        sortOrder: existingCount + 1,
+      }),
+    );
+    onClose();
+  }
+
+  return (
+    <SettingsSheet
+      open={open}
+      onOpenChange={(next) => (next ? null : onClose())}
+      title="New tag group"
+      description="Groups let agents see related tags together when filtering tickets."
+      footer={
+        <>
+          <Button size="sm" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button size="sm" type="submit" form="create-group-form">
+            Create group
+          </Button>
+        </>
+      }
+    >
+      <form id="create-group-form" onSubmit={submit} noValidate className="flex flex-col gap-3">
+        <FormRow label="Label">
+          <Input
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder="Billing"
+            autoFocus
+            aria-invalid={Boolean(error?.toLowerCase().includes('label'))}
+          />
+        </FormRow>
+        <FormRow label="Color">
+          <div className="grid grid-cols-[44px_minmax(0,1fr)] gap-2">
+            <input
+              type="color"
+              value={color}
+              onChange={(e) => setColor(e.target.value)}
+              className="h-8 w-11 rounded-md border border-line-default bg-surface p-1"
+              aria-label="Group color"
+            />
+            <Input value={color} onChange={(e) => setColor(e.target.value)} className="font-mono" />
+          </div>
+        </FormRow>
+        {error ? <p className="text-[12px] text-danger">{error}</p> : null}
+      </form>
+    </SettingsSheet>
+  );
+}
+
+function EditGroupSheet({
+  open,
+  group,
+  onClose,
+}: {
+  open: boolean;
+  group: TagGroupRow | null;
+  onClose: () => void;
+}) {
+  const z = useZero();
+  const [label, setLabel] = useState('');
+  const [color, setColor] = useState('#0f766e');
+  const [sortOrder, setSortOrder] = useState('0');
+
+  useEffect(() => {
+    if (group) {
+      setLabel(group.label);
+      setColor(group.color);
+      setSortOrder(String(group.sortOrder));
+    }
   }, [group]);
 
   async function save() {
-    if (invalid) return;
+    if (!group || !label.trim() || !isHexColor(color)) return;
     await z.mutate(
       supportMetadataMutators.tagGroup.update({
         id: group.id,
@@ -371,77 +509,172 @@ function GroupEditor({ group }: { group: TagGroupRow }) {
         sortOrder: Number.parseInt(sortOrder, 10) || 0,
       }),
     );
+    onClose();
   }
 
   return (
-    <div className="grid gap-3 p-3">
-      <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_120px_110px]">
-        <Input
-          value={label}
-          onChange={(event) => setLabel(event.target.value)}
-          aria-invalid={!label.trim()}
-        />
-        <Input
-          value={color}
-          onChange={(event) => setColor(event.target.value)}
-          className="font-mono"
-          aria-invalid={!isHexColor(color)}
-        />
+    <SettingsSheet
+      open={open}
+      onOpenChange={(next) => (next ? null : onClose())}
+      title="Edit tag group"
+      footer={
+        <>
+          <Button size="sm" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button size="sm" onClick={save} disabled={!label.trim() || !isHexColor(color)}>
+            Save
+          </Button>
+        </>
+      }
+    >
+      <FormRow label="Label">
+        <Input value={label} onChange={(e) => setLabel(e.target.value)} />
+      </FormRow>
+      <FormRow label="Color">
+        <div className="grid grid-cols-[44px_minmax(0,1fr)] gap-2">
+          <input
+            type="color"
+            value={color}
+            onChange={(e) => setColor(e.target.value)}
+            className="h-8 w-11 rounded-md border border-line-default bg-surface p-1"
+          />
+          <Input value={color} onChange={(e) => setColor(e.target.value)} className="font-mono" />
+        </div>
+      </FormRow>
+      <FormRow label="Sort order">
         <Input
           type="number"
           value={sortOrder}
-          onChange={(event) => setSortOrder(event.target.value)}
-          aria-label="Sort order"
+          onChange={(e) => setSortOrder(e.target.value)}
+          className="w-24"
         />
-      </div>
-      <div className="flex flex-wrap justify-end gap-2">
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => z.mutate(supportMetadataMutators.tagGroup.archive({ id: group.id }))}
-        >
-          <Archive className="h-3.5 w-3.5" />
-          Archive
-        </Button>
-        <Button size="sm" onClick={save} disabled={invalid}>
-          <Check className="h-3.5 w-3.5" />
-          Save group
-        </Button>
-      </div>
-    </div>
+      </FormRow>
+    </SettingsSheet>
   );
 }
 
-function TagEditor({
-  tag,
+function CreateTagSheet({
+  open,
   groups,
-  expanded = false,
-  onSelect,
+  defaultGroupID,
+  existingCount,
+  onClose,
 }: {
-  tag: TagRow;
+  open: boolean;
   groups: TagGroupRow[];
-  expanded?: boolean;
-  onSelect?: () => void;
+  defaultGroupID: string | null;
+  existingCount: number;
+  onClose: () => void;
 }) {
   const z = useZero();
-  const activeGroupIDs = useMemo(() => new Set(groups.map((group) => group.id)), [groups]);
-  const [label, setLabel] = useState(tag.label);
-  const [groupID, setGroupID] = useState<string | null>(
-    tag.groupID && activeGroupIDs.has(tag.groupID) ? tag.groupID : null,
-  );
-  const [color, setColor] = useState(tag.color ?? '');
-  const [sortOrder, setSortOrder] = useState(String(tag.sortOrder));
-  const invalid = !label.trim() || Boolean(color && !isHexColor(color));
+  const [label, setLabel] = useState('');
+  const [groupID, setGroupID] = useState<string | null>(defaultGroupID);
+  const [color, setColor] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setLabel(tag.label);
-    setGroupID(tag.groupID && activeGroupIDs.has(tag.groupID) ? tag.groupID : null);
-    setColor(tag.color ?? '');
-    setSortOrder(String(tag.sortOrder));
-  }, [activeGroupIDs, tag]);
+    if (open) {
+      setLabel('');
+      setGroupID(defaultGroupID);
+      setColor('');
+      setError(null);
+    }
+  }, [open, defaultGroupID]);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!label.trim()) {
+      setError('Label is required.');
+      return;
+    }
+    if (color && !isHexColor(color)) {
+      setError('Use a hex color like #0f766e.');
+      return;
+    }
+    await z.mutate(
+      supportMetadataMutators.tag.create({
+        id: crypto.randomUUID(),
+        label: label.trim(),
+        groupID: groupID,
+        color: color.trim() || null,
+        sortOrder: existingCount + 1,
+      }),
+    );
+    onClose();
+  }
+
+  return (
+    <SettingsSheet
+      open={open}
+      onOpenChange={(next) => (next ? null : onClose())}
+      title="New tag"
+      footer={
+        <>
+          <Button size="sm" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button size="sm" type="submit" form="create-tag-form">
+            Create tag
+          </Button>
+        </>
+      }
+    >
+      <form id="create-tag-form" onSubmit={submit} noValidate className="flex flex-col gap-3">
+        <FormRow label="Label">
+          <Input
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder="Refund"
+            autoFocus
+          />
+        </FormRow>
+        <FormRow label="Group">
+          <GroupSelect groups={groups} value={groupID} onChange={setGroupID} />
+        </FormRow>
+        <FormRow label="Color (optional)">
+          <Input
+            value={color}
+            onChange={(e) => setColor(e.target.value)}
+            placeholder="Inherits from group"
+            className="font-mono"
+          />
+        </FormRow>
+        {error ? <p className="text-[12px] text-danger">{error}</p> : null}
+      </form>
+    </SettingsSheet>
+  );
+}
+
+function EditTagSheet({
+  open,
+  tag,
+  groups,
+  onClose,
+}: {
+  open: boolean;
+  tag: TagRow | null;
+  groups: TagGroupRow[];
+  onClose: () => void;
+}) {
+  const z = useZero();
+  const [label, setLabel] = useState('');
+  const [groupID, setGroupID] = useState<string | null>(null);
+  const [color, setColor] = useState('');
+  const [sortOrder, setSortOrder] = useState('0');
+
+  useEffect(() => {
+    if (tag) {
+      setLabel(tag.label);
+      setGroupID(tag.groupID ?? null);
+      setColor(tag.color ?? '');
+      setSortOrder(String(tag.sortOrder));
+    }
+  }, [tag]);
 
   async function save() {
-    if (invalid) return;
+    if (!tag || !label.trim()) return;
+    if (color && !isHexColor(color)) return;
     await z.mutate(
       supportMetadataMutators.tag.update({
         id: tag.id,
@@ -451,97 +684,61 @@ function TagEditor({
         sortOrder: Number.parseInt(sortOrder, 10) || 0,
       }),
     );
+    onClose();
   }
 
   return (
-    <div className="grid gap-2 p-3">
-      <button
-        type="button"
-        onClick={onSelect}
-        className="flex w-fit max-w-full items-center gap-2 text-left"
-      >
-        <span
-          className="rounded-full border px-2 py-0.5 text-[11px] font-medium"
-          style={tagPillStyle(tag)}
-        >
-          {tag.label}
-        </span>
-        {!expanded ? <span className="text-[11px] text-muted-foreground">Edit</span> : null}
-      </button>
-      <div className="grid gap-2 sm:grid-cols-2">
-        <Input
-          value={label}
-          onChange={(event) => setLabel(event.target.value)}
-          aria-invalid={!label.trim()}
-        />
-        <GroupPicker groups={groups} value={groupID} onChange={setGroupID} />
+    <SettingsSheet
+      open={open}
+      onOpenChange={(next) => (next ? null : onClose())}
+      title="Edit tag"
+      footer={
+        <>
+          <Button size="sm" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button size="sm" onClick={save} disabled={!label.trim()}>
+            Save
+          </Button>
+        </>
+      }
+    >
+      <FormRow label="Label">
+        <Input value={label} onChange={(e) => setLabel(e.target.value)} />
+      </FormRow>
+      <FormRow label="Group">
+        <GroupSelect groups={groups} value={groupID} onChange={setGroupID} />
+      </FormRow>
+      <FormRow label="Color (optional)">
         <Input
           value={color}
-          onChange={(event) => setColor(event.target.value)}
-          placeholder="Tag color"
+          onChange={(e) => setColor(e.target.value)}
+          placeholder="Inherits from group"
           className="font-mono"
-          aria-invalid={Boolean(color && !isHexColor(color))}
         />
+      </FormRow>
+      <FormRow label="Sort order">
         <Input
           type="number"
           value={sortOrder}
-          onChange={(event) => setSortOrder(event.target.value)}
-          aria-label="Sort order"
+          onChange={(e) => setSortOrder(e.target.value)}
+          className="w-24"
         />
-      </div>
-      <div className="flex justify-end gap-2">
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => z.mutate(supportMetadataMutators.tag.archive({ id: tag.id }))}
-        >
-          <Archive className="h-3.5 w-3.5" />
-          Archive
-        </Button>
-        <Button size="sm" onClick={save} disabled={invalid}>
-          <Check className="h-3.5 w-3.5" />
-          Save tag
-        </Button>
-      </div>
-    </div>
+      </FormRow>
+    </SettingsSheet>
   );
 }
 
-function ArchivedRow({
-  label,
-  meta,
-  color,
-  onRestore,
-}: {
-  label: string;
-  meta: string;
-  color: string;
-  onRestore: () => void;
-}) {
+function FormRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
-      <div className="flex min-w-0 items-center gap-2">
-        <span
-          className="h-2.5 w-2.5 shrink-0 rounded-full border"
-          style={{
-            backgroundColor: `${normalizeHexColor(color)}1f`,
-            borderColor: normalizeHexColor(color),
-          }}
-        />
-        <div className="min-w-0">
-          <p className="truncate text-xs font-medium text-foreground">{label}</p>
-          <p className="text-[11px] text-muted-foreground">{meta}</p>
-        </div>
-      </div>
-      <Button size="sm" variant="outline" className="h-8" onClick={onRestore}>
-        <RotateCcw className="h-3.5 w-3.5" />
-        Restore
-      </Button>
-    </div>
+    <label className="flex flex-col gap-1.5">
+      <span className="text-[12px] font-medium text-fg-primary">{label}</span>
+      {children}
+    </label>
   );
 }
 
-function GroupPicker({
+function GroupSelect({
   groups,
   value,
   onChange,
@@ -550,32 +747,90 @@ function GroupPicker({
   value: string | null;
   onChange: (value: string | null) => void;
 }) {
-  const selected = groups.find((group) => group.id === value);
+  const selected = groups.find((g) => g.id === value);
   return (
-    <div className="flex items-center gap-1">
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="h-8 flex-1 justify-start px-2 text-xs"
-        onClick={() => {
-          const currentIndex = groups.findIndex((group) => group.id === value);
-          const next = groups[currentIndex + 1] ?? null;
-          onChange(next?.id ?? null);
-        }}
-      >
-        {selected ? selected.label : 'Ungrouped'}
-      </Button>
-      {value ? (
-        <button
-          type="button"
-          aria-label="Clear group"
-          onClick={() => onChange(null)}
-          className="grid h-8 w-8 place-items-center rounded-md border border-border text-muted-foreground hover:bg-surface-muted"
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button type="button" variant="outline" size="sm" className="h-8 justify-start gap-2">
+          {selected ? (
+            <>
+              <span
+                className="h-2 w-2 rounded-full"
+                style={{ backgroundColor: normalizeHexColor(selected.color) }}
+              />
+              {selected.label}
+            </>
+          ) : (
+            'Ungrouped'
+          )}
+          <ChevronDown className="ml-auto h-3.5 w-3.5" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        <DropdownMenuItem onSelect={() => onChange(null)}>Ungrouped</DropdownMenuItem>
+        <DropdownMenuSeparator />
+        {groups.map((group) => (
+          <DropdownMenuItem key={group.id} onSelect={() => onChange(group.id)}>
+            <span
+              className="h-2 w-2 rounded-full"
+              style={{ backgroundColor: normalizeHexColor(group.color) }}
+            />
+            {group.label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function ArchivedSection({ groups, tags }: { groups: TagGroupRow[]; tags: TagRow[] }) {
+  const z = useZero();
+  return (
+    <ListSection title="Archived" count={groups.length + tags.length}>
+      {groups.map((group) => (
+        <div
+          key={group.id}
+          className="flex h-9 items-center gap-2 border-b border-line-quiet px-3 last:border-b-0"
         >
-          <X className="h-3.5 w-3.5" />
-        </button>
-      ) : null}
-    </div>
+          <span
+            className="h-2 w-2 rounded-full"
+            style={{ backgroundColor: normalizeHexColor(group.color) }}
+          />
+          <span className="truncate text-[13px] text-fg-secondary">{group.label}</span>
+          <Badge variant="muted" className="ml-1">
+            Group
+          </Badge>
+          <Button
+            size="sm"
+            variant="outline"
+            className="ml-auto h-7"
+            onClick={() => z.mutate(supportMetadataMutators.tagGroup.restore({ id: group.id }))}
+          >
+            <RotateCcw className="h-3 w-3" />
+            Restore
+          </Button>
+        </div>
+      ))}
+      {tags.map((tag) => (
+        <div
+          key={tag.id}
+          className="flex h-9 items-center gap-2 border-b border-line-quiet px-3 last:border-b-0"
+        >
+          <span className="rounded-full border px-2 py-0.5 text-[11px]" style={tagPillStyle(tag)}>
+            {tag.label}
+          </span>
+          <Badge variant="muted">{tag.group?.label ?? 'Tag'}</Badge>
+          <Button
+            size="sm"
+            variant="outline"
+            className="ml-auto h-7"
+            onClick={() => z.mutate(supportMetadataMutators.tag.restore({ id: tag.id }))}
+          >
+            <RotateCcw className="h-3 w-3" />
+            Restore
+          </Button>
+        </div>
+      ))}
+    </ListSection>
   );
 }

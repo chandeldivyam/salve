@@ -14,6 +14,7 @@ import { AddDomainForm } from '@/components/email-settings/add-domain-form';
 import { EmptyState } from '@/components/email-settings/empty-state';
 import { domainStatusVariant } from '@/components/email-settings/types';
 import { RouteErrorFeedback, RoutePendingFeedback } from '@/components/route-feedback';
+import { SettingsBody, SettingsHeader } from '@/components/settings';
 import { CACHE_NAV } from '@/lib/zero-cache';
 
 interface DomainsSearch {
@@ -42,67 +43,70 @@ function DomainsTab() {
   const empty = domains.length === 0;
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-6 sm:px-8">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <h2 className="text-base font-semibold text-foreground">Sending domains</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Add a domain so replies go out from your own brand. We'll DKIM-sign every send.
-          </p>
-        </div>
-        {!empty ? (
-          <Button
-            size="sm"
-            variant={showForm ? 'outline' : 'default'}
-            onClick={() => setShowForm((s) => !s)}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            {showForm ? 'Close form' : 'Add domain'}
-          </Button>
-        ) : null}
-      </div>
-
-      {showForm ? <AddDomainForm onDone={() => setShowForm(false)} /> : null}
-
-      {empty && !showForm ? (
-        <EmptyState
-          icon={Mail}
-          title="No sending domains yet"
-          description="Add the domain replies will come from. We'll generate DKIM records for your DNS."
-          action={
-            <Button size="sm" onClick={() => setShowForm(true)}>
-              <Plus className="h-3.5 w-3.5" /> Add domain
+    <>
+      <SettingsHeader
+        title="Sending domains"
+        description="Add a domain so replies go out from your own brand. We'll DKIM-sign every send."
+        actions={
+          !empty ? (
+            <Button
+              size="sm"
+              variant={showForm ? 'outline' : 'default'}
+              onClick={() => setShowForm((s) => !s)}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              {showForm ? 'Close form' : 'Add domain'}
             </Button>
-          }
-        />
-      ) : (
-        <Card className="overflow-hidden">
-          <CardContent className="p-0">
-            <ul className="divide-y divide-border">
-              {domains.map((d) => (
-                <li key={d.id}>
-                  <Link
-                    to="/app/settings/channels/email/domains/$domainId"
-                    params={{ domainId: d.id }}
-                    className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-surface-muted"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-foreground">{d.domain}</p>
-                      <p className="mt-0.5 text-[11px] text-muted-foreground">
-                        Added {format(new Date(d.createdAt), 'MMM d, yyyy')}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant={domainStatusVariant(d.dnsStatus)}>{d.dnsStatus}</Badge>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                    </div>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      )}
-    </div>
+          ) : null
+        }
+      />
+      <SettingsBody maxWidth="wide">
+        <div className="flex flex-col gap-4">
+          {showForm ? <AddDomainForm onDone={() => setShowForm(false)} /> : null}
+
+          {empty && !showForm ? (
+            <EmptyState
+              icon={Mail}
+              title="No sending domains yet"
+              description="Add the domain replies will come from. We'll generate DKIM records for your DNS."
+              action={
+                <Button size="sm" onClick={() => setShowForm(true)}>
+                  <Plus className="h-3.5 w-3.5" /> Add domain
+                </Button>
+              }
+            />
+          ) : (
+            <Card className="overflow-hidden">
+              <CardContent className="p-0">
+                <ul className="divide-y divide-line-quiet">
+                  {domains.map((d) => (
+                    <li key={d.id}>
+                      <Link
+                        to="/app/settings/channels/email/domains/$domainId"
+                        params={{ domainId: d.id }}
+                        className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-bg-elevated/60"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-[13px] font-medium text-fg-primary">
+                            {d.domain}
+                          </p>
+                          <p className="mt-0.5 text-[11px] text-fg-tertiary">
+                            Added {format(new Date(d.createdAt), 'MMM d, yyyy')}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={domainStatusVariant(d.dnsStatus)}>{d.dnsStatus}</Badge>
+                          <ChevronRight className="h-4 w-4 text-fg-tertiary" />
+                        </div>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </SettingsBody>
+    </>
   );
 }

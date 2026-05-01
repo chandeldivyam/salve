@@ -19,6 +19,7 @@ import {
   shortID,
 } from '@/components/email-settings/types';
 import { RouteErrorFeedback, RoutePendingFeedback } from '@/components/route-feedback';
+import { SettingsBody, SettingsHeader } from '@/components/settings';
 import { CACHE_NAV } from '@/lib/zero-cache';
 
 interface RoutingSearch {
@@ -44,16 +45,12 @@ function RoutingTab() {
   const noAddresses = addresses.length === 0;
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-6 sm:px-8">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <h2 className="text-base font-semibold text-foreground">Routing</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Decide priority and default assignee for each receive address.
-          </p>
-        </div>
-      </div>
-
+    <>
+      <SettingsHeader
+        title="Routing"
+        description="Decide priority and default assignee for each receive address."
+      />
+      <SettingsBody maxWidth="wide">
       {noAddresses ? (
         <EmptyState
           icon={RouteIcon}
@@ -136,6 +133,7 @@ function RoutingTab() {
           })}
         </div>
       )}
-    </div>
+      </SettingsBody>
+    </>
   );
 }
