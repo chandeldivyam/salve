@@ -175,8 +175,11 @@ function SingleTicketTimeline({ ticketID }: { ticketID: string }) {
       byID.set(row.id, row);
     }
     if (ticket) byID.set(ticket.id, ticket);
+    // Sort by createdAt so a ticket's position in the timeline is anchored
+    // to when it was opened, not when it was last touched. Otherwise an
+    // assignment / status flip yanks the anchor to the bottom of the rail.
     return [...byID.values()].sort(
-      (a, b) => a.updatedAt - b.updatedAt || a.createdAt - b.createdAt || a.id.localeCompare(b.id),
+      (a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id),
     );
   }, [customerID, customerTicketRows, ticket]);
 
@@ -1107,10 +1110,10 @@ function splitNeighbours(tickets: ReadonlyArray<TimelineTicket>, anchorID: strin
   if (!anchor) return { older: [], newer: [] };
   return {
     older: tickets.filter(
-      (ticket) => ticket.id !== anchorID && ticket.updatedAt <= anchor.updatedAt,
+      (ticket) => ticket.id !== anchorID && ticket.createdAt < anchor.createdAt,
     ),
     newer: tickets.filter(
-      (ticket) => ticket.id !== anchorID && ticket.updatedAt > anchor.updatedAt,
+      (ticket) => ticket.id !== anchorID && ticket.createdAt >= anchor.createdAt,
     ),
   };
 }

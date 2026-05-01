@@ -54,7 +54,7 @@ export function InboxRow({
   return (
     <div
       className={cn(
-        'group flex h-9 items-center gap-2.5 px-3',
+        'group relative flex h-9 items-center gap-2.5 px-3',
         multiSelected
           ? 'bg-brand-soft/40 transition-none hover:bg-brand-soft/60'
           : isSelected
@@ -62,6 +62,22 @@ export function InboxRow({
             : 'transition-colors duration-150 hover:bg-bg-elevated',
       )}
     >
+      {/*
+       * Full-row navigation overlay. Stretches across the row so any click
+       * inside the row navigates — no dead zones between fields. Sub-elements
+       * that need their own click target (checkbox, customer link, tooltip
+       * triggers) sit on a higher z-index so they intercept first.
+       */}
+      <WorkbenchLink
+        href={`/app/inbox/t/${ticket.id}`}
+        source="ticket-row"
+        onClick={onNavigate}
+        aria-label={ticket.title}
+        className="absolute inset-0 z-0"
+      >
+        <span className="sr-only">{ticket.title}</span>
+      </WorkbenchLink>
+
       {/*
        * Leading slot. Two layered children, only one visible at a time:
        *  - status dot (default, hidden when checkbox visible)
@@ -72,9 +88,9 @@ export function InboxRow({
        * via negative insets so the click target is generous (full row height
        * vertically, ~half the gap to the title horizontally) — Linear-style.
        * pointer-events-none when invisible so clicks on the dot fall through
-       * to the row link (navigate), not the hidden checkbox.
+       * to the row overlay link (navigate), not the hidden checkbox.
        */}
-      <span className="relative h-3.5 w-3.5 shrink-0">
+      <span className="relative z-10 h-3.5 w-3.5 shrink-0">
         <span
           role="img"
           aria-label={`Status: ${ticket.status}`}
@@ -116,28 +132,24 @@ export function InboxRow({
         </button>
       </span>
 
-      <WorkbenchLink
-        href={`/app/inbox/t/${ticket.id}`}
-        source="ticket-row"
-        onClick={onNavigate}
-        className="min-w-0 flex-1 truncate leading-tight"
-      >
-        <span className="text-[14px] font-medium tracking-[-0.011em] text-fg-primary">
-          {ticket.title}
-        </span>
-      </WorkbenchLink>
-      <span className="text-[13px] text-fg-tertiary">·</span>
+      <span className="pointer-events-none relative z-0 min-w-0 flex-1 truncate text-[14px] font-medium leading-tight tracking-[-0.011em] text-fg-primary">
+        {ticket.title}
+      </span>
+      <span className="pointer-events-none relative z-0 text-[13px] text-fg-tertiary">·</span>
       {ticket.customer?.id ? (
         <WorkbenchLink
           href={`/app/customers/${ticket.customer.id}`}
           source="ticket-row"
-          className="max-w-[140px] truncate text-[13px] text-fg-tertiary transition-colors hover:text-fg-primary hover:underline"
+          className="relative z-10 max-w-[140px] truncate text-[13px] text-fg-tertiary transition-colors hover:text-fg-primary hover:underline"
           title={customerLabel}
         >
           {customerLabel}
         </WorkbenchLink>
       ) : (
-        <span className="max-w-[140px] truncate text-[13px] text-fg-tertiary" title={customerLabel}>
+        <span
+          className="pointer-events-none relative z-0 max-w-[140px] truncate text-[13px] text-fg-tertiary"
+          title={customerLabel}
+        >
           {customerLabel}
         </span>
       )}
@@ -148,7 +160,7 @@ export function InboxRow({
               role="img"
               aria-label={`Priority: ${ticket.priority}`}
               className={cn(
-                'inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center',
+                'relative z-10 inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center',
                 ticket.priority === 'urgent' ? 'text-danger' : 'text-warning',
               )}
             >
@@ -158,7 +170,7 @@ export function InboxRow({
           <TooltipContent>{ticket.priority === 'urgent' ? 'Urgent' : 'High'}</TooltipContent>
         </Tooltip>
       ) : null}
-      <span className="shrink-0">
+      <span className="relative z-10 shrink-0">
         {ticket.assignee ? (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -172,7 +184,7 @@ export function InboxRow({
           </Tooltip>
         ) : null}
       </span>
-      <span className="shrink-0 text-[11px] tabular-nums text-fg-tertiary">
+      <span className="pointer-events-none relative z-0 shrink-0 text-[11px] tabular-nums text-fg-tertiary">
         {formatDistanceToNowStrict(updated)}
       </span>
     </div>
