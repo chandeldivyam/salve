@@ -2,32 +2,65 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Tailwind v4 auto-detects content from the file referencing the CSS, but
-   workspace-linked packages aren't always reached from the heuristic. Tell it
-   explicitly to scan the @opendesk/ui sources so classes inside Button/Card/
-   Input/Label survive the JIT pass. */
 @source "../../../packages/ui/src/**/*.{ts,tsx}";
 
+/* ----------------------------------------------------------------------
+ * Design tokens — Linear-aligned 5-step surface ladder + 4-tier text/lines.
+ *
+ * Naming model:
+ *   --bg-*       background surfaces (5 steps, ~1-2% L apart)
+ *   --fg-*       foreground text (4 stops, primary off-white/off-black)
+ *   --line-*     dividers and borders (3 tiers + translucent)
+ *
+ * Existing semantic aliases (--background, --surface, --border, etc.) are
+ * preserved as **mappings** to the new tokens so component styles keep
+ * working without churn. Prefer the new tokens in new code.
+ *
+ * Hue strategy:
+ *   dark  — hue 270 at very low chroma (0.003-0.006), harmonized with brand
+ *   light — hue 320 at very low chroma — Linear's "warm grey" tilt
+ */
 :root {
   color-scheme: light;
 
-  --background: oklch(0.98 0.005 230);
-  --foreground: oklch(0.18 0.02 230);
-  --surface: oklch(1 0 0);
-  --surface-foreground: oklch(0.18 0.02 230);
-  --surface-muted: oklch(0.97 0.006 230);
-  --surface-muted-foreground: oklch(0.48 0.025 230);
-  --muted: oklch(0.94 0.008 230);
-  --muted-foreground: oklch(0.52 0.025 230);
-  --border: oklch(0.9 0.01 230);
-  --border-strong: oklch(0.84 0.014 230);
-  --input: oklch(0.84 0.014 230);
-  --ring: var(--brand-600);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.2 0.02 230);
-  --tooltip: oklch(0.22 0.022 230);
-  --tooltip-foreground: oklch(0.98 0.004 230);
+  /* Surfaces (light) — warm-tilted near-white */
+  --bg-canvas: oklch(0.985 0.002 320);
+  --bg-panel: oklch(0.97 0.003 320);
+  --bg-elevated: oklch(0.945 0.004 320);
+  --bg-popover: oklch(1 0 0);
+  --bg-overlay: rgb(0 0 0 / 0.04);
 
+  /* Foreground (light) — primary is warm near-black, never pure black */
+  --fg-primary: oklch(0.2 0.01 320);
+  --fg-secondary: oklch(0.32 0.012 320);
+  --fg-tertiary: oklch(0.5 0.012 320);
+  --fg-quaternary: oklch(0.62 0.012 320);
+
+  /* Lines (light) — softened, prefer the quiet tier in-content */
+  --line-quiet: oklch(0.95 0.004 320);
+  --line-default: oklch(0.9 0.006 320);
+  --line-strong: oklch(0.82 0.008 320);
+  --line-overlay: rgb(0 0 0 / 0.06);
+
+  /* Backwards-compat aliases — map old names to new tokens */
+  --background: var(--bg-canvas);
+  --foreground: var(--fg-primary);
+  --surface: var(--bg-panel);
+  --surface-foreground: var(--fg-primary);
+  --surface-muted: var(--bg-elevated);
+  --surface-muted-foreground: var(--fg-tertiary);
+  --muted: var(--bg-elevated);
+  --muted-foreground: var(--fg-tertiary);
+  --border: var(--line-default);
+  --border-strong: var(--line-strong);
+  --input: var(--line-strong);
+  --ring: var(--brand-600);
+  --popover: var(--bg-popover);
+  --popover-foreground: var(--fg-primary);
+  --tooltip: oklch(0.22 0.012 320);
+  --tooltip-foreground: oklch(0.98 0.002 320);
+
+  /* Brand — single accent (indigo, hue 270). Used sparingly. */
   --brand-50: oklch(0.97 0.014 270);
   --brand-100: oklch(0.93 0.028 270);
   --brand-500: oklch(0.62 0.1 270);
@@ -40,6 +73,7 @@
   --brand-soft-foreground: var(--brand-700);
   --brand-border: oklch(0.86 0.05 270);
 
+  /* Status hues — saturated, used only for status dots/icons */
   --success: oklch(0.55 0.14 150);
   --success-foreground: oklch(1 0 0);
   --success-soft: oklch(0.96 0.035 150);
@@ -58,27 +92,71 @@
   --danger-soft: oklch(0.96 0.035 25);
   --danger-soft-foreground: oklch(0.48 0.13 25);
   --danger-border: oklch(0.87 0.075 25);
+
+  /* Z-layer scale — Linear's named scale, no ad-hoc z-index */
+  --z-header: 100;
+  --z-overlay: 500;
+  --z-popover: 600;
+  --z-command-menu: 650;
+  --z-dialog: 700;
+  --z-toasts: 800;
+  --z-tooltip: 1100;
+  --z-context-menu: 1200;
+
+  /* Motion — instant-in / fade-out asymmetry */
+  --ease-standard: cubic-bezier(0.165, 0.84, 0.44, 1);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration-quick: 100ms;
+  --duration-regular: 150ms;
+  --duration-fade-out: 150ms;
+
+  /* Shadows — restrained; rely on surface ladder for elevation */
+  --shadow-low: 0 1px 2px rgb(0 0 0 / 0.04), 0 1px 1px rgb(0 0 0 / 0.03);
+  --shadow-medium: 0 2px 4px rgb(0 0 0 / 0.04), 0 4px 12px rgb(0 0 0 / 0.05);
+  --shadow-high:
+    0 1px 1px rgb(0 0 0 / 0.04), 0 2px 2px rgb(0 0 0 / 0.04),
+    0 4px 4px rgb(0 0 0 / 0.06), 0 6px 8px rgb(0 0 0 / 0.06),
+    0 12px 24px rgb(0 0 0 / 0.08);
 }
 
 .dark {
   color-scheme: dark;
 
-  --background: oklch(0.16 0.018 230);
-  --foreground: oklch(0.93 0.01 230);
-  --surface: oklch(0.2 0.02 230);
-  --surface-foreground: oklch(0.93 0.01 230);
-  --surface-muted: oklch(0.25 0.022 230);
-  --surface-muted-foreground: oklch(0.72 0.018 230);
-  --muted: oklch(0.29 0.022 230);
-  --muted-foreground: oklch(0.69 0.018 230);
-  --border: oklch(0.34 0.024 230);
-  --border-strong: oklch(0.42 0.026 230);
-  --input: oklch(0.42 0.026 230);
+  /* Surfaces (dark) — 5-step ladder, hue 270 at very low chroma */
+  --bg-canvas: oklch(0.155 0.004 270);
+  --bg-panel: oklch(0.185 0.005 270);
+  --bg-elevated: oklch(0.225 0.006 270);
+  --bg-popover: oklch(0.255 0.007 270);
+  --bg-overlay: rgb(255 255 255 / 0.05);
+
+  /* Foreground (dark) — primary is off-white, never pure white */
+  --fg-primary: oklch(0.96 0.003 270);
+  --fg-secondary: oklch(0.84 0.005 270);
+  --fg-tertiary: oklch(0.62 0.008 270);
+  --fg-quaternary: oklch(0.48 0.008 270);
+
+  /* Lines (dark) — quiet tier nearly invisible, used in-content */
+  --line-quiet: oklch(0.22 0.005 270);
+  --line-default: oklch(0.28 0.006 270);
+  --line-strong: oklch(0.36 0.008 270);
+  --line-overlay: rgb(255 255 255 / 0.08);
+
+  --background: var(--bg-canvas);
+  --foreground: var(--fg-primary);
+  --surface: var(--bg-panel);
+  --surface-foreground: var(--fg-primary);
+  --surface-muted: var(--bg-elevated);
+  --surface-muted-foreground: var(--fg-tertiary);
+  --muted: var(--bg-elevated);
+  --muted-foreground: var(--fg-tertiary);
+  --border: var(--line-default);
+  --border-strong: var(--line-strong);
+  --input: var(--line-strong);
   --ring: var(--brand-500);
-  --popover: oklch(0.22 0.022 230);
-  --popover-foreground: oklch(0.93 0.01 230);
-  --tooltip: oklch(0.92 0.01 230);
-  --tooltip-foreground: oklch(0.16 0.018 230);
+  --popover: var(--bg-popover);
+  --popover-foreground: var(--fg-primary);
+  --tooltip: oklch(0.92 0.003 270);
+  --tooltip-foreground: oklch(0.155 0.004 270);
 
   --brand-50: oklch(0.24 0.04 270);
   --brand-100: oklch(0.29 0.05 270);
@@ -87,7 +165,7 @@
   --brand-700: oklch(0.74 0.08 270);
   --brand-900: oklch(0.9 0.04 270);
   --brand: var(--brand-600);
-  --brand-foreground: oklch(0.13 0.018 230);
+  --brand-foreground: oklch(0.13 0.004 270);
   --brand-soft: var(--brand-50);
   --brand-soft-foreground: var(--brand-900);
   --brand-border: oklch(0.4 0.06 270);
@@ -110,9 +188,35 @@
   --danger-soft: oklch(0.27 0.06 25);
   --danger-soft-foreground: oklch(0.84 0.11 25);
   --danger-border: oklch(0.47 0.1 25);
+
+  /* Shadows (dark) — stronger, but elevation still mostly via surface ladder */
+  --shadow-low: 0 1px 2px rgb(0 0 0 / 0.2), 0 1px 1px rgb(0 0 0 / 0.16);
+  --shadow-medium: 0 2px 4px rgb(0 0 0 / 0.2), 0 4px 12px rgb(0 0 0 / 0.24);
+  --shadow-high:
+    0 1px 1px rgb(0 0 0 / 0.16), 0 2px 2px rgb(0 0 0 / 0.16),
+    0 4px 4px rgb(0 0 0 / 0.2), 0 6px 8px rgb(0 0 0 / 0.24),
+    0 12px 24px rgb(0 0 0 / 0.32);
 }
 
 @theme inline {
+  /* New ladder — prefer these in new code */
+  --color-bg-canvas: var(--bg-canvas);
+  --color-bg-panel: var(--bg-panel);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-bg-popover: var(--bg-popover);
+  --color-bg-overlay: var(--bg-overlay);
+
+  --color-fg-primary: var(--fg-primary);
+  --color-fg-secondary: var(--fg-secondary);
+  --color-fg-tertiary: var(--fg-tertiary);
+  --color-fg-quaternary: var(--fg-quaternary);
+
+  --color-line-quiet: var(--line-quiet);
+  --color-line-default: var(--line-default);
+  --color-line-strong: var(--line-strong);
+  --color-line-overlay: var(--line-overlay);
+
+  /* Backwards-compat aliases */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-surface: var(--surface);
@@ -158,6 +262,26 @@
   --color-danger-soft: var(--danger-soft);
   --color-danger-soft-foreground: var(--danger-soft-foreground);
   --color-danger-border: var(--danger-border);
+
+  /* Shadows */
+  --shadow-low: var(--shadow-low);
+  --shadow-medium: var(--shadow-medium);
+  --shadow-high: var(--shadow-high);
+
+  /* Z-layer scale */
+  --z-header: var(--z-header);
+  --z-overlay: var(--z-overlay);
+  --z-popover: var(--z-popover);
+  --z-command-menu: var(--z-command-menu);
+  --z-dialog: var(--z-dialog);
+  --z-toasts: var(--z-toasts);
+  --z-tooltip: var(--z-tooltip);
+  --z-context-menu: var(--z-context-menu);
+
+  /* Typography font stack */
+  --font-sans:
+    'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
 html,
@@ -166,24 +290,156 @@ body,
   height: 100%;
 }
 
+/* ----------------------------------------------------------------------
+ * Typography — Inter Variable with Linear's exact feature settings + tracking.
+ * `cv01` (alt 1) + `ss03` (alt g) are the single biggest "looks like Linear"
+ * tweak. Negative tracking on body, tighter on titles. Optical sizing auto
+ * lets the variable font adjust glyph weight to size automatically.
+ */
 body {
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-    'Helvetica Neue', Arial, sans-serif;
+  font-family:
+    'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-feature-settings: 'cv01', 'ss03';
+  font-optical-sizing: auto;
+  letter-spacing: -0.011em;
   background-color: var(--background);
   color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  letter-spacing: -0.018em;
+  font-feature-settings: 'cv01', 'ss03';
+}
+
+/* Numerics align in a column — timestamps, counts, IDs */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ----------------------------------------------------------------------
+ * Iconography — Linear uses 1.5px stroke icons globally; Lucide ships at 2.
+ * Lucide-react attaches `lucide` to every rendered SVG, so a single rule
+ * shifts the whole app. Opt out per-instance with `data-stroke="bold"`
+ * for icons that need to read at very small sizes (e.g. row priority).
+ */
+.lucide {
+  stroke-width: 1.5 !important;
+}
+.lucide[data-stroke='bold'] {
+  stroke-width: 2 !important;
+}
+
+/* ----------------------------------------------------------------------
+ * TipTap / ProseMirror — minimal "rich text" rendering, scoped.
+ *
+ * The composer uses TipTap's StarterKit which produces real <ul>/<ol>/
+ * <blockquote>/<code> in the document — input rules (`- ` for bullets,
+ * `> ` for quotes, etc.) and toolbar buttons all work. But Tailwind v4's
+ * preflight resets list-style to none and strips paddings, so without
+ * scoped CSS those structures render invisibly.
+ *
+ * We deliberately do NOT pull in @tailwindcss/typography (`prose`):
+ *  - It bundles opinionated typography that fights our Linear-tight defaults.
+ *  - It targets a much larger surface than we need (the editor is the
+ *    only rich-text surface in the app).
+ *  - Scoping to `.ProseMirror` keeps the rules from leaking into other
+ *    rendered HTML.
+ *
+ * Add new element rules here when StarterKit (or a new extension) starts
+ * emitting tags that don't render — don't reach for `prose`.
+ */
+.ProseMirror ul {
+  list-style: disc;
+  padding-left: 1.5rem;
+  margin: 0.5em 0;
+}
+.ProseMirror ol {
+  list-style: decimal;
+  padding-left: 1.5rem;
+  margin: 0.5em 0;
+}
+.ProseMirror ul ul,
+.ProseMirror ol ol,
+.ProseMirror ul ol,
+.ProseMirror ol ul {
+  margin: 0;
+}
+.ProseMirror li > p {
+  margin: 0;
+}
+.ProseMirror li {
+  margin: 0.125em 0;
+}
+.ProseMirror blockquote {
+  border-left: 2px solid var(--line-strong);
+  padding-left: 0.875rem;
+  margin: 0.5em 0;
+  color: var(--fg-secondary);
+}
+.ProseMirror code {
+  background: var(--bg-elevated);
+  border: 1px solid var(--line-quiet);
+  border-radius: 4px;
+  padding: 0.05em 0.3em;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 0.9em;
+}
+.ProseMirror pre {
+  background: var(--bg-elevated);
+  border: 1px solid var(--line-quiet);
+  border-radius: 6px;
+  padding: 0.625rem 0.875rem;
+  margin: 0.5em 0;
+  overflow-x: auto;
+}
+.ProseMirror pre code {
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+.ProseMirror a {
+  color: var(--brand-500);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.ProseMirror strong {
+  font-weight: 600;
+}
+.ProseMirror p {
+  margin: 0.25em 0;
+}
+.ProseMirror p:first-child {
+  margin-top: 0;
+}
+.ProseMirror p:last-child {
+  margin-bottom: 0;
+}
+/* Empty-editor placeholder — TipTap emits an .is-editor-empty class on
+ * the first child when applicable; pair with the StarterKit Placeholder
+ * extension if/when we add one. */
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--fg-quaternary);
+  pointer-events: none;
+  float: left;
+  height: 0;
 }
 
 /* ---------------------------------------------------------------------- */
 /* Brand splash. Used by both the inline `#initial-splash` div in
  * `index.html` (paints before React mounts) and the React
- * `<BrandSplash>` component (covers TanStack Router's pending state and
- * any other bootstrapping). Keeping the animation declarations in the
- * stylesheet so the React component and the inline HTML stay visually
- * identical — adjust here, both pick it up.
- *
+ * `<BrandSplash>` component. Keep markup + animation timings in sync.
  * `#initial-splash` is hidden as soon as React renders into `#root`
- * (`#root:not(:empty) + #initial-splash`) so the React splash takes over
- * without a visual gap.
+ * (`#root:not(:empty) ~ #initial-splash`).
  */
 @keyframes brand-splash-breathe {
   0%,
@@ -246,11 +502,6 @@ body {
   transition: opacity 220ms ease-out;
 }
 
-/* Hide the inline splash the moment React paints into `#root`. The React
- * `<BrandSplash>` (rendered by `defaultPendingComponent` while auth
- * resolves) takes over at the same z-index so the visual is continuous.
- * Use `~` (general sibling) not `+` (adjacent) — there can be a <style>
- * tag between #root and #initial-splash in index.html. */
 #root:not(:empty) ~ #initial-splash {
   opacity: 0;
   pointer-events: none;

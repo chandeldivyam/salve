@@ -4,6 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Salve · opendesk dev shell</title>
+    <!-- Inter Variable — body font. Linear uses this same font; the
+         font-feature-settings cv01+ss03 in styles.css turn on the alt 1
+         and alternate g glyphs that give the typeface its distinctive feel. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&display=swap"
+      rel="stylesheet"
+    />
     <script>
       // Anti-FOUC: paint the right theme synchronously before any stylesheet
       // or bundle parses. Mirrors STORAGE_KEY + VALID_MODES from
@@ -52,7 +61,7 @@
         z-index: 50;
         display: grid;
         place-items: center;
-        background: oklch(0.98 0.005 230);
+        background: oklch(0.985 0.002 320);
         transition: opacity 220ms ease-out;
       }
       /* Hide the moment React paints any content into #root. `~` not `+`
@@ -62,7 +71,7 @@
         pointer-events: none;
       }
       .dark #initial-splash {
-        background: oklch(0.16 0.018 230);
+        background: oklch(0.155 0.004 270);
       }
       #initial-splash .stack {
         display: flex;
@@ -71,11 +80,11 @@
         gap: 20px;
       }
       #initial-splash svg {
-        color: oklch(0.58 0.115 200);
+        color: oklch(0.54 0.115 270);
         animation: initial-splash-breathe 2.4s ease-in-out infinite;
       }
       .dark #initial-splash svg {
-        color: oklch(0.62 0.11 200);
+        color: oklch(0.66 0.1 270);
       }
       #initial-splash .dots {
         display: inline-flex;
@@ -85,11 +94,11 @@
         width: 6px;
         height: 6px;
         border-radius: 9999px;
-        background: oklch(0.58 0.115 200);
+        background: oklch(0.54 0.115 270);
         animation: initial-splash-dot 1.4s ease-in-out infinite;
       }
       .dark #initial-splash .dots > span {
-        background: oklch(0.62 0.11 200);
+        background: oklch(0.66 0.1 270);
       }
       #initial-splash .dots > span:nth-child(2) {
         animation-delay: 0.18s;

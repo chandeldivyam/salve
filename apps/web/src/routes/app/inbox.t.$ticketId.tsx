@@ -234,7 +234,7 @@ function TicketDetail() {
   useEffect(() => {
     if (!ticket) return;
     const title = ticket.shortID > 0 ? `#${ticket.shortID} ${ticket.title}` : ticket.title;
-    setActiveTabTitle(workspaceID, title, 'ticket');
+    setActiveTabTitle(workspaceID, title, 'ticket', 'ticket');
     recordRecentTicket(workspaceID, ticketId);
   }, [recordRecentTicket, setActiveTabTitle, ticket, ticketId, workspaceID]);
 

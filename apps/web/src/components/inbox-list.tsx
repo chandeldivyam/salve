@@ -54,7 +54,7 @@ const PAGE_GROWTH = 200;
 const PAGE_CEILING = 2000;
 const LOAD_MORE_THRESHOLD = 16; // grow when within this many rows of the bottom
 
-const ROW_HEIGHT = 44;
+const ROW_HEIGHT = 36;
 
 interface SavedInboxState {
   offset: number;
@@ -336,7 +336,7 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
 
   return (
     <div className="flex h-full w-full flex-col bg-surface">
-      <div className="flex shrink-0 flex-col gap-2 border-b border-border px-3 py-2.5">
+      <div className="flex shrink-0 flex-col gap-2 border-b border-line-quiet px-3 py-2.5">
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -367,10 +367,10 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
               type="button"
               onClick={() => setFilter(f.id)}
               className={cn(
-                'rounded-md px-2 py-1 text-xs font-medium transition-colors',
+                'h-6 rounded-md px-2 py-1 text-xs transition-colors',
                 filter === f.id
-                  ? 'bg-brand-soft text-brand-soft-foreground ring-1 ring-brand-border'
-                  : 'text-muted-foreground hover:bg-surface-muted',
+                  ? 'bg-bg-elevated font-medium text-fg-primary'
+                  : 'text-fg-tertiary hover:bg-bg-elevated hover:text-fg-primary',
               )}
             >
               {f.label}

@@ -182,6 +182,7 @@ function SortableWorkbenchTab({
   const pinTab = useWorkbenchStore((state) => state.pinTab);
   const unpinTab = useWorkbenchStore((state) => state.unpinTab);
   const reopenLastClosed = useWorkbenchStore((state) => state.reopenLastClosed);
+  const [menuOpen, setMenuOpen] = useState(false);
   const Icon =
     workbenchIconMap[tab.iconId as keyof typeof workbenchIconMap] ?? workbenchIconMap.ticket;
   const title = tab.customTitle ?? tab.title;
@@ -227,149 +228,185 @@ function SortableWorkbenchTab({
         tab.pinned ? 'w-9 shrink-0' : 'min-w-[9rem] max-w-[15rem] flex-1',
         isDragging && 'opacity-60',
       )}
+      onContextMenu={(event) => {
+        // Pinned tabs have no inline close/menu affordance — right-click is
+        // the only path to Unpin / Close. Mirror the same menu for non-pinned
+        // so the right-click contract is consistent across all tabs.
+        event.preventDefault();
+        setMenuOpen(true);
+      }}
+      // Activate handler lives on the outermost wrapper so the entire tab
+      // — including the px-2 padding and the hover-revealed-button gutter —
+      // is a click target. Children that need to *not* activate (close X,
+      // menu trigger button, rename input) call stopPropagation on their
+      // own onClick. Hover-revealed buttons are pointer-events-none when
+      // invisible so clicks on their layout space fall through to here.
+      onClick={(event) => {
+        if (event.defaultPrevented) return;
+        if (event.button !== 0) return;
+        if (editing) return;
+        activate();
+      }}
+      onAuxClick={(event) => {
+        if (event.button === 1 && canClose) {
+          event.preventDefault();
+          freezeTabWidths();
+          closeAndNavigate();
+        }
+      }}
+      onDoubleClick={() => {
+        if (!tab.pinned) setEditing(true);
+      }}
       {...attributes}
       {...listeners}
     >
-      <div
-        className={cn(
-          'group flex h-9 min-w-0 items-center rounded-t-md border border-transparent px-2 text-[13px]',
-          active
-            ? 'border-border border-b-background bg-background text-foreground'
-            : 'text-muted-foreground hover:bg-surface-muted hover:text-foreground',
-        )}
-      >
-        <button
-          type="button"
+      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+        <div
           role="tab"
           aria-selected={active}
-          className="flex min-w-0 flex-1 items-center gap-1.5"
-          onClick={activate}
-          onAuxClick={(event) => {
-            if (event.button === 1 && canClose) {
-              event.preventDefault();
-              freezeTabWidths();
-              closeAndNavigate();
-            }
-          }}
-          onDoubleClick={() => {
-            if (!tab.pinned) setEditing(true);
-          }}
-        >
-          <Icon className="h-3.5 w-3.5 shrink-0" />
-          {tab.pinned ? (
-            <span className="sr-only">{title}</span>
-          ) : editing ? (
-            <input
-              ref={editInputRef}
-              value={editValue}
-              onChange={(event) => setEditValue(event.target.value)}
-              onBlur={commitRename}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') commitRename();
-                if (event.key === 'Escape') setEditing(false);
-              }}
-              className="h-6 min-w-0 flex-1 rounded-sm border border-input bg-surface px-1 text-[13px] outline-none"
-              onClick={(event) => event.stopPropagation()}
-            />
-          ) : (
-            <span className={cn('truncate', tab.customTitle && 'italic')}>{title}</span>
+          className={cn(
+            'group flex h-9 min-w-0 cursor-default items-center rounded-t-md border border-transparent text-[13px]',
+            tab.pinned ? 'justify-center px-1' : 'px-2',
+            active
+              ? 'border-border border-b-background bg-background text-foreground'
+              : 'text-muted-foreground hover:bg-surface-muted hover:text-foreground',
           )}
-        </button>
-        {!tab.pinned ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
+        >
+          <span
+            className={cn(
+              'flex min-w-0 items-center',
+              tab.pinned ? 'justify-center' : 'flex-1 gap-1.5',
+            )}
+          >
+            <Icon className="h-3.5 w-3.5 shrink-0" />
+            {tab.pinned ? (
+              <span className="sr-only">{title}</span>
+            ) : editing ? (
+              <input
+                ref={editInputRef}
+                value={editValue}
+                onChange={(event) => setEditValue(event.target.value)}
+                onBlur={commitRename}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') commitRename();
+                  if (event.key === 'Escape') setEditing(false);
+                }}
+                className="h-6 min-w-0 flex-1 rounded-sm border border-input bg-surface px-1 text-[13px] outline-none"
+                onClick={(event) => event.stopPropagation()}
+                onDoubleClick={(event) => event.stopPropagation()}
+              />
+            ) : (
+              <span className={cn('truncate', tab.customTitle && 'italic')}>{title}</span>
+            )}
+          </span>
+          {/*
+           * Single trigger for both modes. For pinned tabs the trigger is an
+           * sr-only span — invisible, no click target, but still a valid
+           * Radix anchor so the right-click menu has a position to open from.
+           * For non-pinned the trigger is the hover-revealed `...` button.
+           * `pointer-events-none` when invisible so clicks on this gutter
+           * fall through to the wrapper's activate handler instead.
+           */}
+          <DropdownMenuTrigger asChild>
+            {tab.pinned ? (
+              <span className="sr-only" aria-hidden="true" />
+            ) : (
               <button
                 type="button"
-                className="ml-1 grid h-5 w-5 shrink-0 place-items-center rounded text-muted-foreground opacity-0 hover:bg-muted hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
+                onClick={(event) => event.stopPropagation()}
+                className="pointer-events-none ml-1 grid h-5 w-5 shrink-0 place-items-center rounded text-muted-foreground opacity-0 hover:bg-muted hover:text-foreground group-hover:pointer-events-auto group-hover:opacity-100 data-[state=open]:pointer-events-auto data-[state=open]:opacity-100"
                 aria-label={`${title} tab actions`}
               >
                 <MoreHorizontal className="h-3 w-3" />
               </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-48">
-              <DropdownMenuItem
-                onSelect={() =>
-                  tab.pinned ? unpinTab(workspaceID, tab.id) : pinTab(workspaceID, tab.id)
-                }
-              >
-                {tab.pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
-                {tab.pinned ? 'Unpin tab' : 'Pin tab'}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() => {
-                  const duplicated = duplicateTab(workspaceID, tab.id);
-                  if (duplicated) navigateWorkbenchHref(router, duplicated.href);
-                }}
-              >
-                Duplicate tab
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => setEditing(true)}>Rename tab</DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() =>
-                  navigator.clipboard?.writeText(`${window.location.origin}${tab.href}`)
-                }
-              >
-                <Copy className="h-3.5 w-3.5" /> Copy URL
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() => window.open(tab.href, '_blank', 'noopener,noreferrer')}
-              >
-                <ExternalLink className="h-3.5 w-3.5" /> Open browser tab
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                disabled={!canClose}
-                onSelect={() => {
-                  freezeTabWidths();
-                  closeAndNavigate();
-                }}
-              >
-                <X className="h-3.5 w-3.5" /> Close tab
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() => {
-                  closeLeft(workspaceID, tab.id);
-                  const next = selectActiveWorkspaceTab(workspaceID);
-                  if (next) navigateWorkbenchHref(router, next.href);
-                }}
-              >
-                Close tabs to left
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() => {
-                  closeRight(workspaceID, tab.id);
-                  const next = selectActiveWorkspaceTab(workspaceID);
-                  if (next) navigateWorkbenchHref(router, next.href);
-                }}
-              >
-                Close tabs to right
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() => {
-                  const reopened = reopenLastClosed(workspaceID);
-                  if (reopened) navigateWorkbenchHref(router, reopened.href);
-                }}
-              >
-                <RotateCcw className="h-3.5 w-3.5" /> Reopen closed tab
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : null}
-        {canClose ? (
-          <button
-            type="button"
-            onMouseDown={freezeTabWidths}
-            onClick={(event) => {
-              event.stopPropagation();
+            )}
+          </DropdownMenuTrigger>
+          {/* Inline X close — non-pinned only. Pinned tabs use the menu. */}
+          {!tab.pinned && canClose ? (
+            <button
+              type="button"
+              onMouseDown={freezeTabWidths}
+              onClick={(event) => {
+                event.stopPropagation();
+                closeAndNavigate();
+              }}
+              className="pointer-events-none ml-1 grid h-5 w-5 shrink-0 place-items-center rounded text-muted-foreground opacity-0 hover:bg-muted hover:text-foreground group-hover:pointer-events-auto group-hover:opacity-100"
+              aria-label={`Close ${title}`}
+            >
+              <X className="h-3 w-3" />
+            </button>
+          ) : null}
+        </div>
+        <DropdownMenuContent align="start" className="w-48">
+          <DropdownMenuItem
+            onSelect={() =>
+              tab.pinned ? unpinTab(workspaceID, tab.id) : pinTab(workspaceID, tab.id)
+            }
+          >
+            {tab.pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
+            {tab.pinned ? 'Unpin tab' : 'Pin tab'}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() => {
+              const duplicated = duplicateTab(workspaceID, tab.id);
+              if (duplicated) navigateWorkbenchHref(router, duplicated.href);
+            }}
+          >
+            Duplicate tab
+          </DropdownMenuItem>
+          {!tab.pinned ? (
+            <DropdownMenuItem onSelect={() => setEditing(true)}>Rename tab</DropdownMenuItem>
+          ) : null}
+          <DropdownMenuItem
+            onSelect={() =>
+              navigator.clipboard?.writeText(`${window.location.origin}${tab.href}`)
+            }
+          >
+            <Copy className="h-3.5 w-3.5" /> Copy URL
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() => window.open(tab.href, '_blank', 'noopener,noreferrer')}
+          >
+            <ExternalLink className="h-3.5 w-3.5" /> Open browser tab
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            disabled={!canClose}
+            onSelect={() => {
+              freezeTabWidths();
               closeAndNavigate();
             }}
-            className="ml-1 grid h-5 w-5 shrink-0 place-items-center rounded text-muted-foreground opacity-0 hover:bg-muted hover:text-foreground group-hover:opacity-100"
-            aria-label={`Close ${title}`}
           >
-            <X className="h-3 w-3" />
-          </button>
-        ) : null}
-      </div>
+            <X className="h-3.5 w-3.5" /> Close tab
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() => {
+              closeLeft(workspaceID, tab.id);
+              const next = selectActiveWorkspaceTab(workspaceID);
+              if (next) navigateWorkbenchHref(router, next.href);
+            }}
+          >
+            Close tabs to left
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() => {
+              closeRight(workspaceID, tab.id);
+              const next = selectActiveWorkspaceTab(workspaceID);
+              if (next) navigateWorkbenchHref(router, next.href);
+            }}
+          >
+            Close tabs to right
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() => {
+              const reopened = reopenLastClosed(workspaceID);
+              if (reopened) navigateWorkbenchHref(router, reopened.href);
+            }}
+          >
+            <RotateCcw className="h-3.5 w-3.5" /> Reopen closed tab
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }

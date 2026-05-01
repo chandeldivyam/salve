@@ -357,6 +357,21 @@ We use **TanStack Router** with file-based routes.
 - `replace: true` for j/k traversal so the back stack isn't polluted with every keystroke.
 - Prefetch on hover. TanStack Router supports this with `preload="intent"` on `<Link>`. Combined with Zero's local cache, the detail pane is already populated by the time the click lands.
 
+### "Active tab" stale-effect race (and the fix shape)
+
+When a route component writes to a *workbench-level* store on the basis of "the currently active tab", you have a race. Concretely:
+
+1. User clicks a left-rail link → `openOrReuseTab` synchronously sets `activeID = newTab`.
+2. `router.navigate(...)` is async — the location hasn't actually changed yet.
+3. The previous route's component is still mounted. Zero re-emits its query result with a new array reference (same data) — useEffect deps shift, the effect re-fires.
+4. The effect calls `setActiveTabTitle(...)` — but `activeID` is now the **new** tab, not the one the route belongs to. The unrelated tab gets stamped with the old route's title and icon.
+
+**Rule:** any store action that mutates "the active tab" from a route component MUST be guarded by the caller's expected route identity. The `setActiveTabTitle(workspaceID, title, iconId, forRouteId)` signature in `lib/workbench/store.ts` is the canonical shape — the action is a no-op unless the active tab's `routeId` still matches `forRouteId`. Pass it from every call site.
+
+If a future feature needs a similar pattern (e.g. "set the badge count for the inbox tab"), follow the same shape: take an `expectedRouteId` (or `expectedTabKey`) parameter, make the action a no-op when the active tab no longer matches.
+
+Symmetric defense in `syncLocation`: every navigation re-stamps `iconId` (and title for non-custom tabs) from the matched route. So even if a stale effect once corrupted a tab's icon, the next navigation heals it. Don't rely on this as a substitute for the guard — fix at the source — but keep the heal-on-nav behaviour as belt-and-suspenders.
+
 ### Layouts to extract (TODO in current code)
 
 Right now, `routes/app/settings.tsx` and `routes/app/inbox.t.$ticketId.tsx` each implement a two-pane layout independently. Extract a `<SplitLayout left={…} right={…} resizable />` component in `apps/web/src/components/layouts/` so future list+detail screens (customers, automations) inherit the same chrome and resize behaviour. Use [`react-resizable-panels`](https://github.com/bvaughn/react-resizable-panels) for the resize handle.
@@ -434,24 +449,27 @@ We use **Tailwind v4** with semantic CSS variables defined in `apps/web/src/styl
 
 ### The tokens that exist (and the only colors you may use)
 
-Defined at `:root` (light) and `.dark` (dark) in `styles.css:11-113`, then exposed through `@theme inline { … }` so Tailwind generates utilities like `bg-surface`, `text-muted-foreground`, `border-brand-border`.
+Defined at `:root` (light) and `.dark` (dark) in `styles.css`, then exposed through `@theme inline { … }` so Tailwind generates utilities like `bg-bg-elevated`, `text-fg-tertiary`, `border-line-quiet`.
 
-| Surface | Text | Border | Status |
+The system is a **Linear-aligned ladder**: 5 background steps, 4 foreground stops, 4 line tiers. Steps within a scale are 1–2% L apart in OKLCH so adjacent surfaces read as elevation, not contrast.
+
+| Backgrounds (5 steps) | Foreground (4 stops) | Lines (4 tiers) | Status / Brand |
 |---|---|---|---|
-| `background` | `foreground` | `border` | `success` / `success-soft` / `success-foreground` |
-| `surface` | `surface-foreground` | `border-strong` | `warning` / `warning-soft` |
-| `surface-muted` | `surface-muted-foreground` | `input` | `danger` / `danger-soft` / `danger-hover` |
-| `muted` | `muted-foreground` | `ring` | |
-| `popover` | `popover-foreground` | | |
-| `tooltip` | `tooltip-foreground` | | |
-| Brand | `brand` / `brand-50…900` / `brand-soft` / `brand-soft-foreground` / `brand-border` | | |
+| `bg-canvas` — page void / behind chrome | `fg-primary` — off-white (dark) / off-black (light), never pure | `line-quiet` — barely visible, in-content separators | `brand` / `brand-50…900` / `brand-soft` / `brand-border` |
+| `bg-panel` — left rail, list-panel chrome, tab strip | `fg-secondary` — body emphasis | `line-default` — default cards, inputs | `success` / `success-soft` / `success-foreground` |
+| `bg-elevated` — cards, hovered rows, URL-selected rows | `fg-tertiary` — metadata, timestamps, counts | `line-strong` — focused / selected | `warning` / `warning-soft` |
+| `bg-popover` — popovers, dropdowns, command palette | `fg-quaternary` — disabled / placeholder | `line-overlay` — translucent, over images | `danger` / `danger-soft` / `danger-hover` |
+| `bg-overlay` — translucent (`rgb(255 255 255 / 0.05)` dark) chips | | | |
+
+Old aliases (`background`, `surface`, `surface-muted`, `border`, `muted-foreground`, etc.) still exist as backwards-compat mappings to the new tokens — they will keep working in old code, but **prefer the new ladder names in everything new**.
 
 Rules:
 
 - **Never use Tailwind palette colors directly** (`bg-gray-500`, `text-blue-600`, `border-zinc-300`). They bypass tokens, break dark mode, and make future redesigns 100x harder.
 - **Never hardcode hex** in components. Even in inline styles for charts — read from `getComputedStyle(document.documentElement).getPropertyValue('--brand-600')`.
-- **Add tokens, don't add colors.** Need a tertiary text shade? Add `--text-tertiary` to both `:root` and `.dark`, expose via `@theme inline`, then use `text-text-tertiary`. The token is the API.
+- **Add tokens, don't add colors.** Need a fifth background step? Add `--bg-deep` to both `:root` and `.dark`, expose via `@theme inline`, then use `bg-bg-deep`. The token is the API.
 - **Status colors are only for status.** Don't use `--success` for "completed" buttons that aren't a status. Treat them as semantic, not visual.
+- **One accent, used sparingly.** `brand` (indigo, hue 270) appears on focus rings, primary CTAs, status dots, multi-select checkbox checked state, command-palette selected item. It does NOT appear on filter pills, list panels, setup cards, or active nav links — those are neutral. If you find yourself reaching for `bg-brand-soft` to "make it pop", you're working against the design language. The page should be ~95% grayscale.
 
 ### OKLCH
 
@@ -466,9 +484,33 @@ When adding a new shade, pick `L` (lightness) and `C` (chroma) from the existing
 When designing components:
 
 - Test in both modes for every PR. Take a screenshot in dark mode at minimum.
-- Borders in dark mode are opacity-driven (`oklch(0.34 0.024 230)`), not gray colors. Surfaces lift via lightness, not shadow.
-- Status colors *vibrate* at high chroma in dark mode. Drop chroma slightly (`0.13 → 0.11`) — already done in `styles.css:95-112`.
-- Pure black is wrong. Our background is `oklch(0.16 …)`, not `#000`. Pure black causes halation against white text.
+- Surfaces lift via lightness on the 5-step ladder, not via box-shadow. Reserve real shadows for popovers and modals (`--shadow-medium` / `--shadow-high`).
+- Status colors *vibrate* at high chroma in dark mode. Drop chroma slightly (`0.13 → 0.11`) — already done in `styles.css`.
+- Pure black is wrong. Our `bg-canvas` is `oklch(0.155 …)`, not `#000`. Pure black causes halation against white text.
+- Pure white text is wrong. `fg-primary` is `oklch(0.96 …)` (off-white). Pure white at full chroma against a dark surface creates harsh contrast and "screen glare."
+- **Hue choice is opinionated.** Dark mode runs hue 270 at chroma 0.003–0.008 — *very* low, but enough to harmonize with the brand indigo. Light mode runs hue 320 (Linear's "warm grey" tilt). Cool grays (hue 200–230) read "techy / cold" and were the single biggest reason opendesk used to look generic. Don't reintroduce them.
+
+### Motion, shadows, z-layers, icons
+
+These four also live in `styles.css` as tokens. Use them, don't reinvent them.
+
+**Z-layers** (named scale, no ad-hoc `z-50`):
+
+```
+--z-header: 100; --z-overlay: 500; --z-popover: 600;
+--z-command-menu: 650; --z-dialog: 700; --z-toasts: 800;
+--z-tooltip: 1100; --z-context-menu: 1200;
+```
+
+Tailwind utilities are `z-z-popover`, `z-z-dialog`, etc. (because the @theme variable is `--z-popover`). If the wrapper feels awkward, prefer raw `style={{ zIndex: 'var(--z-popover)' }}` — the goal is to never see numeric `z-50` in components.
+
+**Shadows** — three named tiers (`--shadow-low`, `--shadow-medium`, `--shadow-high`). The high tier is a **5-stop physical stack**, not a single shadow — it's what makes popovers feel like a real surface above the page. Reach for it on dialogs and the command palette only. Most elevation should come from the surface ladder, not from box-shadow.
+
+**Motion** — selection / hover state changes use `var(--duration-regular)` (150 ms) on color/background. Pattern: **instant-in, fade-out** — when a row becomes selected, the new color appears with `transition: none`; when it becomes deselected, it fades out over `var(--duration-fade-out)`. This is a Linear craft detail (their CSS literally has `--highlightFadeIn: 0s` paired with a non-zero `--highlightFadeOut`). It makes the app feel snappier than uniform 150ms in both directions, even though the difference is unconscious.
+
+Don't animate layout changes in lists (height, position) — virtualizers fight animations. Use `transition-colors`, `transition-opacity`, `transition-transform` (for non-list elements) explicitly; never `transition-all`.
+
+**Icons** — Lucide at 16 px / 1.5 stroke is the default in chrome. The global rule `.lucide { stroke-width: 1.5 !important; }` in `styles.css` enforces this without per-component props. Status / priority glyphs that need to read at small sizes (e.g. `AlertTriangle` in a 32px row) keep stroke 2 by adding `data-stroke="bold"` to the rendered icon — that's what the matching `.lucide[data-stroke='bold']` rule is for. Don't migrate every Lucide import to a wrapper; the CSS rule handles it globally.
 
 ### When you find yourself needing `style={{ … }}`
 
@@ -491,7 +533,7 @@ Static colors / sizes / spacing in `style` is a code-review blocker.
 Component spacing rules:
 
 - Button: `h-9 px-3 text-sm` (md), `h-8 px-2 text-xs` (sm). Inputs match button height.
-- List row: `px-3 py-2`, target row height ~36px.
+- List row: `h-8 px-3` (32px tall, 12px horizontal). No vertical padding — use flex `items-center`. **No `border-b` between rows** (use hover/selected backgrounds instead).
 - Section gap inside a card: `gap-3` (12px). Between sections: `gap-6` (24px).
 - Page chrome padding: `p-4` to `p-6`.
 
@@ -514,16 +556,33 @@ Tabular figures everywhere a count or timestamp shows: `tabular-nums` (Tailwind 
 
 ### Font
 
-`Inter Variable` is the default once we add it. Until then, `system-ui` (currently in `styles.css:170`). Add Inter via `@fontsource-variable/inter` and enable feature flags (single-story `a` and tabular figures): `font-feature-settings: 'cv11' 1, 'ss01' 1, 'tnum' 1;`. Apply at the body level.
+**Inter** loaded from Google Fonts via `apps/web/index.html` (`<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&display=swap">`). The body uses:
+
+```css
+font-family: 'Inter', ui-sans-serif, system-ui, …;
+font-feature-settings: 'cv01', 'ss03';
+font-optical-sizing: auto;
+letter-spacing: -0.011em;
+-webkit-font-smoothing: antialiased;
+text-rendering: optimizeLegibility;
+```
+
+`cv01` (alt `1`) + `ss03` (alternate `g`) are the **single biggest "looks like Linear" tweak** — without them Inter looks like every other Inter site. `font-optical-sizing: auto` lets the variable font self-adjust glyph weight to size. Negative tracking (`-0.011em` body, `-0.018em` titles) is what makes the type look "designer-tightened" instead of default-Inter loose.
+
+Tabular figures everywhere a count or timestamp shows: `tabular-nums` (Tailwind class). Otherwise digits jump as values change.
+
+Weights: 400 (regular), 500 (medium emphasis — list-row titles, nav labels), 600 (page titles, semantic emphasis). Avoid 700 except in marketing surfaces. Linear uses unusual weights `510 / 590` to look distinct; we stick to 400/500/600 for ergonomics with `font-medium`/`font-semibold`.
 
 ### Density
 
-Lists are tabular. Row height target 32–36 px. The current inbox row at 96 px (`inbox-list.tsx:118`) is too tall — we're showing customer name, title, snippet, time, priority, tags, assignee in one row, which requires that height. Either:
+Lists are tabular. **Row height target: 32 px** (current inbox `ROW_HEIGHT = 32`, `h-8` on the row component). Linear's issue list is the reference. Trade-offs:
 
-- Drop the snippet (Linear doesn't show one in the inbox), shrinking to ~52 px, OR
-- Keep the snippet behind a hover/keyboard-toggle "expand row" state.
+- **Don't show inline snippets in dense lists.** Linear doesn't, and they immediately push row height to 60+ px which breaks scan-density. If the user wants the body, they push-nav into the detail view (j/k still work — see §11).
+- **Don't put borders between rows.** Use surface deltas. A solid 1px line every 32px is visual noise; the eye picks up the row from its hover state and the column alignment alone. `bg-elevated` on hover/URL-selected creates a clearly readable row without a single border. Linear's 2025 redesign explicitly reduced separator proliferation — copy that.
+- **Status dots, not pills, in rows.** A 2×2 (`h-2 w-2`) colored dot in the leading slot is enough to scan an inbox; coloured "Open" / "Resolved" pills inflate every row and create a confetti effect.
+- **Keep horizontal padding tight.** `px-3` (12px) inside rows; `gap-2.5` (10px) between leading icon and title.
 
-The principle: dense by default, expand on demand.
+The principle: dense by default, push-nav for depth.
 
 ---
 
@@ -1069,6 +1128,16 @@ If you do any of these, expect to be asked to undo them in code review.
 34. **Push-nav that strands list-only shortcuts.** Push-navigation unmounts the list when the detail is open, which silently kills j/k/x/etc. that were only mounted in the list component. Re-mount the equivalents in the detail route, subscribed to the same query (`CACHE_FOREVER` makes the second subscription free). See `inbox.t.$ticketId.tsx` j/k handlers.
 35. **`scrollTop = saved` to restore a virtualizer's scroll position.** Races the virtualizer's internal sync effect and gets clamped. Use `useVirtualizer({ initialOffset })`. See §11 "Scroll restoration with push-nav".
 36. **Persisting offset without persisting `pageLimit`.** If the list paginates, the offset alone is insufficient — the page count must round-trip too, or `scrollTop` clamps to the height of the smaller page. See §11.
+37. **Two-step surface system.** Rail and list panel sharing the same background tone reads as one slab. Use the 5-step ladder (`bg-canvas → bg-panel → bg-elevated → bg-popover → bg-overlay`) — adjacent regions should be ~1–2% L apart, not equal. See §7.
+38. **`bg-brand-soft` on a whole card to "make it pop".** The setup card in the rail used to do this — it became the loudest indigo block on screen and pulled the eye away from actual content. Use `bg-bg-elevated` for the surface and put the accent on a thin progress bar / underline / dot. Reserve indigo for focus rings, primary CTAs, status indicators, and selected items. See §7 "One accent, used sparingly."
+39. **Cool-grey surfaces (hue 200–230).** Looks "techy / cold," not premium. Use hue 270 dark / 320 light at chroma 0.003–0.008 — the grayscale should be slightly hue-tinted to harmonize with the accent, but never more than barely-perceptible chroma. See §7 dark-mode hue notes.
+40. **Pure white text on dark / pure black on light.** Halates against the surface. Use `fg-primary` (off-white `oklch(0.96 …)` dark, off-black `oklch(0.20 …)` light). The eye relaxes; the text reads as ink on paper, not a screen.
+41. **Borders between every list row.** A 1 px line every 32 px is visual noise and was the loudest layout-noise source in the old inbox. Drop the per-row `border-b border-border` and rely on hover/URL-selected `bg-bg-elevated` for separation. Linear's 2025 redesign explicitly reduced separator proliferation; copy that. See §8 Density.
+42. **Inter without `font-feature-settings: 'cv01', 'ss03'`.** It's still Inter, but it doesn't look like Linear-Inter — the alt-`1` and alternate-`g` glyphs are what give the typeface its distinctive shape. Pair with `font-optical-sizing: auto` and `letter-spacing: -0.011em` (body) / `-0.018em` (titles). Apply at the body element, not per-component. See §8 Font.
+43. **Mutating "the active tab" from a route component without an `expectedRouteId` guard.** The active tab can change between when the effect was scheduled and when it actually runs (Zero query re-emit + async router navigation = stale-effect race). `setActiveTabTitle` and any sibling action MUST take an expected-route guard and no-op if the active tab no longer matches. See §5 "Active tab stale-effect race."
+44. **`prose` classes on the editor (or anywhere) without `@tailwindcss/typography` installed.** `prose prose-sm` is dead text — it renders nothing — unless the plugin is loaded via `@plugin` in `styles.css`. Compounds with Tailwind v4's preflight, which strips `list-style` and padding from `<ul>`/`<ol>` and removes default `<blockquote>` borders, so the editor *appears* to be broken (typing `- ` produces a real `<ul>` in the DOM but renders flat). Don't reach for `prose` — add scoped rules under `.ProseMirror` (or a similar class) in `styles.css`. See the `.ProseMirror` block in `apps/web/src/styles.css`.
+45. **Hover-revealed buttons that only toggle `opacity` (not `pointer-events`).** `opacity: 0` does NOT disable click capture — invisible-but-still-clickable buttons reserve hit area in their layout slot, intercepting clicks meant for siblings (e.g. the row's activate target). Always pair `opacity-0` with `pointer-events-none` and `group-hover:opacity-100` with `group-hover:pointer-events-auto`. See `tab-strip.tsx` close X / menu trigger.
+46. **Click handler scoped to one inner control when the whole row should be clickable.** If the wrapper has padding (`px-2`) or hover-revealed siblings, putting `onClick` on the inner `<button>` leaves dead zones that don't activate. Hoist the click handler to the outermost wrapper and `event.stopPropagation()` on the children that should NOT activate (close X, menu trigger, edit input). The whole row becomes a single hit target with carved-out exceptions.
 
 ---
 

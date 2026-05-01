@@ -59,7 +59,12 @@ interface WorkbenchStore extends WorkbenchPersistedState {
   unpinTab: (workspaceID: string | null, tabID: string) => void;
   reorderTabs: (workspaceID: string | null, activeID: string, overID: string) => void;
   reopenLastClosed: (workspaceID: string | null) => WorkbenchTab | null;
-  setActiveTabTitle: (workspaceID: string | null, title: string, iconId?: string) => void;
+  setActiveTabTitle: (
+    workspaceID: string | null,
+    title: string,
+    iconId?: string,
+    forRouteId?: string,
+  ) => void;
   setCommandOpen: (open: boolean) => void;
   setLeftRailCollapsed: (collapsed: boolean) => void;
   recordRecentTicket: (workspaceID: string | null, ticketID: string) => void;
@@ -140,6 +145,9 @@ export const useWorkbenchStore = create<WorkbenchStore>((set, get) => ({
       let nextTabs = tabs;
       let nextActive = activeID;
 
+      // Always refresh iconId from the matched route, not just title/href.
+      // Heals any past corruption (e.g. a stale-effect race that stamped a
+      // tab with the wrong iconId) on the very next navigation.
       if (activeMatchesLocation && active) {
         nextTabs = tabs.map((tab) =>
           tab.id === active.id
@@ -147,6 +155,7 @@ export const useWorkbenchStore = create<WorkbenchStore>((set, get) => ({
                 ...tab,
                 href: match.href,
                 title: tab.customTitle ? tab.title : match.title,
+                iconId: match.route.iconId,
                 lastActiveAt: Date.now(),
               }
             : tab,
@@ -159,6 +168,7 @@ export const useWorkbenchStore = create<WorkbenchStore>((set, get) => ({
                 ...tab,
                 href: match.href,
                 title: tab.customTitle ? tab.title : match.title,
+                iconId: match.route.iconId,
                 lastActiveAt: Date.now(),
               }
             : tab,
@@ -167,7 +177,13 @@ export const useWorkbenchStore = create<WorkbenchStore>((set, get) => ({
       } else if (active && active.tabKey === 'inbox' && match.tabKey === 'inbox') {
         nextTabs = tabs.map((tab) =>
           tab.id === active.id
-            ? { ...tab, href: match.href, title: match.title, lastActiveAt: Date.now() }
+            ? {
+                ...tab,
+                href: match.href,
+                title: match.title,
+                iconId: match.route.iconId,
+                lastActiveAt: Date.now(),
+              }
             : tab,
         );
         nextActive = active.id;
@@ -358,18 +374,27 @@ export const useWorkbenchStore = create<WorkbenchStore>((set, get) => ({
     return reopened;
   },
 
-  setActiveTabTitle: (workspaceID, title, iconId) => {
+  // `forRouteId` guards against a stale-effect race: a route component's
+  // useEffect can fire AFTER the user has navigated away (because Zero
+  // re-emits a query result with a new array reference). Without the guard,
+  // the call would relabel whatever tab is *now* active — corrupting an
+  // unrelated tab. Pass the caller's own routeId; the update is a no-op
+  // unless the active tab still belongs to that route.
+  setActiveTabTitle: (workspaceID, title, iconId, forRouteId) => {
     const key = workspaceKey(workspaceID);
     set((state) => {
       const activeID = state.activeTabIdByWorkspace[key];
       if (!activeID) return state;
+      const tabs = state.tabsByWorkspace[key] ?? [];
+      const active = tabs.find((tab) => tab.id === activeID);
+      if (!active) return state;
+      if (active.routeId === 'inbox') return state;
+      if (forRouteId && active.routeId !== forRouteId) return state;
       return {
         tabsByWorkspace: {
           ...state.tabsByWorkspace,
-          [key]: (state.tabsByWorkspace[key] ?? []).map((tab) =>
-            tab.id === activeID && tab.routeId !== 'inbox'
-              ? { ...tab, title, iconId: iconId ?? tab.iconId }
-              : tab,
+          [key]: tabs.map((tab) =>
+            tab.id === activeID ? { ...tab, title, iconId: iconId ?? tab.iconId } : tab,
           ),
         },
       };

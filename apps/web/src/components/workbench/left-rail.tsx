@@ -97,7 +97,7 @@ export function WorkbenchLeftRail({ workspaceID }: { workspaceID: string | null 
   return (
     <aside
       className={cn(
-        'flex min-h-0 shrink-0 flex-col border-r border-border bg-surface',
+        'flex h-full min-h-0 shrink-0 flex-col border-r border-border bg-surface',
         collapsed ? 'w-[52px]' : 'w-[240px]',
       )}
     >
@@ -175,21 +175,32 @@ export function WorkbenchLeftRail({ workspaceID }: { workspaceID: string | null 
             href="/app/settings/setup"
             source="left-rail"
             className={cn(
-              'rounded-md border border-brand-border bg-brand-soft px-3 py-2 text-xs text-brand-soft-foreground',
-              'hover:bg-brand-soft/80',
+              'relative overflow-hidden rounded-md bg-bg-elevated px-3 py-2 pb-2.5 text-xs text-fg-primary',
+              'hover:bg-bg-elevated/80',
             )}
           >
             <span className="flex items-center gap-2 font-medium">
               <ListChecks className="h-3.5 w-3.5" />
               Setup
               {!progress.isComplete ? (
-                <span className="ml-auto tabular-nums">
+                <span className="ml-auto tabular-nums text-fg-tertiary">
                   {progress.completedCount}/{progress.total}
                 </span>
               ) : null}
             </span>
-            <span className="mt-1 block text-[11px] opacity-80">
+            <span className="mt-1 block text-[11px] text-fg-tertiary">
               {progress.isComplete ? 'Workspace ready' : 'Finish workspace setup'}
+            </span>
+            <span
+              aria-hidden="true"
+              className="absolute inset-x-0 bottom-0 h-0.5 bg-bg-elevated"
+            >
+              <span
+                className="block h-full bg-brand-500 transition-[width] duration-200"
+                style={{
+                  width: `${Math.round((progress.completedCount / progress.total) * 100)}%`,
+                }}
+              />
             </span>
           </WorkbenchLink>
         ) : null}

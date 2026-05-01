@@ -57,12 +57,12 @@ export function InboxRow({
       source="ticket-row"
       onClick={onNavigate}
       className={cn(
-        'group flex h-11 items-center gap-2 border-b border-border px-3 transition-colors',
+        'group flex h-9 items-center gap-2.5 px-3',
         multiSelected
-          ? 'bg-brand-soft/40 hover:bg-brand-soft/60'
+          ? 'bg-brand-soft/40 transition-none hover:bg-brand-soft/60'
           : isSelected
-            ? 'bg-surface-muted'
-            : 'hover:bg-surface-muted/50',
+            ? 'bg-bg-elevated transition-none'
+            : 'transition-colors duration-150 hover:bg-bg-elevated',
       )}
     >
       {/*
@@ -70,15 +70,19 @@ export function InboxRow({
        *  - status dot (default, hidden when checkbox visible)
        *  - checkbox button (forced visible when `showCheckbox`, otherwise
        *    revealed on row hover)
-       * Wrapping <span> reserves the 14px column width so the title doesn't
-       * shift when the affordance swaps.
+       * The wrapping <span> reserves a 14px visual column so the title doesn't
+       * shift when affordances swap. The button itself extends BEYOND the span
+       * via negative insets so the click target is generous (full row height
+       * vertically, ~half the gap to the title horizontally) — Linear-style.
+       * pointer-events-none when invisible so clicks on the dot fall through
+       * to the row link (navigate), not the hidden checkbox.
        */}
-      <span className="relative grid h-3.5 w-3.5 shrink-0 place-items-center">
+      <span className="relative h-3.5 w-3.5 shrink-0">
         <span
           role="img"
           aria-label={`Status: ${ticket.status}`}
           className={cn(
-            'absolute h-2.5 w-2.5 rounded-full transition-opacity duration-200',
+            'pointer-events-none absolute inset-0 m-auto h-2 w-2 rounded-full transition-opacity duration-150',
             statusDotClass(ticket.status),
             showCheckbox ? 'opacity-0' : 'opacity-100 group-hover:opacity-0',
           )}
@@ -89,28 +93,38 @@ export function InboxRow({
           aria-label={multiSelected ? 'Deselect ticket' : 'Select ticket'}
           aria-pressed={multiSelected}
           className={cn(
-            'absolute grid h-3.5 w-3.5 place-items-center rounded-[3px] border transition-opacity duration-200',
+            'absolute -inset-y-3 -left-3 -right-1.5 grid place-items-center rounded-[3px] transition-opacity duration-150',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-            multiSelected
-              ? 'border-brand bg-brand text-brand-foreground opacity-100'
-              : 'border-border bg-surface text-transparent',
-            showCheckbox || multiSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+            showCheckbox || multiSelected
+              ? 'pointer-events-auto opacity-100'
+              : 'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100',
           )}
         >
-          <Check
+          <span
             className={cn(
-              'h-2.5 w-2.5 transition-opacity',
-              multiSelected ? 'opacity-100' : 'opacity-0',
+              'grid h-3.5 w-3.5 place-items-center rounded-[3px] border',
+              multiSelected
+                ? 'border-brand bg-brand text-brand-foreground'
+                : 'border-border bg-surface text-transparent',
             )}
-            strokeWidth={3}
-          />
+          >
+            <Check
+              className={cn(
+                'h-2.5 w-2.5 transition-opacity',
+                multiSelected ? 'opacity-100' : 'opacity-0',
+              )}
+              strokeWidth={3}
+            />
+          </span>
         </button>
       </span>
 
-      <div className="min-w-0 flex-1 truncate text-[13.5px] leading-tight">
-        <span className="font-medium text-foreground">{ticket.title}</span>
-        <span className="text-muted-foreground"> · </span>
-        <span className="text-muted-foreground" title={customerLabel}>
+      <div className="min-w-0 flex-1 truncate leading-tight">
+        <span className="text-[14px] font-medium tracking-[-0.011em] text-fg-primary">
+          {ticket.title}
+        </span>
+        <span className="text-[13px] text-fg-tertiary"> · </span>
+        <span className="text-[13px] text-fg-tertiary" title={customerLabel}>
           {customerLabel}
         </span>
       </div>
@@ -125,7 +139,7 @@ export function InboxRow({
                 ticket.priority === 'urgent' ? 'text-danger' : 'text-warning',
               )}
             >
-              <AlertTriangle className="h-3.5 w-3.5" />
+              <AlertTriangle className="h-3.5 w-3.5" data-stroke="bold" />
             </span>
           </TooltipTrigger>
           <TooltipContent>{ticket.priority === 'urgent' ? 'Urgent' : 'High'}</TooltipContent>
@@ -145,7 +159,7 @@ export function InboxRow({
           </Tooltip>
         ) : null}
       </span>
-      <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+      <span className="shrink-0 text-[11px] tabular-nums text-fg-tertiary">
         {formatDistanceToNowStrict(updated)}
       </span>
     </WorkbenchLink>
