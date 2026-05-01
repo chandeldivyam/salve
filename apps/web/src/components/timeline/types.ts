@@ -72,6 +72,7 @@ export interface TimelineTag {
   readonly group?: {
     readonly id?: string | null;
     readonly label?: string | null;
+    readonly color?: string | null;
   } | null;
 }
 
