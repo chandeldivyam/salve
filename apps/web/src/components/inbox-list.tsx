@@ -21,7 +21,7 @@ import { useQuery } from '@rocicorp/zero/react';
 import { Link, useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowRight, Filter, Inbox, ListChecks, Search } from 'lucide-react';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BulkActionBar } from '@/components/inbox/bulk-action-bar';
 import { InboxRow } from '@/components/inbox/inbox-row';
 import { useInboxSelectionStore } from '@/lib/inbox-selection';
@@ -56,6 +56,43 @@ const LOAD_MORE_THRESHOLD = 16; // grow when within this many rows of the bottom
 
 const ROW_HEIGHT = 44;
 
+interface SavedInboxState {
+  offset: number;
+  pageLimit: number;
+}
+
+const SCROLL_KEY_PREFIX = 'opendesk.inbox.state.';
+
+function scrollKeyFor(workspaceID: string | null) {
+  return `${SCROLL_KEY_PREFIX}${workspaceID ?? 'no-workspace'}`;
+}
+
+function readSavedInboxState(workspaceID: string | null): SavedInboxState {
+  const fallback: SavedInboxState = { offset: 0, pageLimit: INITIAL_PAGE };
+  if (typeof window === 'undefined') return fallback;
+  const raw = window.sessionStorage.getItem(scrollKeyFor(workspaceID));
+  if (!raw) return fallback;
+  try {
+    const parsed = JSON.parse(raw) as Partial<SavedInboxState>;
+    const offset =
+      Number.isFinite(parsed.offset) && (parsed.offset ?? 0) > 0 ? Number(parsed.offset) : 0;
+    const limit =
+      Number.isFinite(parsed.pageLimit) &&
+      (parsed.pageLimit ?? 0) >= INITIAL_PAGE &&
+      (parsed.pageLimit ?? 0) <= PAGE_CEILING
+        ? Number(parsed.pageLimit)
+        : INITIAL_PAGE;
+    return { offset, pageLimit: limit };
+  } catch {
+    return fallback;
+  }
+}
+
+function writeSavedInboxState(workspaceID: string | null, state: SavedInboxState) {
+  if (typeof window === 'undefined') return;
+  window.sessionStorage.setItem(scrollKeyFor(workspaceID), JSON.stringify(state));
+}
+
 export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
   const navigate = useNavigate();
   const z = useZero();
@@ -64,7 +101,14 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
   };
   const workspaceID = ctx.session.session.activeOrganizationId ?? null;
   const setupProgress = useSetupProgress(workspaceID);
-  const [pageLimit, setPageLimit] = useState(INITIAL_PAGE);
+
+  // Both `pageLimit` and the virtualizer's initial scroll offset are
+  // restored from sessionStorage at mount. Without rehydrating pageLimit
+  // the list resets to INITIAL_PAGE rows on back-nav, the content isn't
+  // tall enough for the saved offset, and the virtualizer's scroll clamps
+  // to the last visible row — defeating the restore.
+  const restored = useMemo(() => readSavedInboxState(workspaceID), [workspaceID]);
+  const [pageLimit, setPageLimit] = useState(restored.pageLimit);
   // CACHE_FOREVER (10m) so the inbox hydrates from IDB before the first
   // render after a hard reload. Without this, a fresh mount has nothing
   // to show until the server replies and the UI flashes a loading state.
@@ -140,56 +184,25 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
     getScrollElement: () => parentRef.current,
     estimateSize: () => ROW_HEIGHT,
     overscan: 8,
+    initialOffset: restored.offset,
   });
 
-  // Scroll restoration: when a row is clicked, the list unmounts (push-nav).
-  // Capture parentRef.current.scrollTop into sessionStorage on row click and
-  // on unmount; restore it on mount. Keyed per-workspace.
-  const scrollKey = useMemo(
-    () => `opendesk.inbox.scroll.${workspaceID ?? 'no-workspace'}`,
-    [workspaceID],
-  );
-  const restoredRef = useRef(false);
-
-  useLayoutEffect(() => {
-    if (restoredRef.current) return;
-    if (typeof window === 'undefined') return;
+  // Refs so the capture callbacks always read fresh state without
+  // resubscribing every render.
+  const pageLimitRef = useRef(pageLimit);
+  pageLimitRef.current = pageLimit;
+  const captureScroll = useCallback(() => {
     const node = parentRef.current;
     if (!node) return;
-    const raw = window.sessionStorage.getItem(scrollKey);
-    if (!raw) return;
-    const saved = Number.parseInt(raw, 10);
-    if (!Number.isFinite(saved) || saved <= 0) return;
-    // Defer until the virtualizer has measured at least once so its
-    // scrollHeight reflects the rendered rows; otherwise setting scrollTop
-    // gets clamped to 0.
-    const total = virtualizer.getTotalSize();
-    if (total > 0 && saved < total) {
-      node.scrollTop = saved;
-      restoredRef.current = true;
-    } else if (total > 0) {
-      // total exists but saved is past the end → clear stale value.
-      restoredRef.current = true;
-    }
-  });
-
-  function captureScroll() {
-    if (typeof window === 'undefined') return;
-    const node = parentRef.current;
-    if (!node) return;
-    window.sessionStorage.setItem(scrollKey, String(node.scrollTop));
-  }
+    writeSavedInboxState(workspaceID, {
+      offset: node.scrollTop,
+      pageLimit: pageLimitRef.current,
+    });
+  }, [workspaceID]);
 
   // Capture on unmount as a safety net (covers j/k navigation that doesn't
-  // run a click handler). Reads parentRef + scrollKey at unmount time.
-  useEffect(() => {
-    return () => {
-      if (typeof window === 'undefined') return;
-      const node = parentRef.current;
-      if (!node) return;
-      window.sessionStorage.setItem(scrollKey, String(node.scrollTop));
-    };
-  }, [scrollKey]);
+  // run a click handler).
+  useEffect(() => captureScroll, [captureScroll]);
 
   // J/K + arrow keys for keyboard navigation. E archives (close mutator).
   // `useShortcut` centralises the "skip while typing" gate (lib/shortcuts).
@@ -197,20 +210,17 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
     (idx: number) => {
       const t = filtered[idx];
       if (!t) return;
-      // Persist current scroll so the list can restore on return.
-      if (typeof window !== 'undefined' && parentRef.current) {
-        window.sessionStorage.setItem(scrollKey, String(parentRef.current.scrollTop));
-      }
+      captureScroll();
       navigate({ to: '/app/inbox/t/$ticketId', params: { ticketId: t.id } });
     },
-    [filtered, navigate, scrollKey],
+    [filtered, navigate, captureScroll],
   );
   const cur = selectedIndex < 0 ? 0 : selectedIndex;
-  useShortcut(['j', 'ArrowDown'], () => {
+  useShortcut(['j'], () => {
     if (filtered.length === 0) return;
     goToIndex(Math.min(filtered.length - 1, cur + 1));
   });
-  useShortcut(['k', 'ArrowUp'], () => {
+  useShortcut(['k'], () => {
     if (filtered.length === 0) return;
     goToIndex(Math.max(0, cur - 1));
   });

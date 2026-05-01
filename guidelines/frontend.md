@@ -695,9 +695,21 @@ Three panes: **nav** (240px) | **list** (380–480px, resizable) | **detail** (f
 ### Virtual scrolling
 
 - Use [TanStack Virtual](https://tanstack.com/virtual) when row count > 200 OR row count is unbounded. Below 200, plain rendering is faster (no measurement).
-- Currently `inbox-list.tsx:115-120` virtualizes always. That's fine because the list is unbounded in principle.
+- Currently `inbox-list.tsx` virtualizes always. That's fine because the list is unbounded in principle.
 - Keep `overscan` between 5 and 10. Higher hurts memory; lower flickers on fast scroll.
 - Fixed row height when possible. Variable row heights need `measureElement`, which causes a measure pass per row — measurable cost above 1k rows.
+
+### Scroll restoration with push-nav
+
+When a list pushes into a detail (the list unmounts), restoring scroll on back-nav has two compounding gotchas. We hit both.
+
+1. **Don't `scrollTop = saved` after the virtualizer mounts.** It races the virtualizer's own scroll-sync effect and gets clamped back to 0 (or to the initial overscan position). Use `useVirtualizer({ initialOffset })` so the scroll is set during construction, not after.
+2. **If the list paginates, persist the page count alongside the offset.** A growing-window list (`pageLimit` doubles as the user scrolls) resets to `INITIAL_PAGE` on remount. The saved offset (e.g. 14000px) then exceeds `scrollHeight` (200 rows × 44px = 8800px), so the browser clamps `scrollTop` to ~8352. Pagination kicks in *after* the clamp, which doesn't re-apply the offset. Persist `{ offset, pageLimit }` together in `sessionStorage` and rehydrate `useState(restored.pageLimit)` so the content is tall enough at first render. See `inbox-list.tsx` `readSavedInboxState` / `writeSavedInboxState`.
+
+Capture writes happen in three places:
+- On row click (in `goToIndex`, before `navigate`).
+- On unmount (`useEffect(() => captureScroll, …)`).
+- On `onClickCapture` of the scroll element (covers any link inside a row).
 
 ### Multi-select
 
@@ -1054,6 +1066,9 @@ If you do any of these, expect to be asked to undo them in code review.
 31. **`"Loading…"` text instead of a skeleton.** Centered loading text is the wrong shape, shifts layout when content arrives, and makes the app feel slower than it is. Render a skeleton at the *exact* dimensions of the real content (`apps/web/src/components/skeletons.tsx`).
 32. **Full-screen splash on in-app navigation.** `BrandSplash` is for the auth gate only. Wiring it as `defaultPendingComponent` makes every ticket click flash a full-screen splash — instant downgrade from "feels like Linear" to "feels like a 2010 web app". See §14 "Pre-React splash for the auth window".
 33. **Async `beforeLoad` without caching.** TanStack Router re-runs `beforeLoad` on every matched navigation. An uncached async fetch in there will re-trigger the route's pending state on every click and silently re-hit your auth endpoint. Cache the result at module level (or use the loader's `staleTime`).
+34. **Push-nav that strands list-only shortcuts.** Push-navigation unmounts the list when the detail is open, which silently kills j/k/x/etc. that were only mounted in the list component. Re-mount the equivalents in the detail route, subscribed to the same query (`CACHE_FOREVER` makes the second subscription free). See `inbox.t.$ticketId.tsx` j/k handlers.
+35. **`scrollTop = saved` to restore a virtualizer's scroll position.** Races the virtualizer's internal sync effect and gets clamped. Use `useVirtualizer({ initialOffset })`. See §11 "Scroll restoration with push-nav".
+36. **Persisting offset without persisting `pageLimit`.** If the list paginates, the offset alone is insufficient — the page count must round-trip too, or `scrollTop` clamps to the height of the smaller page. See §11.
 
 ---
 

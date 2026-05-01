@@ -25,7 +25,7 @@ import {
 } from '@opendesk/ui';
 import { queries } from '@opendesk/zero-schema';
 import { useQuery } from '@rocicorp/zero/react';
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { format, formatDistanceToNow } from 'date-fns';
 import {
   AlertTriangle,
@@ -40,12 +40,13 @@ import {
   UserMinus,
   UserPlus,
 } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Composer, type ComposerEmailAddress, type ComposerSendArgs } from '@/components/composer';
 import { CustomFieldsBlock } from '@/components/conversation/custom-fields-block';
 import { TagsField } from '@/components/conversation/tags-field';
 import { BackToInbox } from '@/components/inbox/back-to-inbox';
 import { TicketDetailSkeleton } from '@/components/skeletons';
+import { useShortcut } from '@/lib/shortcuts';
 import { useWorkbenchStore } from '@/lib/workbench';
 import { useZero } from '@/lib/zero';
 import { CACHE_FOREVER, CACHE_NAV } from '@/lib/zero-cache';
@@ -176,6 +177,7 @@ const HEADER_PILL_CLASS =
 
 function TicketDetail() {
   const { ticketId } = Route.useParams();
+  const navigate = useNavigate();
   const z = useZero();
   const { session } = Route.useRouteContext() as {
     session: {
@@ -190,6 +192,32 @@ function TicketDetail() {
 
   const [ticket, ticketStatus] = useQuery(queries.ticketByID({ id: ticketId }), CACHE_NAV);
   const [members] = useQuery(queries.workspaceMembers(), CACHE_FOREVER);
+  // Subscribe to the same inbox window as InboxList so j/k from inside a
+  // ticket walks the same ordered list. CACHE_FOREVER is shared with the
+  // list query — no extra hydration cost on back-nav. Always uses the
+  // default `all` ordering; per-route filters aren't preserved here.
+  const [inboxList] = useQuery(queries.inboxOpen({ limit: 200 }), CACHE_FOREVER);
+  const inboxIndex = useMemo(
+    () => inboxList.findIndex((t: { id: string }) => t.id === ticketId),
+    [inboxList, ticketId],
+  );
+
+  useShortcut(['j'], () => {
+    if (inboxList.length === 0) return;
+    const next = inboxIndex < 0 ? 0 : Math.min(inboxList.length - 1, inboxIndex + 1);
+    const target = inboxList[next];
+    if (target && target.id !== ticketId) {
+      navigate({ to: '/app/inbox/t/$ticketId', params: { ticketId: target.id } });
+    }
+  });
+  useShortcut(['k'], () => {
+    if (inboxList.length === 0) return;
+    const prev = inboxIndex < 0 ? 0 : Math.max(0, inboxIndex - 1);
+    const target = inboxList[prev];
+    if (target && target.id !== ticketId) {
+      navigate({ to: '/app/inbox/t/$ticketId', params: { ticketId: target.id } });
+    }
+  });
   // Phase 3a: outbound delivery status per message. Empty until the
   // Post-commit Inngest delivery → mailpit/SES round-trip stamps a row.
   const [outboundRows] = useQuery(queries.outboundMessagesByTicket({ id: ticketId }), CACHE_NAV);
