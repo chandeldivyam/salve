@@ -76,34 +76,30 @@ function DomainsTab() {
               }
             />
           ) : (
-            <Card className="overflow-hidden">
-              <CardContent className="p-0">
-                <ul className="divide-y divide-line-quiet">
-                  {domains.map((d) => (
-                    <li key={d.id}>
-                      <Link
-                        to="/app/settings/channels/email/domains/$domainId"
-                        params={{ domainId: d.id }}
-                        className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-bg-elevated/60"
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate text-[13px] font-medium text-fg-primary">
-                            {d.domain}
-                          </p>
-                          <p className="mt-0.5 text-[11px] text-fg-tertiary">
-                            Added {format(new Date(d.createdAt), 'MMM d, yyyy')}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant={domainStatusVariant(d.dnsStatus)}>{d.dnsStatus}</Badge>
-                          <ChevronRight className="h-4 w-4 text-fg-tertiary" />
-                        </div>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
+            <ul className="flex flex-col">
+              {domains.map((d) => (
+                <li key={d.id}>
+                  <Link
+                    to="/app/settings/channels/email/domains/$domainId"
+                    params={{ domainId: d.id }}
+                    className="flex items-center justify-between gap-3 rounded-md px-3 py-2.5 transition-colors hover:bg-bg-elevated/40"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-[13px] font-medium text-fg-primary">
+                        {d.domain}
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-fg-tertiary">
+                        Added {format(new Date(d.createdAt), 'MMM d, yyyy')}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={domainStatusVariant(d.dnsStatus)}>{d.dnsStatus}</Badge>
+                      <ChevronRight className="h-4 w-4 text-fg-tertiary" />
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       </SettingsBody>

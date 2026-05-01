@@ -75,18 +75,16 @@ export function ListSection({
   className?: string;
 }) {
   const hasChildren = children !== undefined && children !== null;
+  const hasHeader = title || trailing || count !== undefined;
   return (
-    <section
-      className={cn(
-        'overflow-hidden rounded-md border border-line-quiet bg-surface',
-        className,
-      )}
-    >
-      {title || trailing || count !== undefined ? (
-        <header className="flex h-9 items-center justify-between gap-3 border-b border-line-quiet px-3">
-          <div className="flex min-w-0 items-center gap-2">
+    <section className={cn('flex flex-col', className)}>
+      {hasHeader ? (
+        <header className="flex h-7 items-center justify-between gap-3 px-1 pb-1">
+          <div className="flex min-w-0 items-center gap-1.5">
             {title ? (
-              <h3 className="text-[12px] font-semibold text-fg-primary">{title}</h3>
+              <h3 className="text-[11px] font-semibold uppercase tracking-[0.06em] text-fg-quaternary">
+                {title}
+              </h3>
             ) : null}
             {count !== undefined ? (
               <span className="tabular-nums text-[11px] text-fg-quaternary">{count}</span>
@@ -111,8 +109,7 @@ export function ListRow({
   onClick?: () => void;
   asChild?: boolean;
 }) {
-  const base =
-    'flex h-9 items-center gap-2 px-3 text-[13px] text-fg-primary border-b border-line-quiet last:border-b-0';
+  const base = 'flex h-9 items-center gap-2 rounded-md px-2 text-[13px] text-fg-primary';
   if (asChild || onClick) {
     return (
       <button
@@ -143,7 +140,7 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        'flex flex-col items-center gap-3 rounded-md border border-line-quiet bg-surface px-6 py-12 text-center',
+        'flex flex-col items-center gap-3 rounded-md bg-surface px-6 py-14 text-center',
         className,
       )}
     >

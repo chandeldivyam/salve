@@ -195,8 +195,8 @@ function GroupCard({
 }) {
   const z = useZero();
   return (
-    <section className="overflow-hidden rounded-md border border-line-quiet bg-surface">
-      <header className="flex h-9 items-center gap-2 border-b border-line-quiet px-3">
+    <section className="flex flex-col">
+      <header className="flex h-7 items-center gap-2 px-1 pb-1">
         <span
           className="h-2 w-2 shrink-0 rounded-full"
           style={{ backgroundColor: normalizeHexColor(group.color) }}
@@ -244,17 +244,19 @@ function GroupCard({
           </DropdownMenuContent>
         </DropdownMenu>
       </header>
-      {tags.map((tag) => (
-        <TagRowItem key={tag.id} tag={tag} onEdit={() => onEditTag(tag)} />
-      ))}
-      <button
-        type="button"
-        onClick={onAddTag}
-        className="flex h-9 items-center gap-2 border-t border-line-quiet px-3 text-[12px] text-fg-tertiary transition-colors hover:bg-bg-elevated/40 hover:text-fg-primary"
-      >
-        <Plus className="h-3.5 w-3.5" />
-        Add tag
-      </button>
+      <div className="flex flex-col">
+        {tags.map((tag) => (
+          <TagRowItem key={tag.id} tag={tag} onEdit={() => onEditTag(tag)} />
+        ))}
+        <button
+          type="button"
+          onClick={onAddTag}
+          className="flex h-8 items-center gap-2 rounded-md px-2 text-[12px] text-fg-tertiary transition-colors hover:bg-bg-elevated/40 hover:text-fg-primary"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Add tag
+        </button>
+      </div>
     </section>
   );
 }
@@ -276,7 +278,7 @@ function UngroupedCard({
       <button
         type="button"
         onClick={onAddTag}
-        className="flex h-9 items-center gap-2 border-t border-line-quiet px-3 text-[12px] text-fg-tertiary transition-colors hover:bg-bg-elevated/40 hover:text-fg-primary"
+        className="flex h-8 items-center gap-2 rounded-md px-2 text-[12px] text-fg-tertiary transition-colors hover:bg-bg-elevated/40 hover:text-fg-primary"
       >
         <Plus className="h-3.5 w-3.5" />
         Add tag
@@ -288,7 +290,7 @@ function UngroupedCard({
 function TagRowItem({ tag, onEdit }: { tag: TagRow; onEdit: () => void }) {
   const z = useZero();
   return (
-    <div className="flex h-9 items-center gap-2 border-b border-line-quiet px-3 last:border-b-0">
+    <div className="group/row flex h-8 items-center gap-2 rounded-md px-2 transition-colors hover:bg-bg-elevated/40">
       <button
         type="button"
         onClick={onEdit}
@@ -790,7 +792,7 @@ function ArchivedSection({ groups, tags }: { groups: TagGroupRow[]; tags: TagRow
       {groups.map((group) => (
         <div
           key={group.id}
-          className="flex h-9 items-center gap-2 border-b border-line-quiet px-3 last:border-b-0"
+          className="flex h-8 items-center gap-2 rounded-md px-2 transition-colors hover:bg-bg-elevated/40"
         >
           <span
             className="h-2 w-2 rounded-full"
@@ -814,7 +816,7 @@ function ArchivedSection({ groups, tags }: { groups: TagGroupRow[]; tags: TagRow
       {tags.map((tag) => (
         <div
           key={tag.id}
-          className="flex h-9 items-center gap-2 border-b border-line-quiet px-3 last:border-b-0"
+          className="flex h-8 items-center gap-2 rounded-md px-2 transition-colors hover:bg-bg-elevated/40"
         >
           <span className="rounded-full border px-2 py-0.5 text-[11px]" style={tagPillStyle(tag)}>
             {tag.label}

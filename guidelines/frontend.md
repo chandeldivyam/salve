@@ -513,6 +513,29 @@ Don't animate layout changes in lists (height, position) — virtualizers fight 
 
 **Icons** — Lucide at 16 px / 1.5 stroke is the default in chrome. The global rule `.lucide { stroke-width: 1.5 !important; }` in `styles.css` enforces this without per-component props. Status / priority glyphs that need to read at small sizes (e.g. `AlertTriangle` in a 32px row) keep stroke 2 by adding `data-stroke="bold"` to the rendered icon — that's what the matching `.lucide[data-stroke='bold']` rule is for. Don't migrate every Lucide import to a wrapper; the CSS rule handles it globally.
 
+### Lines vs surface deltas
+
+The single biggest gap between "looks Linear" and "looks generic" is line restraint. Lines define structure when they have to and otherwise stay out of the way. Don't paper structure on with borders — use the 5-step background ladder instead, and let hover handle row separation.
+
+**Default to no line. Add one only when it earns the pixel.**
+
+A line earns its pixel when:
+- It separates the page header from the body (`SettingsHeader` border-b — once per page).
+- It separates the rail from the content (`border-r` on `<aside>` — one per app).
+- It indicates a focused or selected element (`focus-visible:ring`, `data-state=selected:border-line-strong`).
+- It's the only differentiator and adding a surface delta would change semantics (e.g. an inline form field's outline).
+
+A line does NOT earn its pixel when:
+- It separates rows in a list (use hover `bg-bg-elevated/40` instead).
+- It outlines a card that already sits on a different surface (`bg-surface` on `bg-canvas` is enough — drop the `border`).
+- It separates internal sub-regions of the rail (logo bar / workspace switcher / footer were all `border-b`/`-t border-border` in v1; they're not anymore — internal spacing carries the structure).
+- It rims a chip or pill that's already differentiated by shape and color.
+- It "draws boundaries between sections" — that's what padding and group labels are for.
+
+**The rail is the canonical example.** v1 had four horizontal lines (under logo, under workspace switcher, above footer, plus the right-edge rail border). v2 has one — the right-edge — and the internal sections separate via vertical spacing alone. The eye still groups them correctly because surfaces and spacing carry the structure.
+
+**ListSection (settings) is the canonical row example.** v1 was an outlined card (`border border-line-quiet`) with `border-b border-line-quiet` on every row. That's two borders stacked at every row boundary on the outer edge, plus N internal lines. v2 is a flat list on `bg-canvas` with `bg-elevated/40` on hover for the row the cursor's on. Zero static lines; zero loss of structure.
+
 ### When you find yourself needing `style={{ … }}`
 
 Almost never the answer. Tailwind covers 99% of styling. Inline `style` is acceptable only for:
@@ -1133,7 +1156,7 @@ If you do any of these, expect to be asked to undo them in code review.
 38. **`bg-brand-soft` on a whole card to "make it pop".** The setup card in the rail used to do this — it became the loudest indigo block on screen and pulled the eye away from actual content. Use `bg-bg-elevated` for the surface and put the accent on a thin progress bar / underline / dot. Reserve indigo for focus rings, primary CTAs, status indicators, and selected items. See §7 "One accent, used sparingly."
 39. **Cool-grey surfaces (hue 200–230).** Looks "techy / cold," not premium. Use hue 270 dark / 320 light at chroma 0.003–0.008 — the grayscale should be slightly hue-tinted to harmonize with the accent, but never more than barely-perceptible chroma. See §7 dark-mode hue notes.
 40. **Pure white text on dark / pure black on light.** Halates against the surface. Use `fg-primary` (off-white `oklch(0.96 …)` dark, off-black `oklch(0.20 …)` light). The eye relaxes; the text reads as ink on paper, not a screen.
-41. **Borders between every list row.** A 1 px line every 32 px is visual noise and was the loudest layout-noise source in the old inbox. Drop the per-row `border-b border-border` and rely on hover/URL-selected `bg-bg-elevated` for separation. Linear's 2025 redesign explicitly reduced separator proliferation; copy that. See §8 Density.
+41. **Borders between every list row.** A 1 px line every 32 px is visual noise and was the loudest layout-noise source in the old inbox. Drop the per-row `border-b border-border` and rely on hover/URL-selected `bg-bg-elevated` for separation. Linear's 2025 redesign explicitly reduced separator proliferation; copy that. See §8 Density and §7 "Lines vs surface deltas."
 42. **Inter without `font-feature-settings: 'cv01', 'ss03'`.** It's still Inter, but it doesn't look like Linear-Inter — the alt-`1` and alternate-`g` glyphs are what give the typeface its distinctive shape. Pair with `font-optical-sizing: auto` and `letter-spacing: -0.011em` (body) / `-0.018em` (titles). Apply at the body element, not per-component. See §8 Font.
 43. **Mutating "the active tab" from a route component without an `expectedRouteId` guard.** The active tab can change between when the effect was scheduled and when it actually runs (Zero query re-emit + async router navigation = stale-effect race). `setActiveTabTitle` and any sibling action MUST take an expected-route guard and no-op if the active tab no longer matches. See §5 "Active tab stale-effect race."
 44. **`prose` classes on the editor (or anywhere) without `@tailwindcss/typography` installed.** `prose prose-sm` is dead text — it renders nothing — unless the plugin is loaded via `@plugin` in `styles.css`. Compounds with Tailwind v4's preflight, which strips `list-style` and padding from `<ul>`/`<ol>` and removes default `<blockquote>` borders, so the editor *appears* to be broken (typing `- ` produces a real `<ul>` in the DOM but renders flat). Don't reach for `prose` — add scoped rules under `.ProseMirror` (or a similar class) in `styles.css`. See the `.ProseMirror` block in `apps/web/src/styles.css`.
@@ -1143,6 +1166,9 @@ If you do any of these, expect to be asked to undo them in code review.
 48. **Per-page bespoke header in settings.** Every settings sub-route renders its own `<h1>` + description + actions in a different shape, breaking visual rhythm across the section. Use `<SettingsHeader>` exclusively — it's the only header element a settings page declares. See §20.
 49. **Persistent inline create form on a settings page.** The create form glues itself to the right rail or the top of the list, taking real estate even when no one is creating. Use a tier-B `<SettingsSheet>` triggered from the page header CTA. See §20.
 50. **Per-row `Save` buttons when Zero mutators are optimistic.** The save button does nothing the auto-save wouldn't. Drop it; auto-save on blur. Reserve explicit Save for transactional units (inside a sheet, where half-filled state shouldn't survive accidental close). See §20.
+51. **Outlined card wrapping a list.** `border border-line-quiet` around a `ListSection` plus `border-b` on every row stacks two lines at the outer edge and adds N internal lines that earn nothing — you already have a surface delta (`bg-surface` on `bg-canvas`) and hover. Drop the outer `border`; drop the per-row `border-b`. See §7 "Lines vs surface deltas."
+52. **Internal rail dividers.** `border-b` under the logo bar, under the workspace switcher, and `border-t` above the footer were all in v1 of the workbench rail and read as four horizontal lines stacked in 240 px. Vertical spacing alone groups those regions correctly. The only border the rail needs is its right edge against the content. See §7 "Lines vs surface deltas."
+53. **"Back to inbox" as a sidebar list item.** Mixes two navigation modes (sidebar items go *into* the section; "back" leaves it). Put the back affordance in the rail's top-left header slot — same place the logo lives outside settings. The list shows only sidebar items. See §20.
 
 ---
 
@@ -1236,6 +1262,21 @@ Three breakpoints:
 - `640–1023 px` — rail collapses to icon-only (existing collapse behavior).
 - `<640 px` — rail hides; page header shows a `Settings ▾` button that opens a drawer with the full sidebar. Side sheets become full-screen modals.
 
+### Lines (specific to settings)
+
+See §7 "Lines vs surface deltas" — settings is where the rule was forged. The settings layout has exactly two static horizontal lines on screen at any time: the workbench tab strip's bottom and the `SettingsHeader`'s bottom. Everything else is spacing, surface tone, or hover.
+
+Concretely, in settings:
+- `ListSection` does **not** outline. No outer `border`. Section title is an 11px uppercase muted label, not a card chrome.
+- Rows in settings lists do **not** use `border-b` between them. They use `rounded-md hover:bg-bg-elevated/40`.
+- `EmptyState` does **not** outline. It sits on `bg-surface` with generous padding.
+- The `+ Add tag` row does **not** have a `border-t` separating it from the items above. Spacing is enough.
+- Group cards (e.g. tag groups) do **not** outline. The group's color dot + label *is* the visual anchor.
+
+### Back-to-inbox affordance
+
+The way out of settings is the rail's top-left slot. When `pathname.startsWith('/app/settings/')`, the slot that normally shows the Salve logo shows a quiet `← Inbox` text link instead. Click → back to inbox. This is in addition to the workbench tab strip's close X on the Settings tab — both work; the link is the discoverable one. We do **not** add a separate "Back to inbox" item inside the sidebar list (that mixes navigation modes).
+
 ### Anti-patterns specific to settings
 
 - Persistent inline create form on the page (the entity creator is a tier-B sheet).
@@ -1243,6 +1284,8 @@ Three breakpoints:
 - Per-row `Save` buttons when Zero mutators are optimistic (auto-save instead).
 - Per-page bespoke header (use `SettingsHeader`).
 - Three-column "list / editor / preview" layouts (sheet + page is enough; preview lives inside the sheet).
+- Outlined cards around lists (rely on surface delta + hover instead — see "Lines" above).
+- "Back to inbox" as a sidebar list item (it lives in the rail's top-left slot, not in the navigation list).
 
 ---
 

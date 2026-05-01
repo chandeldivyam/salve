@@ -112,12 +112,25 @@ export function WorkbenchLeftRail({ workspaceID }: { workspaceID: string | null 
     >
       <div
         className={cn(
-          'flex h-10 shrink-0 items-center border-b border-border',
+          'flex h-10 shrink-0 items-center',
           collapsed ? 'justify-center px-0' : 'justify-between gap-2 px-3',
         )}
       >
         {collapsed ? (
           <CollapseToggle collapsed={collapsed} onToggle={toggleCollapsed} />
+        ) : inSettings ? (
+          <>
+            <WorkbenchLink
+              href="/app/inbox"
+              source="left-rail"
+              className="inline-flex min-w-0 items-center gap-1.5 rounded-md text-[12px] font-medium text-fg-tertiary outline-none transition-colors hover:text-fg-primary focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="Back to inbox"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              <span>Inbox</span>
+            </WorkbenchLink>
+            <CollapseToggle collapsed={collapsed} onToggle={toggleCollapsed} />
+          </>
         ) : (
           <>
             <WorkbenchLink
@@ -135,7 +148,7 @@ export function WorkbenchLeftRail({ workspaceID }: { workspaceID: string | null 
 
       <div
         className={cn(
-          'shrink-0 border-b border-border',
+          'shrink-0',
           collapsed ? 'flex justify-center px-1 py-2' : 'px-2 py-2',
         )}
       >
@@ -157,16 +170,7 @@ export function WorkbenchLeftRail({ workspaceID }: { workspaceID: string | null 
         )}
       >
         {inSettings ? (
-          <>
-            <RailItem
-              href="/app/inbox"
-              icon={ArrowLeft}
-              label="Back to inbox"
-              collapsed={collapsed}
-              active={false}
-            />
-            <SettingsSidebar groups={settingsGroups} collapsed={collapsed} />
-          </>
+          <SettingsSidebar groups={settingsGroups} collapsed={collapsed} />
         ) : (
           <>
             <div className={cn('w-full space-y-0.5', collapsed && 'flex flex-col items-center')}>
@@ -233,7 +237,7 @@ export function WorkbenchLeftRail({ workspaceID }: { workspaceID: string | null 
 
       <div
         className={cn(
-          'shrink-0 border-t border-border',
+          'shrink-0',
           collapsed ? 'flex justify-center px-1 py-2' : 'p-2',
         )}
       >

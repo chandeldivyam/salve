@@ -139,23 +139,26 @@ function AddressesTab() {
             const list = grouped.get(d.id) ?? [];
             if (list.length === 0) return null;
             return (
-              <Card key={d.id} className="overflow-hidden">
-                <CardContent className="p-0">
-                  <div className="flex items-center justify-between gap-2 border-b border-line-quiet bg-bg-elevated/50 px-4 py-2">
-                    <p className="truncate text-[12px] font-medium text-fg-primary">{d.domain}</p>
-                    <Badge variant={d.dnsStatus === 'verified' ? 'success' : 'warning'}>
-                      DNS: {d.dnsStatus}
-                    </Badge>
-                  </div>
-                  <ul className="divide-y divide-line-quiet">
-                    {list.map((a) => (
-                      <li key={a.id}>
-                        <AddressRow address={a} />
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
-              </Card>
+              <section key={d.id} className="flex flex-col gap-1">
+                <div className="flex h-7 items-center justify-between gap-2 px-1 pb-1">
+                  <p className="truncate text-[11px] font-semibold uppercase tracking-[0.06em] text-fg-quaternary">
+                    {d.domain}
+                  </p>
+                  <Badge variant={d.dnsStatus === 'verified' ? 'success' : 'warning'}>
+                    DNS: {d.dnsStatus}
+                  </Badge>
+                </div>
+                <ul className="flex flex-col">
+                  {list.map((a) => (
+                    <li
+                      key={a.id}
+                      className="rounded-md transition-colors hover:bg-bg-elevated/30"
+                    >
+                      <AddressRow address={a} />
+                    </li>
+                  ))}
+                </ul>
+              </section>
             );
           })}
         </div>

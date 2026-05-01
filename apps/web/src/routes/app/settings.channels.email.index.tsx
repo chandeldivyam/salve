@@ -154,7 +154,7 @@ function SummaryCard({
   tone?: 'default' | 'warning';
 }) {
   return (
-    <div className="flex flex-col gap-2 rounded-md border border-line-quiet bg-surface px-4 py-3.5">
+    <div className="flex flex-col gap-2 rounded-md bg-surface px-4 py-3.5">
       <div className="flex items-center justify-between">
         <span className="inline-flex items-center gap-2 text-[12px] font-medium text-fg-tertiary">
           <Icon className="h-3.5 w-3.5" />

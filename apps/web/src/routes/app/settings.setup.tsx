@@ -136,7 +136,7 @@ function SetupRow({
 }) {
   const completed = item.completed;
   return (
-    <div className="flex flex-col gap-3 border-b border-line-quiet px-4 py-3.5 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+    <div className="flex flex-col gap-3 rounded-md px-3 py-3 transition-colors hover:bg-bg-elevated/30 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
       <div className="flex min-w-0 items-start gap-2.5">
         <StatusIcon ready={ready} completed={completed} />
         <div className="min-w-0">

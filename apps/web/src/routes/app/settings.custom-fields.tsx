@@ -197,7 +197,7 @@ function FieldRow({ field, onEdit }: { field: CustomFieldRow; onEdit: () => void
   const z = useZero();
   const active = isCustomFieldActive(field);
   return (
-    <div className="flex h-12 items-center gap-3 border-b border-line-quiet px-3 last:border-b-0">
+    <div className="group/row flex h-12 items-center gap-3 rounded-md px-2 transition-colors hover:bg-bg-elevated/40">
       <button type="button" onClick={onEdit} className="min-w-0 flex-1 text-left">
         <div className="flex items-center gap-1.5">
           <p className="truncate text-[13px] font-medium text-fg-primary">{field.displayName}</p>
@@ -236,11 +236,15 @@ function FieldRow({ field, onEdit }: { field: CustomFieldRow; onEdit: () => void
 
 function PreviewSection({ category }: { category: CustomFieldCategory }) {
   return (
-    <section className="rounded-md border border-line-quiet bg-surface p-4">
-      <p className="mb-2 text-[12px] font-semibold text-fg-primary">Input preview</p>
-      <p className="mb-3 text-[11px] text-fg-tertiary">
-        Live preview of how active fields render in the {category} sidebar.
-      </p>
+    <section className="flex flex-col gap-2 pt-4">
+      <div>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-fg-quaternary">
+          Input preview
+        </p>
+        <p className="mt-0.5 text-[11px] text-fg-tertiary">
+          Live preview of how active fields render in the {category} sidebar.
+        </p>
+      </div>
       <CustomFieldsBlock
         entity={category}
         entityID={null}
