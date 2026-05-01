@@ -36,11 +36,11 @@ import { useCallback, useState } from 'react';
 import { buildSettingsSidebarGroups, SettingsSidebar } from '@/components/settings';
 import { ThemeSwitcher } from '@/components/theme-switcher';
 import { authClient, switchWorkspace } from '@/lib/auth-client';
+import { useKeyBinding } from '@/lib/commands/use-key-binding';
 import { resetDraftsForSignOut } from '@/lib/composer-drafts';
 import { showError } from '@/lib/feedback';
 import { clearSessionCache, getCachedOrgs, type SessionData } from '@/lib/session-loader';
 import { useSetupProgress } from '@/lib/setup-progress';
-import { useShortcut } from '@/lib/shortcuts';
 import { setThemeMode, type ThemeMode, useTheme } from '@/lib/theme';
 import { useWorkbenchStore } from '@/lib/workbench';
 import { WorkbenchLink } from './workbench-link';
@@ -62,14 +62,11 @@ export function WorkbenchLeftRail({ workspaceID }: { workspaceID: string | null 
     setCollapsed(!useWorkbenchStore.getState().leftRailCollapsed);
   }, [setCollapsed]);
 
-  useShortcut(
-    '\\',
-    (event) => {
-      if (!(event.metaKey || event.ctrlKey)) return;
-      toggleCollapsed();
-    },
-    { allowInInputs: false },
-  );
+  useKeyBinding('$mod+\\', () => toggleCollapsed(), {
+    scopes: ['app'],
+    label: 'Toggle sidebar',
+    group: 'View',
+  });
 
   async function onSwitch(nextWorkspaceID: string) {
     if (nextWorkspaceID === workspaceID) return;

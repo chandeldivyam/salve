@@ -23,7 +23,7 @@ import {
 import { useRouter } from '@tanstack/react-router';
 import { Copy, ExternalLink, MoreHorizontal, Pin, PinOff, Plus, RotateCcw, X } from 'lucide-react';
 import { Fragment, useEffect, useRef, useState } from 'react';
-import { isMod, useShortcut } from '@/lib/shortcuts';
+import { useKeyBinding } from '@/lib/commands/use-key-binding';
 import {
   selectActiveWorkspaceTab,
   useWorkbenchStore,
@@ -49,45 +49,31 @@ export function WorkbenchTabStrip({ workspaceID }: WorkbenchTabStripProps) {
   const setCommandOpen = useWorkbenchStore((state) => state.setCommandOpen);
   const reorderTabs = useWorkbenchStore((state) => state.reorderTabs);
   const activateTab = useWorkbenchStore((state) => state.activateTab);
-  const closeTab = useWorkbenchStore((state) => state.closeTab);
-  const reopenLastClosed = useWorkbenchStore((state) => state.reopenLastClosed);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
-  useShortcut(
-    ['1', '2', '3', '4', '5', '6', '7', '8', '9'],
+  useKeyBinding(
+    ['$mod+1', '$mod+2', '$mod+3', '$mod+4', '$mod+5', '$mod+6', '$mod+7', '$mod+8', '$mod+9'],
     (event) => {
-      if (!isMod(event)) return;
       event.preventDefault();
       const tab = tabs[Number(event.key) - 1];
       if (!tab) return;
       activateTab(key, tab.id);
       navigateWorkbenchHref(router, tab.href);
     },
-    { allowInInputs: true, preventDefault: false },
+    {
+      scopes: ['app'],
+      allowInInputs: true,
+      preventDefault: false,
+      label: 'Switch tab',
+      group: 'Navigation',
+    },
   );
 
-  useShortcut(
-    ['W', 'w'],
-    (event) => {
-      if (!isMod(event) || !event.shiftKey || !activeTabID) return;
-      event.preventDefault();
-      closeTab(key, activeTabID);
-      const next = selectActiveWorkspaceTab(key);
-      if (next) navigateWorkbenchHref(router, next.href);
-    },
-    { allowInInputs: true, preventDefault: false },
-  );
-
-  useShortcut(
-    ['T', 't'],
-    (event) => {
-      if (!isMod(event) || !event.shiftKey) return;
-      event.preventDefault();
-      const reopened = reopenLastClosed(key);
-      if (reopened) navigateWorkbenchHref(router, reopened.href);
-    },
-    { allowInInputs: true, preventDefault: false },
-  );
+  // Close/reopen tabs deliberately have no global hotkey. `Cmd+W` and
+  // `Cmd+Shift+W` are owned by the browser; `Alt+W` produces a special
+  // glyph on macOS (`∑`) so the dispatcher never sees `w` in event.key.
+  // The X button on hover, middle-click, and the right-click menu are
+  // the canonical close paths.
 
   function onDragEnd(event: DragEndEvent) {
     const activeID = String(event.active.id);

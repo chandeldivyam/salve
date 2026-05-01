@@ -20,6 +20,7 @@
 import { sql } from 'drizzle-orm';
 import {
   boolean,
+  customType,
   index,
   integer,
   jsonb,
@@ -31,6 +32,12 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import { organization, user } from './auth.js';
+
+const tsvector = customType<{ data: string; driverData: string }>({
+  dataType() {
+    return 'tsvector';
+  },
+});
 
 // ---------- Enums ----------
 
@@ -74,12 +81,22 @@ export const customer = pgTable(
       .$type<Record<string, unknown>>()
       .notNull()
       .default(sql`'{}'::jsonb`),
+    searchVector: tsvector('search_vector').generatedAlwaysAs(
+      sql`to_tsvector('simple', coalesce("name", '') || ' ' || coalesce("display_name", '') || ' ' || coalesce("email", ''))`,
+    ),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
     workspaceEmailIdx: index('customer_workspace_email_idx').on(t.workspaceId, t.email),
     workspaceEmailUnique: uniqueIndex('customer_workspace_email_unique').on(t.workspaceId, t.email),
+    searchVectorIdx: index('customer_search_vector_idx').using('gin', t.searchVector),
+    nameTrgmIdx: index('customer_name_trgm_idx').using('gin', t.name.op('gin_trgm_ops')),
+    displayNameTrgmIdx: index('customer_display_name_trgm_idx').using(
+      'gin',
+      t.displayName.op('gin_trgm_ops'),
+    ),
+    emailTrgmIdx: index('customer_email_trgm_idx').using('gin', t.email.op('gin_trgm_ops')),
   }),
 );
 
@@ -111,11 +128,20 @@ export const ticket = pgTable(
     // closed (resolved doesn't fill it).
     closedAt: timestamp('closed_at', { withTimezone: true }),
     closedById: text('closed_by_id').references(() => user.id, { onDelete: 'set null' }),
+    searchVector: tsvector('search_vector').generatedAlwaysAs(
+      sql`to_tsvector('simple', coalesce("title", '') || ' ' || coalesce("description", ''))`,
+    ),
   },
   (t) => ({
     inboxIdx: index('ticket_inbox_idx').on(t.workspaceId, t.status, t.updatedAt),
     assigneeIdx: index('ticket_assignee_idx').on(t.workspaceId, t.assigneeId, t.status),
     createdAtIdx: index('ticket_created_at_idx').on(t.workspaceId, t.createdAt),
+    searchVectorIdx: index('ticket_search_vector_idx').using('gin', t.searchVector),
+    titleTrgmIdx: index('ticket_title_trgm_idx').using('gin', t.title.op('gin_trgm_ops')),
+    descriptionTrgmIdx: index('ticket_description_trgm_idx').using(
+      'gin',
+      t.description.op('gin_trgm_ops'),
+    ),
     workspaceShortIdUnique: uniqueIndex('ticket_workspace_short_id_unique').on(
       t.workspaceId,
       t.shortId,

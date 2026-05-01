@@ -24,6 +24,7 @@ import {
 } from './inngest/functions/index.js';
 import { buildJwtCookieHeader, issueOpendeskJwt, readJwtCookie, verifyOpendeskJwt } from './jwt.js';
 import { authMiddleware, authOf, requireUser, requireWorkspace } from './middleware.js';
+import { handleSearch } from './routes/search.js';
 import { createServerMutators, type PostCommitTask } from './server-mutators.js';
 import {
   handleEmailAddressAdd,
@@ -132,6 +133,7 @@ app.post('/api/auth/switch-workspace', requireUser, async (c) => {
 // `apps/api/src/files.ts`.
 app.post('/api/files/presign', requireWorkspace, handlePresign);
 app.post('/api/files/get', requireWorkspace, handleGetSigned);
+app.get('/api/search', requireWorkspace, handleSearch);
 app.post('/api/customers/:customerID/events', requireWorkspace, handleCustomerEventIngest);
 
 // Phase 3a settings: email domains (BYO sending domain).

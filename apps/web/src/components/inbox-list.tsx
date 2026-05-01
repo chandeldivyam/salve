@@ -30,10 +30,11 @@ import { ArrowRight, Filter, Inbox, ListChecks, Search } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BulkActionBar } from '@/components/inbox/bulk-action-bar';
 import { InboxRow } from '@/components/inbox/inbox-row';
+import { useHoverTargetRoot, useHoverTargetStore } from '@/lib/commands/hover-target';
+import { useKeyBinding } from '@/lib/commands/use-key-binding';
 import { useInboxSelectionStore } from '@/lib/inbox-selection';
 import { INBOX_ROW_HEIGHT, LOAD_MORE_THRESHOLD } from '@/lib/list-constants';
 import { useSetupProgress } from '@/lib/setup-progress';
-import { isMod, useShortcut } from '@/lib/shortcuts';
 import { useZero } from '@/lib/zero';
 import { CACHE_FOREVER } from '@/lib/zero-cache';
 import { InboxListSkeleton } from './skeletons';
@@ -112,6 +113,7 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
   const ready = status?.type === 'complete';
   const [filter, setFilter] = useState<InboxFilter>('all');
   const [search, setSearch] = useState('');
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   // Bulk selection (transient — see lib/inbox-selection.ts).
   const selectionIds = useInboxSelectionStore((s) => s.ids);
@@ -166,15 +168,18 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
     });
   }, [tickets, filter, search, currentUserID]);
 
-  // Selected index based on URL — keeps J/K + selected highlight in sync
-  // with the actual route param. With push-nav the list is hidden when a
-  // ticket is open, but selection still drives j/k starting position.
+  // Selected index based on URL — keeps the URL-selected highlight in
+  // sync with the actual route param. The j/k cursor is now independent
+  // of URL (see `cursorIndex` below); URL only seeds the cursor when we
+  // remount with a ticket already focused (e.g. after Esc-back from a
+  // ticket detail).
   const selectedIndex = useMemo(() => {
     if (!selectedTicketID) return -1;
     return filtered.findIndex((t) => t.id === selectedTicketID);
   }, [filtered, selectedTicketID]);
 
   const parentRef = useRef<HTMLDivElement | null>(null);
+  useHoverTargetRoot(parentRef);
   const virtualizer = useVirtualizer({
     count: filtered.length,
     getScrollElement: () => parentRef.current,
@@ -182,6 +187,51 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
     overscan: 8,
     initialOffset: restored.offset,
   });
+
+  // Cursor model — Linear-style. The cursor is what `x`, `Enter`, and
+  // every command targets; it follows whichever input was used most
+  // recently.
+  //   • Mouse hover writes to `useHoverTargetStore` via
+  //     `useHoverTargetRoot`. While the keyboard owns the cursor, the
+  //     store ignores hover updates until the mouse moves to a *new* row.
+  //   • `j`/`k` move the cursor and publish the new target into the same
+  //     store, so palette commands (`s`, `p`, `a`) act on the same row
+  //     the user sees highlighted.
+  //   • The URL (current ticket) seeds the cursor only on first mount.
+  const cursorTarget = useHoverTargetStore((state) => state.target);
+  const cursorSource = useHoverTargetStore((state) => state.source);
+  const cursorTicketID = cursorTarget?.kind === 'ticket' ? cursorTarget.id : null;
+  const cursorIndex = useMemo(() => {
+    if (cursorTicketID) {
+      const idx = filtered.findIndex((t) => t.id === cursorTicketID);
+      if (idx >= 0) return idx;
+    }
+    if (selectedIndex >= 0) return selectedIndex;
+    return filtered.length > 0 ? 0 : -1;
+  }, [cursorTicketID, filtered, selectedIndex]);
+
+  // Reset cursor when the list itself changes shape.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: filter/search are the trigger; we never read them
+  useEffect(() => {
+    useHoverTargetStore.getState().clear();
+  }, [filter, search]);
+
+  const moveCursor = useCallback(
+    (delta: 1 | -1) => {
+      if (filtered.length === 0) return;
+      const start = cursorIndex < 0 ? 0 : cursorIndex;
+      const next = Math.max(0, Math.min(filtered.length - 1, start + delta));
+      const ticket = filtered[next];
+      if (!ticket) return;
+      useHoverTargetStore.getState().setKeyboardTarget({
+        kind: 'ticket',
+        id: ticket.id,
+        label: ticket.shortID > 0 ? `#${ticket.shortID}` : ticket.title,
+      });
+      virtualizer.scrollToIndex(next, { align: 'auto' });
+    },
+    [cursorIndex, filtered, virtualizer],
+  );
 
   // Refs so the capture callbacks always read fresh state without
   // resubscribing every render.
@@ -201,7 +251,6 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
   useEffect(() => captureScroll, [captureScroll]);
 
   // J/K + arrow keys for keyboard navigation. E archives (close mutator).
-  // `useShortcut` centralises the "skip while typing" gate (lib/shortcuts).
   const goToIndex = useCallback(
     (idx: number) => {
       const t = filtered[idx];
@@ -211,22 +260,32 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
     },
     [filtered, navigate, captureScroll],
   );
-  const cur = selectedIndex < 0 ? 0 : selectedIndex;
-  useShortcut(['j'], () => {
-    if (filtered.length === 0) return;
-    goToIndex(Math.min(filtered.length - 1, cur + 1));
+  useKeyBinding(['j', 'ArrowDown'], () => moveCursor(1), {
+    scopes: ['inbox'],
+    label: 'Move cursor down',
+    group: 'Navigation',
   });
-  useShortcut(['k'], () => {
-    if (filtered.length === 0) return;
-    goToIndex(Math.max(0, cur - 1));
+  useKeyBinding(['k', 'ArrowUp'], () => moveCursor(-1), {
+    scopes: ['inbox'],
+    label: 'Move cursor up',
+    group: 'Navigation',
   });
-  useShortcut('Enter', () => {
-    if (filtered.length > 0) goToIndex(cur);
-  });
-  useShortcut(['e', 'E'], () => {
-    const t = filtered[cur];
-    if (t) z.mutate(mutators.ticket.close({ id: t.id }));
-  });
+  useKeyBinding(
+    'Enter',
+    () => {
+      if (cursorIndex < 0) return;
+      goToIndex(cursorIndex);
+    },
+    { scopes: ['inbox'], label: 'Open ticket at cursor', group: 'Navigation' },
+  );
+  useKeyBinding(
+    'e',
+    () => {
+      const t = filtered[cursorIndex];
+      if (t) z.mutate(mutators.ticket.close({ id: t.id }));
+    },
+    { scopes: ['inbox'], label: 'Close ticket', group: 'Ticket', commandId: 'ticket.close' },
+  );
 
   // Selection toggling. Range mode looks up the indexes in the *current*
   // filtered list — not the underlying ticket array — because that's the
@@ -252,35 +311,97 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
     [filtered, lastToggledIndex, selectionIds, setMany, toggleOne, setLastToggledIndex],
   );
 
-  // `x` toggles selection on the current j/k cursor row.
-  useShortcut(['x', 'X'], () => {
-    const t = filtered[cur];
-    if (!t) return;
-    toggleSelection(t.id, { shiftRange: false });
+  // `x` toggles selection on the cursor row (hovered or keyboard).
+  useKeyBinding(
+    'x',
+    () => {
+      const t = filtered[cursorIndex];
+      if (!t) return;
+      toggleSelection(t.id, { shiftRange: false });
+    },
+    { scopes: ['inbox'], label: 'Select ticket at cursor', group: 'Ticket' },
+  );
+
+  // Shift+J/K extends selection from the cursor and advances the cursor
+  // by one row. Unlike the previous version, it does NOT push-navigate
+  // — staying on the list lets the user keep multi-selecting with x.
+  const extendSelection = useCallback(
+    (delta: 1 | -1) => {
+      if (filtered.length === 0 || cursorIndex < 0) return;
+      const nextIndex = Math.max(0, Math.min(filtered.length - 1, cursorIndex + delta));
+      const current = filtered[cursorIndex];
+      const next = filtered[nextIndex];
+      if (!next) return;
+      if (lastToggledIndex === null && current) {
+        setMany(Array.from(new Set([...selectionIds, current.id])));
+        setLastToggledIndex(cursorIndex);
+      }
+      toggleSelection(next.id, { shiftRange: true });
+      useHoverTargetStore.getState().setKeyboardTarget({
+        kind: 'ticket',
+        id: next.id,
+        label: next.shortID > 0 ? `#${next.shortID}` : next.title,
+      });
+      virtualizer.scrollToIndex(nextIndex, { align: 'auto' });
+    },
+    [
+      cursorIndex,
+      filtered,
+      lastToggledIndex,
+      selectionIds,
+      setLastToggledIndex,
+      setMany,
+      toggleSelection,
+      virtualizer,
+    ],
+  );
+
+  useKeyBinding('Shift+j', () => extendSelection(1), {
+    scopes: ['inbox'],
+    label: 'Extend selection down',
+    group: 'Ticket',
   });
+  useKeyBinding('Shift+k', () => extendSelection(-1), {
+    scopes: ['inbox'],
+    label: 'Extend selection up',
+    group: 'Ticket',
+  });
+
+  useKeyBinding(
+    '/',
+    () => {
+      searchInputRef.current?.focus();
+      searchInputRef.current?.select();
+    },
+    { scopes: ['inbox'], label: 'Focus inbox search', group: 'Navigation' },
+  );
 
   // Esc clears selection — but only when a selection exists, so it falls
   // through to BackToInbox / other Esc handlers when there's nothing to clear.
-  useShortcut(
+  useKeyBinding(
     'Escape',
     (event) => {
       if (selectionIds.length === 0) return;
       event.stopPropagation();
       clearSelection();
     },
-    { preventDefault: false, enabled: hasSelection },
+    { scopes: ['inbox'], preventDefault: false, enabled: hasSelection },
   );
 
   // Cmd/Ctrl + A selects all visible (filtered) rows.
-  useShortcut(
-    'a',
+  useKeyBinding(
+    '$mod+a',
     (event) => {
-      if (!isMod(event)) return;
       event.preventDefault();
       setMany(filtered.map((t) => t.id));
       setLastToggledIndex(filtered.length > 0 ? 0 : null);
     },
-    { preventDefault: false },
+    {
+      scopes: ['inbox'],
+      preventDefault: false,
+      label: 'Select all visible tickets',
+      group: 'Ticket',
+    },
   );
 
   // Infinite scroll — when the last virtualized row index is within
@@ -337,6 +458,7 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
           <div className="relative flex-1">
             <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
+              ref={searchInputRef}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search title or customer…"
@@ -376,7 +498,12 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
       </div>
 
       <div className="relative flex-1 overflow-hidden">
-        <div ref={parentRef} className="h-full overflow-y-auto" onClickCapture={captureScroll}>
+        <div
+          ref={parentRef}
+          data-input-mode={cursorSource ?? 'hover'}
+          className="h-full overflow-y-auto [&[data-input-mode=keyboard]_[data-ticket-id]:hover]:!bg-transparent"
+          onClickCapture={captureScroll}
+        >
           {/*
            * Render order matters here:
            *   1. tickets present → render the list (covers both "live data"
@@ -408,12 +535,19 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
                 if (!t) return null;
                 const isSelected = t.id === selectedTicketID;
                 const multiSelected = selectionSet.has(t.id);
+                // Keyboard-cursor highlight kicks in only when the
+                // keyboard owns the cursor. The parent's
+                // `data-input-mode='keyboard'` attribute also suppresses
+                // the CSS `:hover` rule on every row so we never paint
+                // the keyboard cursor and a stale mouse hover at once.
+                const isCursor = cursorSource === 'keyboard' && vi.index === cursorIndex;
                 return (
                   <div
                     key={t.id}
                     data-testid="inbox-row"
                     data-selected={isSelected ? 'true' : 'false'}
                     data-multi-selected={multiSelected ? 'true' : 'false'}
+                    data-cursor={isCursor ? 'true' : 'false'}
                     ref={virtualizer.measureElement}
                     data-index={vi.index}
                     style={{
@@ -429,6 +563,7 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
                       isSelected={isSelected}
                       multiSelected={multiSelected}
                       showCheckbox={hasSelection}
+                      isCursor={isCursor}
                       onToggleSelect={toggleSelection}
                       onNavigate={clearSelection}
                     />

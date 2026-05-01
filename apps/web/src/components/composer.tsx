@@ -44,9 +44,9 @@ import {
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useKeyBinding } from '@/lib/commands/use-key-binding';
 import { useComposerDraftsStore } from '@/lib/composer-drafts';
 import type { SessionData } from '@/lib/session-loader';
-import { isMod, useShortcut } from '@/lib/shortcuts';
 
 export interface ComposerAttachment {
   id: string;
@@ -426,16 +426,15 @@ export function Composer({
     workspaceID,
   ]);
 
-  useShortcut(
-    'Enter',
+  useKeyBinding(
+    '$mod+Enter',
     (event) => {
-      if (!isMod(event)) return;
       const target = event.target as HTMLElement | null;
       if (!target?.closest('.tiptap-composer')) return;
       event.preventDefault();
       onSendClick();
     },
-    { allowInInputs: true, preventDefault: false },
+    { scopes: ['conversation'], allowInInputs: true, preventDefault: false },
   );
 
   if (disabled) {

@@ -30,6 +30,7 @@ import type {
   TimelineTag,
   TimelineTagRelation,
 } from '@/components/timeline/types';
+import { useScope } from '@/lib/commands/use-scope';
 import { paginate } from '@/lib/paginate';
 import { useShortcut } from '@/lib/shortcuts';
 import { CACHE_TICKET_DETAIL } from '@/lib/zero-cache';
@@ -63,6 +64,7 @@ const SORT_OPTIONS: ReadonlyArray<SortOption> = [
 ];
 
 function CustomersIndexRoute() {
+  useScope('customer');
   const navigate = useNavigate({ from: Route.fullPath });
   const search = useSearch({ from: Route.fullPath });
   const query = search.q ?? '';

@@ -28,6 +28,11 @@ interface InboxRowProps {
   multiSelected: boolean;
   /** Force the leading slot to render the checkbox unconditionally. */
   showCheckbox: boolean;
+  /**
+   * Keyboard cursor position. Renders a hover-equivalent highlight so the
+   * user can see which row `x` / `Enter` will act on after `j`/`k`.
+   */
+  isCursor: boolean;
   onToggleSelect: (id: string, opts: { shiftRange?: boolean }) => void;
   /** Called when the row navigates (single click). Used to clear selection. */
   onNavigate: () => void;
@@ -38,6 +43,7 @@ export function InboxRow({
   isSelected,
   multiSelected,
   showCheckbox,
+  isCursor,
   onToggleSelect,
   onNavigate,
 }: InboxRowProps) {
@@ -53,13 +59,17 @@ export function InboxRow({
 
   return (
     <div
+      data-ticket-id={ticket.id}
+      data-ticket-label={ticket.shortID > 0 ? `#${ticket.shortID}` : ticket.title}
       className={cn(
         'group relative flex h-9 items-center gap-2.5 px-3',
         multiSelected
           ? 'bg-brand-soft/40 transition-none hover:bg-brand-soft/60'
           : isSelected
             ? 'bg-bg-elevated transition-none'
-            : 'transition-colors duration-150 hover:bg-bg-elevated',
+            : isCursor
+              ? 'bg-bg-elevated transition-none'
+              : 'transition-colors duration-150 hover:bg-bg-elevated',
       )}
     >
       {/*

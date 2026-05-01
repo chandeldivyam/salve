@@ -3,7 +3,8 @@
 
 import { Link, useNavigate } from '@tanstack/react-router';
 import { ChevronLeft } from 'lucide-react';
-import { isMod, useShortcut } from '@/lib/shortcuts';
+import { useKeyBinding } from '@/lib/commands/use-key-binding';
+import { useShortcut } from '@/lib/shortcuts';
 
 export function BackToInbox() {
   const navigate = useNavigate();
@@ -16,15 +17,12 @@ export function BackToInbox() {
   // Cmd/Ctrl+[ — Linear's "go back" chord. We disable the default
   // preventDefault and only consume the event when the modifier is held,
   // so a bare '[' keypress in the document still flows normally.
-  useShortcut(
-    '[',
-    (e) => {
-      if (!isMod(e)) return;
-      e.preventDefault();
-      back();
-    },
-    { preventDefault: false },
-  );
+  useKeyBinding('$mod+[', back, {
+    scopes: ['conversation'],
+    preventDefault: true,
+    label: 'Back to inbox',
+    group: 'Navigation',
+  });
 
   return (
     <Link

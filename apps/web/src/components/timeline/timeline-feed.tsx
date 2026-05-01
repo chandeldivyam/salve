@@ -53,6 +53,7 @@ import { CustomerProfileCard } from '@/components/customer/profile-card';
 import { BackToInbox } from '@/components/inbox/back-to-inbox';
 import { TicketDetailSkeleton } from '@/components/skeletons';
 import { WorkbenchLink } from '@/components/workbench/workbench-link';
+import { useCommandRegistry } from '@/lib/commands/registry';
 import { TIMELINE_NEWER_VISIBLE, TIMELINE_OLDER_VISIBLE } from '@/lib/list-constants';
 import type { SessionData } from '@/lib/session-loader';
 import { useShortcut } from '@/lib/shortcuts';
@@ -218,6 +219,10 @@ function SingleTicketTimeline({ ticketID }: { ticketID: string }) {
     const title = ticket.shortID > 0 ? `#${ticket.shortID} ${ticket.title}` : ticket.title;
     setActiveTabTitle(workspaceID, title, 'ticket', 'ticket');
     recordRecentTicket(workspaceID, ticketID);
+    useCommandRegistry.getState().setUrlTarget({
+      pathname: `/app/inbox/t/${ticket.id}`,
+      target: { kind: 'ticket', id: ticket.id, label: ticketNumber(ticket) },
+    });
   }, [recordRecentTicket, setActiveTabTitle, ticket, ticketID, workspaceID]);
 
   if (!ticket) {

@@ -4,7 +4,7 @@
 // Two functions: `useShortcut(key, fn)` for a single key, and the
 // platform-detection `isMod(e)` for ⌘/Ctrl modifier checks.
 
-import { useEffect } from 'react';
+import { useKeyBinding } from './commands/use-key-binding';
 
 export type ShortcutKey =
   | string // a single character or named key (e.g. 'j', 'Enter', 'ArrowDown')
@@ -26,18 +26,14 @@ export function isTypingInElement(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
   if (!el) return false;
   if (el.isContentEditable) return true;
-  const tag = el.tagName;
-  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)) return true;
+  const combobox = el.closest('[role="combobox"], [role="listbox"]');
+  return !!combobox && combobox.getAttribute('aria-expanded') === 'true';
 }
 
 /** True when the event has the platform-correct modifier (Cmd on macOS, Ctrl elsewhere). */
 export function isMod(e: KeyboardEvent | React.KeyboardEvent): boolean {
   return isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
-}
-
-function matchesKey(e: KeyboardEvent, key: ShortcutKey): boolean {
-  if (Array.isArray(key)) return key.includes(e.key);
-  return e.key === (key as string);
 }
 
 /**
@@ -51,16 +47,19 @@ export function useShortcut(
   options: UseShortcutOptions = {},
 ): void {
   const { allowInInputs = false, preventDefault = true, enabled = true } = options;
+  useKeyBinding(keyToPattern(key), fn, {
+    scopes: ['app'],
+    allowInInputs,
+    preventDefault,
+    enabled,
+  });
+}
 
-  useEffect(() => {
-    if (!enabled) return;
-    const handler = (e: KeyboardEvent) => {
-      if (!allowInInputs && isTypingInElement(e.target)) return;
-      if (!matchesKey(e, key)) return;
-      if (preventDefault) e.preventDefault();
-      fn(e);
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [key, fn, allowInInputs, preventDefault, enabled]);
+function keyToPattern(key: ShortcutKey): string | ReadonlyArray<string> {
+  if (typeof key !== 'string') return key.map(normalizeShortcutKey);
+  return normalizeShortcutKey(key);
+}
+
+function normalizeShortcutKey(key: string): string {
+  return key === 'Escape' ? 'Escape' : key;
 }

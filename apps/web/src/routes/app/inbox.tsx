@@ -6,12 +6,14 @@
 
 import { createFileRoute, Outlet, useParams } from '@tanstack/react-router';
 import { InboxList } from '@/components/inbox-list';
+import { useScope } from '@/lib/commands/use-scope';
 
 export const Route = createFileRoute('/app/inbox')({
   component: InboxLayout,
 });
 
 function InboxLayout() {
+  useScope('inbox');
   const params = useParams({ strict: false }) as { ticketId?: string };
   const { session } = Route.useRouteContext() as {
     session: { user: { id: string } };
