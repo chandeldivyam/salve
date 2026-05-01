@@ -8,67 +8,34 @@
 // the bottom. Mirrors zbugs `issueListV2` cursor pattern in spirit (limit
 // instead of cursor, since Zero already de-duplicates an expanded window
 // efficiently).
+//
+// Phase 2 multi-select: bulk selection state is kept in
+// `lib/inbox-selection.ts` (Zustand, transient — no persist) so the
+// command palette can read it. Per-row state used by InboxRow is wired
+// down via props to keep the row component dumb.
 
 import { mutators } from '@opendesk/mutators';
-import {
-  Avatar,
-  AvatarFallback,
-  Badge,
-  Button,
-  cn,
-  Input,
-  initialsFromName,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@opendesk/ui';
-import { type InboxRow, queries, type Ticket } from '@opendesk/zero-schema';
+import { Button, cn, Input, Tooltip, TooltipContent, TooltipTrigger } from '@opendesk/ui';
+import { type InboxRow as InboxRowData, queries } from '@opendesk/zero-schema';
 import { useQuery } from '@rocicorp/zero/react';
 import { Link, useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { formatDistanceToNow } from 'date-fns';
 import { ArrowRight, Filter, Inbox, ListChecks, Search } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { BulkActionBar } from '@/components/inbox/bulk-action-bar';
+import { InboxRow } from '@/components/inbox/inbox-row';
+import { useInboxSelectionStore } from '@/lib/inbox-selection';
 import { useSetupProgress } from '@/lib/setup-progress';
-import { useShortcut } from '@/lib/shortcuts';
-import { sortedTagsFromRelations, type TagRow, tagPillStyle } from '@/lib/support-metadata';
+import { isMod, useShortcut } from '@/lib/shortcuts';
 import { useZero } from '@/lib/zero';
 import { CACHE_FOREVER } from '@/lib/zero-cache';
 import { InboxListSkeleton } from './skeletons';
-import { WorkbenchLink } from './workbench/workbench-link';
 
 type InboxFilter = 'all' | 'unassigned' | 'mine' | 'resolved';
 
 interface InboxListProps {
   selectedTicketID: string | null;
   currentUserID: string;
-}
-
-// `InboxRow` is `QueryResultType<typeof queries.inboxOpen>[number]` from
-// `@opendesk/zero-schema` — it carries the ticket columns plus the
-// `customer`, `assignee`, and tag relateds declared on `inboxOpen`.
-type TicketRow = InboxRow;
-
-const STATUS_LABEL: Record<Ticket['status'], string> = {
-  open: 'Open',
-  in_progress: 'In progress',
-  snoozed: 'Snoozed',
-  resolved: 'Resolved',
-  closed: 'Closed',
-};
-
-function statusVariant(status: Ticket['status']): 'default' | 'success' | 'warning' | 'muted' {
-  switch (status) {
-    case 'open':
-      return 'default';
-    case 'in_progress':
-      return 'warning';
-    case 'snoozed':
-      return 'muted';
-    case 'resolved':
-    case 'closed':
-      return 'success';
-  }
 }
 
 const FILTERS: Array<{ id: InboxFilter; label: string }> = [
@@ -87,6 +54,8 @@ const PAGE_GROWTH = 200;
 const PAGE_CEILING = 2000;
 const LOAD_MORE_THRESHOLD = 16; // grow when within this many rows of the bottom
 
+const ROW_HEIGHT = 44;
+
 export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
   const navigate = useNavigate();
   const z = useZero();
@@ -104,9 +73,40 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
   const [filter, setFilter] = useState<InboxFilter>('all');
   const [search, setSearch] = useState('');
 
+  // Bulk selection (transient — see lib/inbox-selection.ts).
+  const selectionIds = useInboxSelectionStore((s) => s.ids);
+  const setSelectionWorkspace = useInboxSelectionStore((s) => s.setWorkspace);
+  const setMany = useInboxSelectionStore((s) => s.setMany);
+  const clearSelection = useInboxSelectionStore((s) => s.clear);
+  const toggleOne = useInboxSelectionStore((s) => s.toggle);
+  const setLastToggledIndex = useInboxSelectionStore((s) => s.setLastToggledIndex);
+  const lastToggledIndex = useInboxSelectionStore((s) => s.lastToggledIndex);
+  const selectionSet = useMemo(() => new Set(selectionIds), [selectionIds]);
+  const hasSelection = selectionIds.length > 0;
+
+  // Reset selection on workspace change (and on mount). The store keys by
+  // workspaceID and clears its own state when it changes.
+  useEffect(() => {
+    setSelectionWorkspace(workspaceID);
+  }, [workspaceID, setSelectionWorkspace]);
+
+  // Drop selection on filter / search change so the bar's count stays
+  // honest (selection refers to ids, not indices, but the user's mental
+  // model is "this list" — switching the list resets the operation).
+  // Tracked via a ref so biome's exhaustive-deps rule sees a single
+  // legitimate dep (`clearSelection`).
+  const lastFilterRef = useRef<string>(`${filter}\u0000${search}`);
+  useEffect(() => {
+    const next = `${filter}\u0000${search}`;
+    if (lastFilterRef.current !== next) {
+      lastFilterRef.current = next;
+      clearSelection();
+    }
+  });
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return tickets.filter((t) => {
+    return tickets.filter((t: InboxRowData) => {
       // status filter
       if (filter === 'unassigned' && t.assigneeID) return false;
       if (filter === 'mine' && t.assigneeID !== currentUserID) return false;
@@ -127,7 +127,8 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
   }, [tickets, filter, search, currentUserID]);
 
   // Selected index based on URL — keeps J/K + selected highlight in sync
-  // with the actual route param.
+  // with the actual route param. With push-nav the list is hidden when a
+  // ticket is open, but selection still drives j/k starting position.
   const selectedIndex = useMemo(() => {
     if (!selectedTicketID) return -1;
     return filtered.findIndex((t) => t.id === selectedTicketID);
@@ -137,18 +138,72 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
   const virtualizer = useVirtualizer({
     count: filtered.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 74,
+    estimateSize: () => ROW_HEIGHT,
     overscan: 8,
   });
+
+  // Scroll restoration: when a row is clicked, the list unmounts (push-nav).
+  // Capture parentRef.current.scrollTop into sessionStorage on row click and
+  // on unmount; restore it on mount. Keyed per-workspace.
+  const scrollKey = useMemo(
+    () => `opendesk.inbox.scroll.${workspaceID ?? 'no-workspace'}`,
+    [workspaceID],
+  );
+  const restoredRef = useRef(false);
+
+  useLayoutEffect(() => {
+    if (restoredRef.current) return;
+    if (typeof window === 'undefined') return;
+    const node = parentRef.current;
+    if (!node) return;
+    const raw = window.sessionStorage.getItem(scrollKey);
+    if (!raw) return;
+    const saved = Number.parseInt(raw, 10);
+    if (!Number.isFinite(saved) || saved <= 0) return;
+    // Defer until the virtualizer has measured at least once so its
+    // scrollHeight reflects the rendered rows; otherwise setting scrollTop
+    // gets clamped to 0.
+    const total = virtualizer.getTotalSize();
+    if (total > 0 && saved < total) {
+      node.scrollTop = saved;
+      restoredRef.current = true;
+    } else if (total > 0) {
+      // total exists but saved is past the end → clear stale value.
+      restoredRef.current = true;
+    }
+  });
+
+  function captureScroll() {
+    if (typeof window === 'undefined') return;
+    const node = parentRef.current;
+    if (!node) return;
+    window.sessionStorage.setItem(scrollKey, String(node.scrollTop));
+  }
+
+  // Capture on unmount as a safety net (covers j/k navigation that doesn't
+  // run a click handler). Reads parentRef + scrollKey at unmount time.
+  useEffect(() => {
+    return () => {
+      if (typeof window === 'undefined') return;
+      const node = parentRef.current;
+      if (!node) return;
+      window.sessionStorage.setItem(scrollKey, String(node.scrollTop));
+    };
+  }, [scrollKey]);
 
   // J/K + arrow keys for keyboard navigation. E archives (close mutator).
   // `useShortcut` centralises the "skip while typing" gate (lib/shortcuts).
   const goToIndex = useCallback(
     (idx: number) => {
       const t = filtered[idx];
-      if (t) navigate({ to: '/app/inbox/t/$ticketId', params: { ticketId: t.id } });
+      if (!t) return;
+      // Persist current scroll so the list can restore on return.
+      if (typeof window !== 'undefined' && parentRef.current) {
+        window.sessionStorage.setItem(scrollKey, String(parentRef.current.scrollTop));
+      }
+      navigate({ to: '/app/inbox/t/$ticketId', params: { ticketId: t.id } });
     },
-    [filtered, navigate],
+    [filtered, navigate, scrollKey],
   );
   const cur = selectedIndex < 0 ? 0 : selectedIndex;
   useShortcut(['j', 'ArrowDown'], () => {
@@ -166,6 +221,61 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
     const t = filtered[cur];
     if (t) z.mutate(mutators.ticket.close({ id: t.id }));
   });
+
+  // Selection toggling. Range mode looks up the indexes in the *current*
+  // filtered list — not the underlying ticket array — because that's the
+  // user's mental model. Selection survives sort/order changes since it's
+  // ID-based, but range bounds are recomputed each call.
+  const toggleSelection = useCallback(
+    (id: string, opts: { shiftRange?: boolean }) => {
+      const idx = filtered.findIndex((t) => t.id === id);
+      if (idx < 0) return;
+      if (opts.shiftRange && lastToggledIndex !== null) {
+        const start = Math.min(lastToggledIndex, idx);
+        const end = Math.max(lastToggledIndex, idx);
+        const rangeIDs = filtered.slice(start, end + 1).map((t) => t.id);
+        // Union with existing selection so shift-click extends rather than
+        // replaces — matches Linear / macOS Finder semantics.
+        const next = Array.from(new Set([...selectionIds, ...rangeIDs]));
+        setMany(next);
+      } else {
+        toggleOne(id);
+      }
+      setLastToggledIndex(idx);
+    },
+    [filtered, lastToggledIndex, selectionIds, setMany, toggleOne, setLastToggledIndex],
+  );
+
+  // `x` toggles selection on the current j/k cursor row.
+  useShortcut(['x', 'X'], () => {
+    const t = filtered[cur];
+    if (!t) return;
+    toggleSelection(t.id, { shiftRange: false });
+  });
+
+  // Esc clears selection — but only when a selection exists, so it falls
+  // through to BackToInbox / other Esc handlers when there's nothing to clear.
+  useShortcut(
+    'Escape',
+    (event) => {
+      if (selectionIds.length === 0) return;
+      event.stopPropagation();
+      clearSelection();
+    },
+    { preventDefault: false, enabled: hasSelection },
+  );
+
+  // Cmd/Ctrl + A selects all visible (filtered) rows.
+  useShortcut(
+    'a',
+    (event) => {
+      if (!isMod(event)) return;
+      event.preventDefault();
+      setMany(filtered.map((t) => t.id));
+      setLastToggledIndex(filtered.length > 0 ? 0 : null);
+    },
+    { preventDefault: false },
+  );
 
   // Infinite scroll — when the last virtualized row index is within
   // LOAD_MORE_THRESHOLD of the end, grow the query window. Capped at
@@ -259,58 +369,70 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
         </div>
       </div>
 
-      <div ref={parentRef} className="flex-1 overflow-y-auto">
-        {/*
-         * Render order matters here:
-         *   1. tickets present → render the list (covers both "live data"
-         *      and "IDB cache from a previous mount", so reload never
-         *      flashes a loading state).
-         *   2. server confirmed empty + matches the empty filter → empty state.
-         *   3. server hasn't responded yet → skeleton at the row shape.
-         * Gating purely on `ready` (zbugs `ticketStatus.type === 'complete'`)
-         * was the source of the previous loading flash on every mount.
-         */}
-        {filtered.length === 0 && !ready ? (
-          <InboxListSkeleton />
-        ) : filtered.length === 0 ? (
-          <EmptyInbox
-            showSampleCreate={tickets.length === 0 && filter === 'all' && search === ''}
-            onCreate={onCreateSampleTicket}
-            setup={setupProgress}
-          />
-        ) : (
-          <div
-            style={{
-              height: virtualizer.getTotalSize(),
-              width: '100%',
-              position: 'relative',
-            }}
-          >
-            {virtualizer.getVirtualItems().map((vi) => {
-              const t = filtered[vi.index];
-              if (!t) return null;
-              const isSelected = t.id === selectedTicketID;
-              return (
-                <div
-                  key={t.id}
-                  data-testid="inbox-row"
-                  data-selected={isSelected ? 'true' : 'false'}
-                  ref={virtualizer.measureElement}
-                  data-index={vi.index}
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    transform: `translateY(${vi.start}px)`,
-                  }}
-                >
-                  <InboxListRow ticket={t} isSelected={isSelected} />
-                </div>
-              );
-            })}
-          </div>
-        )}
+      <div className="relative flex-1 overflow-hidden">
+        <div ref={parentRef} className="h-full overflow-y-auto" onClickCapture={captureScroll}>
+          {/*
+           * Render order matters here:
+           *   1. tickets present → render the list (covers both "live data"
+           *      and "IDB cache from a previous mount", so reload never
+           *      flashes a loading state).
+           *   2. server confirmed empty + matches the empty filter → empty state.
+           *   3. server hasn't responded yet → skeleton at the row shape.
+           * Gating purely on `ready` (zbugs `ticketStatus.type === 'complete'`)
+           * was the source of the previous loading flash on every mount.
+           */}
+          {filtered.length === 0 && !ready ? (
+            <InboxListSkeleton />
+          ) : filtered.length === 0 ? (
+            <EmptyInbox
+              showSampleCreate={tickets.length === 0 && filter === 'all' && search === ''}
+              onCreate={onCreateSampleTicket}
+              setup={setupProgress}
+            />
+          ) : (
+            <div
+              style={{
+                height: virtualizer.getTotalSize(),
+                width: '100%',
+                position: 'relative',
+              }}
+            >
+              {virtualizer.getVirtualItems().map((vi) => {
+                const t = filtered[vi.index];
+                if (!t) return null;
+                const isSelected = t.id === selectedTicketID;
+                const multiSelected = selectionSet.has(t.id);
+                return (
+                  <div
+                    key={t.id}
+                    data-testid="inbox-row"
+                    data-selected={isSelected ? 'true' : 'false'}
+                    data-multi-selected={multiSelected ? 'true' : 'false'}
+                    ref={virtualizer.measureElement}
+                    data-index={vi.index}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      transform: `translateY(${vi.start}px)`,
+                    }}
+                  >
+                    <InboxRow
+                      ticket={t}
+                      isSelected={isSelected}
+                      multiSelected={multiSelected}
+                      showCheckbox={hasSelection}
+                      onToggleSelect={toggleSelection}
+                      onNavigate={clearSelection}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        <BulkActionBar currentUserID={currentUserID} />
       </div>
     </div>
   );
@@ -391,135 +513,3 @@ const NEXT_LABEL: Record<ReturnType<typeof useSetupProgress>['items'][number]['i
   firstMessage: 'receive your first message',
   invite: 'invite a teammate',
 };
-
-function InboxListRow({ ticket, isSelected }: { ticket: TicketRow; isSelected: boolean }) {
-  const isUrgent = ticket.priority === 'urgent' || ticket.priority === 'high';
-  const customerLabel = ticket.customer?.name ?? ticket.customer?.email ?? 'No customer';
-  const updated = new Date(ticket.updatedAt);
-  const rowTags = sortedTagsFromRelations((ticket as unknown as Record<string, unknown>).tags);
-
-  return (
-    <WorkbenchLink
-      href={`/app/inbox/t/${ticket.id}`}
-      source="ticket-row"
-      className={cn(
-        'group block border-b border-border transition-colors',
-        isSelected
-          ? 'border-l-4 border-l-brand-500 bg-brand-soft/60'
-          : 'border-l-4 border-l-transparent hover:bg-surface-muted',
-      )}
-    >
-      <div className="flex items-start gap-2.5 px-3 py-2">
-        {isUrgent ? (
-          <span
-            aria-hidden="true"
-            className={cn(
-              'mt-1 h-2 w-2 shrink-0 rounded-full',
-              ticket.priority === 'urgent' ? 'bg-danger' : 'bg-warning',
-            )}
-          />
-        ) : (
-          <span
-            aria-hidden="true"
-            className="mt-1 h-2 w-2 shrink-0 rounded-full bg-border-strong"
-          />
-        )}
-        <div className="min-w-0 flex-1">
-          <div className="flex items-baseline justify-between gap-2">
-            <span
-              className={cn(
-                'block truncate text-[13px] text-muted-foreground',
-                isSelected && 'text-brand-soft-foreground',
-              )}
-              title={customerLabel}
-            >
-              {customerLabel}
-            </span>
-            <div className="flex min-w-0 shrink-0 items-center gap-1">
-              <InboxRowTags tags={rowTags} />
-              <span className="text-[11px] tabular-nums text-muted-foreground">
-                {formatDistanceToNow(updated, { addSuffix: false })}
-              </span>
-            </div>
-          </div>
-          <p
-            className={cn(
-              'mt-0.5 line-clamp-1 text-[13.5px] leading-snug',
-              isSelected ? 'font-semibold text-foreground' : 'font-medium text-foreground/90',
-            )}
-          >
-            {ticket.title}
-          </p>
-          <div className="mt-1.5 flex items-center gap-1.5">
-            <Badge variant={statusVariant(ticket.status)}>{STATUS_LABEL[ticket.status]}</Badge>
-            {ticket.priority !== 'normal' ? (
-              <Badge
-                variant={
-                  ticket.priority === 'urgent'
-                    ? 'danger'
-                    : ticket.priority === 'high'
-                      ? 'warning'
-                      : 'muted'
-                }
-              >
-                {ticket.priority}
-              </Badge>
-            ) : null}
-            <span className="ml-auto">
-              {ticket.assignee ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Avatar size={20}>
-                      <AvatarFallback>
-                        {initialsFromName(ticket.assignee.name, ticket.assignee.email)}
-                      </AvatarFallback>
-                    </Avatar>
-                  </TooltipTrigger>
-                  <TooltipContent>{ticket.assignee.name ?? ticket.assignee.email}</TooltipContent>
-                </Tooltip>
-              ) : (
-                <span className="text-[11px] text-muted-foreground">Unassigned</span>
-              )}
-            </span>
-          </div>
-        </div>
-      </div>
-    </WorkbenchLink>
-  );
-}
-
-function InboxRowTags({ tags }: { tags: TagRow[] }) {
-  if (tags.length === 0) return null;
-  const shown = tags.slice(0, 3);
-  const hidden = tags.slice(3);
-
-  return (
-    <span className="hidden min-w-0 items-center gap-1 sm:inline-flex">
-      {shown.map((tag) => (
-        <span
-          key={tag.id}
-          className="inline-flex h-[18px] max-w-20 items-center rounded-full border px-1.5 text-[10px] font-medium leading-none"
-          style={tagPillStyle(tag)}
-          title={tag.group?.label ?? tag.label}
-        >
-          <span className="truncate">{tag.label}</span>
-        </span>
-      ))}
-      {hidden.length > 0 ? (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              className="inline-flex h-[18px] items-center rounded-full border border-border bg-muted px-1.5 text-[10px] font-medium leading-none text-muted-foreground"
-              aria-label={`${hidden.length} more tags`}
-              onClick={(event) => event.preventDefault()}
-            >
-              +{hidden.length}
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>{hidden.map((tag) => tag.label).join(', ')}</TooltipContent>
-        </Tooltip>
-      ) : null}
-    </span>
-  );
-}

@@ -22,6 +22,7 @@ export function WorkbenchShell({ session, children }: WorkbenchShellProps) {
   const initializeDrafts = useComposerDraftsStore((state) => state.initializeDrafts);
   const activeTabID = useWorkbenchStore((state) => state.activeTabIdByWorkspace[key]);
   const activeTab = selectActiveWorkspaceTab(key);
+  const leftRailCollapsed = useWorkbenchStore((state) => state.leftRailCollapsed);
 
   useEffect(() => {
     initialize(session.user.id, workspaceID);
@@ -37,7 +38,12 @@ export function WorkbenchShell({ session, children }: WorkbenchShellProps) {
   }, [location.hash, location.pathname, location.searchStr, syncLocation, workspaceID]);
 
   return (
-    <div className="grid h-dvh grid-cols-[240px_minmax(0,1fr)] grid-rows-[40px_minmax(0,1fr)] bg-background text-foreground">
+    <div
+      className="grid h-dvh grid-rows-[40px_minmax(0,1fr)] bg-background text-foreground transition-[grid-template-columns] duration-200 ease-out"
+      style={{
+        gridTemplateColumns: `${leftRailCollapsed ? '52px' : '240px'} minmax(0,1fr)`,
+      }}
+    >
       <div className="row-span-2 min-h-0">
         <WorkbenchLeftRail workspaceID={workspaceID} />
       </div>

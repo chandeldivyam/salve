@@ -28,7 +28,10 @@ import { useQuery } from '@rocicorp/zero/react';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { format, formatDistanceToNow } from 'date-fns';
 import {
+  AlertTriangle,
+  ArrowDown,
   ChevronDown,
+  Equal,
   ExternalLink,
   Lock,
   MoreHorizontal,
@@ -41,6 +44,7 @@ import { useEffect } from 'react';
 import { Composer, type ComposerEmailAddress, type ComposerSendArgs } from '@/components/composer';
 import { CustomFieldsBlock } from '@/components/conversation/custom-fields-block';
 import { TagsField } from '@/components/conversation/tags-field';
+import { BackToInbox } from '@/components/inbox/back-to-inbox';
 import { TicketDetailSkeleton } from '@/components/skeletons';
 import { useWorkbenchStore } from '@/lib/workbench';
 import { useZero } from '@/lib/zero';
@@ -150,6 +154,25 @@ function priorityVariant(p: string): 'default' | 'warning' | 'danger' | 'muted' 
       return 'default';
   }
 }
+
+function statusDotClass(status: string): string {
+  switch (status) {
+    case 'open':
+      return 'bg-brand-500';
+    case 'in_progress':
+      return 'bg-warning';
+    case 'snoozed':
+      return 'bg-border-strong';
+    case 'resolved':
+    case 'closed':
+      return 'bg-success';
+    default:
+      return 'bg-border-strong';
+  }
+}
+
+const HEADER_PILL_CLASS =
+  'inline-flex items-center gap-1 rounded-md px-1.5 h-6 text-[12px] text-muted-foreground hover:bg-surface-muted hover:text-foreground border border-transparent hover:border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors';
 
 function TicketDetail() {
   const { ticketId } = Route.useParams();
@@ -290,56 +313,59 @@ function TicketDetail() {
     await z.mutate(mutators.message.send(payload as Parameters<typeof mutators.message.send>[0]));
   }
 
+  const statusLabel = STATUS_OPTIONS.find((o) => o.id === ticket.status)?.label ?? ticket.status;
+  const customerLine = ticket.customer?.email ?? ticket.customer?.name ?? 'No customer';
+
   return (
     <div className="flex h-full flex-1 flex-col bg-background">
-      <header className="flex shrink-0 flex-col gap-3 border-b border-border bg-surface px-6 py-4">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              {ticket.customer?.email ?? ticket.customer?.name ?? 'No customer'} ·{' '}
+      <header className="flex shrink-0 flex-col gap-1.5 border-b border-border bg-surface px-6 py-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 flex-1 items-center gap-1.5 text-[12px] text-muted-foreground">
+            <BackToInbox />
+            <span aria-hidden="true">·</span>
+            <span className="truncate" title={customerLine}>
+              {customerLine}
+            </span>
+            <span aria-hidden="true">·</span>
+            <span className="tabular-nums">
               {ticket.shortID > 0 ? `#${ticket.shortID}` : 'new'}
-            </p>
-            <h1 className="truncate text-lg font-semibold text-foreground" title={ticket.title}>
-              {ticket.title}
-            </h1>
+            </span>
           </div>
-          <div className="flex shrink-0 items-center gap-1">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  aria-label="Ticket actions"
-                  className="grid h-8 w-8 place-items-center rounded-md border border-border text-muted-foreground hover:bg-surface-muted"
-                >
-                  <MoreHorizontal className="h-4 w-4" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => setStatus('snoozed')}>
-                  Snooze 24h
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setStatus('resolved')}>Close</DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => window.open(window.location.href, '_blank')}>
-                  <ExternalLink className="h-3.5 w-3.5" /> Open in new tab
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Status dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="inline-flex items-center gap-1 rounded-md ring-1 ring-inset ring-transparent transition-colors hover:ring-border-strong"
+                aria-label="Ticket actions"
+                className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-surface-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <Badge variant={statusVariant(ticket.status)}>
-                  {STATUS_OPTIONS.find((o) => o.id === ticket.status)?.label ?? ticket.status}
-                  <ChevronDown className="-mr-0.5 h-3 w-3" />
-                </Badge>
+                <MoreHorizontal className="h-4 w-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => setStatus('snoozed')}>Snooze 24h</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setStatus('resolved')}>Close</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => window.open(window.location.href, '_blank')}>
+                <ExternalLink className="h-3.5 w-3.5" /> Open in new tab
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        <h1 className="truncate text-lg font-semibold text-foreground" title={ticket.title}>
+          {ticket.title}
+        </h1>
+
+        <div className="flex flex-wrap items-center gap-1">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button type="button" className={HEADER_PILL_CLASS}>
+                <span
+                  className={cn('h-2 w-2 shrink-0 rounded-full', statusDotClass(ticket.status))}
+                  aria-hidden="true"
+                />
+                <span className="text-foreground">{statusLabel}</span>
+                <ChevronDown className="h-3 w-3 opacity-60" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent>
@@ -352,17 +378,12 @@ function TicketDetail() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Priority dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="inline-flex items-center gap-1 rounded-md ring-1 ring-inset ring-transparent transition-colors hover:ring-border-strong"
-              >
-                <Badge variant={priorityVariant(ticket.priority)}>
-                  {ticket.priority}
-                  <ChevronDown className="-mr-0.5 h-3 w-3" />
-                </Badge>
+              <button type="button" className={HEADER_PILL_CLASS}>
+                <PriorityIcon priority={ticket.priority} />
+                <span className="text-foreground capitalize">{ticket.priority}</span>
+                <ChevronDown className="h-3 w-3 opacity-60" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent>
@@ -375,29 +396,27 @@ function TicketDetail() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Assignee dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="inline-flex items-center gap-1.5 rounded-md border border-transparent px-1 py-0.5 text-xs text-muted-foreground hover:border-border hover:bg-surface-muted"
-              >
+              <button type="button" className={HEADER_PILL_CLASS}>
                 {ticket.assignee ? (
                   <>
-                    <Avatar size={20}>
+                    <Avatar size={16}>
                       <AvatarFallback>
                         {initialsFromName(ticket.assignee.name, ticket.assignee.email)}
                       </AvatarFallback>
                     </Avatar>
-                    <span>{ticket.assignee.name ?? ticket.assignee.email}</span>
+                    <span className="text-foreground">
+                      {ticket.assignee.name ?? ticket.assignee.email}
+                    </span>
                   </>
                 ) : (
                   <>
-                    <UserPlus className="h-3.5 w-3.5 text-muted-foreground" />
+                    <UserPlus className="h-3.5 w-3.5" />
                     <span>Unassigned</span>
                   </>
                 )}
-                <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                <ChevronDown className="h-3 w-3 opacity-60" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
@@ -889,6 +908,19 @@ function AttachmentList({
       ))}
     </div>
   );
+}
+
+function PriorityIcon({ priority }: { priority: string }) {
+  if (priority === 'urgent') {
+    return <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-danger" aria-hidden="true" />;
+  }
+  if (priority === 'high') {
+    return <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning" aria-hidden="true" />;
+  }
+  if (priority === 'low') {
+    return <ArrowDown className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden="true" />;
+  }
+  return <Equal className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden="true" />;
 }
 
 function formatBytes(b: number) {
