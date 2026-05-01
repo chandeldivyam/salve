@@ -6,6 +6,8 @@ import {
   Settings,
   Tags,
   TextCursorInput,
+  UserRound,
+  Users,
 } from 'lucide-react';
 
 export type WorkbenchRouteKind = 'app' | 'record' | 'utility';
@@ -41,6 +43,8 @@ export interface WorkbenchRouteDef {
 export type WorkbenchIconId =
   | 'inbox'
   | 'ticket'
+  | 'customers'
+  | 'customer'
   | 'settings'
   | 'setup'
   | 'email'
@@ -72,6 +76,11 @@ function ticketParams(pathname: string): Record<string, string> | null {
   return match?.[1] ? { ticketId: decodeURIComponent(match[1]) } : null;
 }
 
+function customerParams(pathname: string): Record<string, string> | null {
+  const match = /^\/app\/customers\/([^/]+)\/?$/.exec(pathname);
+  return match?.[1] ? { customerId: decodeURIComponent(match[1]) } : null;
+}
+
 export const workbenchRoutes: readonly WorkbenchRouteDef[] = [
   {
     id: 'ticket',
@@ -88,6 +97,17 @@ export const workbenchRoutes: readonly WorkbenchRouteDef[] = [
     transientSearchParams: ['action'],
   },
   {
+    id: 'customer',
+    kind: 'record',
+    match: (pathname) => customerParams(pathname),
+    tabKey: (params) => `customer:${params.customerId ?? 'unknown'}`,
+    defaultHref: '/app/customers',
+    title: (params) => `Customer ${params.customerId ?? ''}`.trim(),
+    iconId: 'customer',
+    closable: true,
+    transientSearchParams: ['action'],
+  },
+  {
     id: 'inbox',
     kind: 'app',
     match: (pathname) => (startsWith('/app/inbox')(pathname) ? {} : null),
@@ -99,6 +119,19 @@ export const workbenchRoutes: readonly WorkbenchRouteDef[] = [
     closable: false,
     searchable: true,
     transientSearchParams: ['action', 'fullDetail'],
+  },
+  {
+    id: 'customers',
+    kind: 'app',
+    match: (pathname) => (startsWith('/app/customers')(pathname) ? {} : null),
+    tabKey: () => 'customers',
+    defaultHref: '/app/customers',
+    title: () => 'Customers',
+    iconId: 'customers',
+    pinnedByDefault: false,
+    closable: true,
+    searchable: true,
+    transientSearchParams: ['action'],
   },
   {
     id: 'settings',
@@ -170,6 +203,14 @@ export const appDestinations: readonly WorkbenchSearchDestination[] = [
     iconId: 'inbox',
     group: 'apps',
   },
+  {
+    id: 'app-customers',
+    label: 'Customers',
+    description: 'Profiles, timelines, and contact context',
+    href: '/app/customers',
+    iconId: 'customers',
+    group: 'apps',
+  },
 ];
 
 export const actionDestinations: readonly WorkbenchSearchDestination[] = [
@@ -186,6 +227,8 @@ export const actionDestinations: readonly WorkbenchSearchDestination[] = [
 export const workbenchIconMap: Record<WorkbenchIconId, LucideIcon> = {
   inbox: Inbox,
   ticket: Mail,
+  customers: Users,
+  customer: UserRound,
   settings: Settings,
   setup: ListChecks,
   email: Mail,

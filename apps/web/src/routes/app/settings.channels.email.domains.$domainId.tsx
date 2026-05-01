@@ -118,7 +118,10 @@ function DomainDetail() {
         {isVerified ? (
           <div className="mt-6 flex flex-col gap-6">
             <div className="flex items-start gap-3 rounded-md bg-bg-elevated px-4 py-3">
-              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-fg-tertiary" aria-hidden="true" />
+              <ShieldCheck
+                className="mt-0.5 h-4 w-4 shrink-0 text-fg-tertiary"
+                aria-hidden="true"
+              />
               <div className="min-w-0">
                 <p className="text-[13px] font-medium text-fg-primary">DNS records configured</p>
                 <p className="mt-0.5 text-[12px] text-fg-tertiary">
@@ -164,7 +167,10 @@ function DnsRecordList({
   return (
     <div className="flex flex-col gap-4">
       {records.map((r) => (
-        <div key={`${r.kind}-${r.host}`} className="flex flex-col gap-2 rounded-md bg-bg-elevated px-4 py-3">
+        <div
+          key={`${r.kind}-${r.host}`}
+          className="flex flex-col gap-2 rounded-md bg-bg-elevated px-4 py-3"
+        >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-[13px] font-medium text-fg-primary">{r.kind}</p>
             <Badge variant="muted">{r.type}</Badge>
@@ -172,7 +178,9 @@ function DnsRecordList({
           <div className="grid gap-2 sm:grid-cols-[120px_minmax(0,1fr)] sm:items-start">
             <span className="text-[11px] uppercase tracking-[0.06em] text-fg-quaternary">Host</span>
             <CopyValue value={r.host} label={`${r.kind} host`} />
-            <span className="text-[11px] uppercase tracking-[0.06em] text-fg-quaternary">Value</span>
+            <span className="text-[11px] uppercase tracking-[0.06em] text-fg-quaternary">
+              Value
+            </span>
             <CopyValue value={r.value} label={`${r.kind} value`} variant="block" />
           </div>
         </div>

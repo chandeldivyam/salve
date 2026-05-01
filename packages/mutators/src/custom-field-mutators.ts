@@ -533,7 +533,7 @@ export const customFieldMutators = {
         auth,
         {
           ticketID: args.ticketID,
-          kind: 'ticket.field_set',
+          kind: 'ticket.custom_field_changed',
           payload: {
             fieldID: field.id,
             fieldKey: field.key,
@@ -635,7 +635,7 @@ export const customFieldMutators = {
         auth,
         {
           ticketID: args.ticketID,
-          kind: 'ticket.field_cleared',
+          kind: 'ticket.custom_field_changed',
           payload: {
             fieldID: field.id,
             fieldKey: field.key,

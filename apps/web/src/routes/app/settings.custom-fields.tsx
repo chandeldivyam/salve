@@ -62,10 +62,7 @@ const FIELD_TYPES: CustomFieldType[] = [
   'dynamic_multi_select',
 ];
 
-type SheetState =
-  | { kind: 'closed' }
-  | { kind: 'create' }
-  | { kind: 'edit'; field: CustomFieldRow };
+type SheetState = { kind: 'closed' } | { kind: 'create' } | { kind: 'edit'; field: CustomFieldRow };
 
 function CustomFieldsSettingsPage() {
   const [category, setCategory] = useState<CustomFieldCategory>('ticket');
@@ -551,10 +548,10 @@ function FieldTypeMenu({
 
 function FormRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-1.5">
       <span className="text-[12px] font-medium text-fg-primary">{label}</span>
       {children}
-    </label>
+    </div>
   );
 }
 

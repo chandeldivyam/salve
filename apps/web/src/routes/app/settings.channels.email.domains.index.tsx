@@ -3,7 +3,7 @@
 // for one slice). The setup checklist deep-links here with `?action=add`
 // to auto-open the add form.
 
-import { Badge, Button, Card, CardContent } from '@opendesk/ui';
+import { Badge, Button } from '@opendesk/ui';
 import { queries } from '@opendesk/zero-schema';
 import { useQuery } from '@rocicorp/zero/react';
 import { createFileRoute, Link } from '@tanstack/react-router';
@@ -85,9 +85,7 @@ function DomainsTab() {
                     className="flex items-center justify-between gap-3 rounded-md px-3 py-2.5 transition-colors hover:bg-bg-elevated/40"
                   >
                     <div className="min-w-0">
-                      <p className="truncate text-[13px] font-medium text-fg-primary">
-                        {d.domain}
-                      </p>
+                      <p className="truncate text-[13px] font-medium text-fg-primary">{d.domain}</p>
                       <p className="mt-0.5 text-[11px] text-fg-tertiary">
                         Added {format(new Date(d.createdAt), 'MMM d, yyyy')}
                       </p>

@@ -22,6 +22,7 @@ import {
 import { z } from 'zod';
 import { assertCanModifyTicket, assertHasWorkspace, type WorkspaceAuthData } from './auth.js';
 import { customFieldMutators } from './custom-field-mutators.js';
+import { customerMutators, customerNoteMutators } from './customer-mutators.js';
 import { MutationError, MutationErrorCode } from './error.js';
 import { tagGroupMutators, tagMutators } from './tag-mutators.js';
 
@@ -111,6 +112,11 @@ async function findOrCreateCustomerByEmail(
     workspaceID: authData.workspaceID,
     email,
     name: name ?? undefined,
+    firstSeenAt: ts,
+    lastSeenAt: undefined,
+    phone: undefined,
+    location: undefined,
+    metadata: {},
     createdAt: ts,
     updatedAt: ts,
   });
@@ -158,6 +164,8 @@ export const mutators = defineMutators({
   tagGroup: tagGroupMutators,
   tag: tagMutators,
   customField: customFieldMutators,
+  customer: customerMutators,
+  customerNote: customerNoteMutators,
 
   ticket: {
     create: defineMutator(createTicketArgsSchema, async ({ tx, args, ctx: authData }) => {
@@ -211,38 +219,63 @@ export const mutators = defineMutators({
     }),
 
     update: defineMutator(updateTicketArgsSchema, async ({ tx, args, ctx: authData }) => {
-      await assertCanModifyTicket(tx, authData, args.id);
+      const ticket = await assertCanModifyTicket(tx, authData, args.id);
       const auth = authData as WorkspaceAuthData;
       const ts = now();
 
       const change: Record<string, unknown> = { id: args.id, updatedAt: ts };
+      const contentChanged =
+        (args.title !== undefined && args.title !== ticket.title) ||
+        (args.description !== undefined && args.description !== ticket.description);
+      const priorityChanged = args.priority !== undefined && args.priority !== ticket.priority;
       if (args.title !== undefined) change.title = args.title;
       if (args.description !== undefined) change.description = args.description;
       if (args.priority !== undefined) change.priority = args.priority;
+      if (!contentChanged && !priorityChanged) return;
 
       await tx.mutate.ticket.update(change as { id: string });
 
-      await emitAudit(
-        tx,
-        auth,
-        {
-          id: newID(),
-          ticketID: args.id,
-          kind: 'ticket.updated',
-          payload: {
-            title: args.title,
-            description: args.description,
-            priority: args.priority,
+      if (contentChanged) {
+        await emitAudit(
+          tx,
+          auth,
+          {
+            id: newID(),
+            ticketID: args.id,
+            kind: 'ticket.updated',
+            payload: {
+              title: args.title,
+              description: args.description,
+            },
           },
-        },
-        ts,
-      );
+          ts,
+        );
+      }
+      if (priorityChanged) {
+        await emitAudit(
+          tx,
+          auth,
+          {
+            id: newID(),
+            ticketID: args.id,
+            kind: 'ticket.priority_changed',
+            payload: {
+              oldPriority: ticket.priority,
+              priority: args.priority,
+            },
+          },
+          ts,
+        );
+      }
     }),
 
     assign: defineMutator(assignTicketArgsSchema, async ({ tx, args, ctx: authData }) => {
-      await assertCanModifyTicket(tx, authData, args.id);
+      const ticket = await assertCanModifyTicket(tx, authData, args.id);
       const auth = authData as WorkspaceAuthData;
       const ts = now();
+      const nextAssigneeID = args.assigneeID ?? undefined;
+
+      if ((ticket.assigneeID ?? undefined) === nextAssigneeID) return;
 
       if (args.assigneeID) {
         // Verify assignee is a member of the same workspace (`member` is the
@@ -265,7 +298,7 @@ export const mutators = defineMutators({
 
       await tx.mutate.ticket.update({
         id: args.id,
-        assigneeID: args.assigneeID ?? undefined,
+        assigneeID: nextAssigneeID,
         updatedAt: ts,
       });
 
@@ -276,14 +309,14 @@ export const mutators = defineMutators({
           id: newID(),
           ticketID: args.id,
           kind: 'ticket.assigned',
-          payload: { assigneeID: args.assigneeID },
+          payload: { oldAssigneeID: ticket.assigneeID ?? null, assigneeID: args.assigneeID },
         },
         ts,
       );
     }),
 
     snooze: defineMutator(snoozeTicketArgsSchema, async ({ tx, args, ctx: authData }) => {
-      await assertCanModifyTicket(tx, authData, args.id);
+      const ticket = await assertCanModifyTicket(tx, authData, args.id);
       const auth = authData as WorkspaceAuthData;
       const ts = now();
       await tx.mutate.ticket.update({
@@ -298,16 +331,17 @@ export const mutators = defineMutators({
           id: newID(),
           ticketID: args.id,
           kind: 'ticket.snoozed',
-          payload: { until: args.until },
+          payload: { oldStatus: ticket.status, status: 'snoozed', until: args.until },
         },
         ts,
       );
     }),
 
     close: defineMutator(ticketIdOnlyArgsSchema, async ({ tx, args, ctx: authData }) => {
-      await assertCanModifyTicket(tx, authData, args.id);
+      const ticket = await assertCanModifyTicket(tx, authData, args.id);
       const auth = authData as WorkspaceAuthData;
       const ts = now();
+      if (ticket.status === 'closed') return;
       await tx.mutate.ticket.update({
         id: args.id,
         status: 'closed',
@@ -321,16 +355,18 @@ export const mutators = defineMutators({
         {
           id: newID(),
           ticketID: args.id,
-          kind: 'ticket.closed',
+          kind: 'ticket.status_changed',
+          payload: { oldStatus: ticket.status, status: 'closed' },
         },
         ts,
       );
     }),
 
     reopen: defineMutator(ticketIdOnlyArgsSchema, async ({ tx, args, ctx: authData }) => {
-      await assertCanModifyTicket(tx, authData, args.id);
+      const ticket = await assertCanModifyTicket(tx, authData, args.id);
       const auth = authData as WorkspaceAuthData;
       const ts = now();
+      if (ticket.status === 'open' && !ticket.resolvedAt && !ticket.closedAt) return;
       await tx.mutate.ticket.update({
         id: args.id,
         status: 'open',
@@ -345,7 +381,8 @@ export const mutators = defineMutators({
         {
           id: newID(),
           ticketID: args.id,
-          kind: 'ticket.reopened',
+          kind: ticket.status === 'snoozed' ? 'ticket.unsnoozed' : 'ticket.status_changed',
+          payload: { oldStatus: ticket.status, status: 'open' },
         },
         ts,
       );
@@ -449,6 +486,16 @@ export {
   updateCustomFieldArgsSchema,
   validateCustomFieldValue,
 } from './custom-field-mutators.js';
+export {
+  type CreateCustomerNoteArgs,
+  type CustomerNoteIDOnlyArgs,
+  createCustomerNoteArgsSchema,
+  customerNoteIDOnlyArgsSchema,
+  type UpdateCustomerArgs,
+  type UpdateCustomerNoteArgs,
+  updateCustomerArgsSchema,
+  updateCustomerNoteArgsSchema,
+} from './customer-mutators.js';
 export { MutationError, MutationErrorCode } from './error.js';
 export {
   type CreateTagArgs,

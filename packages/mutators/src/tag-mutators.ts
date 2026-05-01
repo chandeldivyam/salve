@@ -291,10 +291,26 @@ export const tagMutators = {
       const toRemove = existingTagIDs.filter((tagID) => !nextTagIDs.includes(tagID));
       const toAdd = nextTagIDs.filter((tagID) => !existingTagIDs.includes(tagID));
       if (toRemove.length === 0 && toAdd.length === 0) return;
+      const removedTags: typeof tags = [];
+      for (const tagID of toRemove) {
+        removedTags.push(await assertTagInWorkspace(tx, auth, tagID));
+      }
+      const tagByID = new Map([...tags, ...removedTags].map((tag) => [tag.id, tag]));
 
       const ts = now();
       for (const tagID of toRemove) {
         await tx.mutate.ticketTag.delete({ ticketID: args.ticketID, tagID });
+        const tag = tagByID.get(tagID);
+        await emitAudit(
+          tx,
+          auth,
+          {
+            ticketID: args.ticketID,
+            kind: 'ticket.tag_removed',
+            payload: { tagID, tagLabel: tag?.label ?? tagID },
+          },
+          ts,
+        );
       }
       for (const tagID of toAdd) {
         await tx.mutate.ticketTag.insert({
@@ -304,21 +320,18 @@ export const tagMutators = {
           addedAt: ts,
           addedByID: auth.sub,
         });
-      }
-      await emitAudit(
-        tx,
-        auth,
-        {
-          ticketID: args.ticketID,
-          kind: 'ticket.tags_replaced',
-          payload: {
-            oldTagIDs: existingTagIDs,
-            newTagIDs: nextTagIDs,
-            tags: tags.map((tag) => ({ tagID: tag.id, tagLabel: tag.label })),
+        const tag = tagByID.get(tagID);
+        await emitAudit(
+          tx,
+          auth,
+          {
+            ticketID: args.ticketID,
+            kind: 'ticket.tag_added',
+            payload: { tagID, tagLabel: tag?.label ?? tagID },
           },
-        },
-        ts,
-      );
+          ts,
+        );
+      }
     },
   ),
 

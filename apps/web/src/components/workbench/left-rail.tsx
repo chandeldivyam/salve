@@ -30,6 +30,7 @@ import {
   Plus,
   Settings,
   Sun,
+  Users,
 } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { buildSettingsSidebarGroups, SettingsSidebar } from '@/components/settings';
@@ -146,12 +147,7 @@ export function WorkbenchLeftRail({ workspaceID }: { workspaceID: string | null 
         )}
       </div>
 
-      <div
-        className={cn(
-          'shrink-0',
-          collapsed ? 'flex justify-center px-1 py-2' : 'px-2 py-2',
-        )}
-      >
+      <div className={cn('shrink-0', collapsed ? 'flex justify-center px-1 py-2' : 'px-2 py-2')}>
         <WorkspaceSwitcher
           orgs={orgs}
           activeOrg={activeOrg}
@@ -180,6 +176,13 @@ export function WorkbenchLeftRail({ workspaceID }: { workspaceID: string | null 
                 label="Inbox"
                 collapsed={collapsed}
                 active={isActiveHref(pathname, '/app/inbox')}
+              />
+              <RailItem
+                href="/app/customers"
+                icon={Users}
+                label="Customers"
+                collapsed={collapsed}
+                active={isActiveHref(pathname, '/app/customers')}
               />
               <RailItem
                 href="/app/settings/setup"
@@ -235,12 +238,7 @@ export function WorkbenchLeftRail({ workspaceID }: { workspaceID: string | null 
         )}
       </nav>
 
-      <div
-        className={cn(
-          'shrink-0',
-          collapsed ? 'flex justify-center px-1 py-2' : 'p-2',
-        )}
-      >
+      <div className={cn('shrink-0', collapsed ? 'flex justify-center px-1 py-2' : 'p-2')}>
         {collapsed ? (
           <AccountMenu session={session} collapsed onSignOut={onSignOut} />
         ) : (

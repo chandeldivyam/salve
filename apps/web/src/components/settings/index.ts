@@ -1,3 +1,4 @@
+export { SettingsHeader } from './header';
 export { buildSettingsSidebarGroups } from './items';
 export {
   EmptyState,
@@ -6,7 +7,6 @@ export {
   ListSection,
   SettingsBody,
 } from './sections';
-export { SettingsHeader } from './header';
 export { SettingsSheet } from './sheet';
 export {
   SettingsSidebar,

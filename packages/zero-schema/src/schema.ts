@@ -53,6 +53,11 @@ const customer = table('customer')
     alternateEmails: json<string[]>().from('alternate_emails').optional(),
     displayName: string().from('display_name').optional(),
     avatarUrl: string().from('avatar_url').optional(),
+    firstSeenAt: number().from('first_seen_at').optional(),
+    lastSeenAt: number().from('last_seen_at').optional(),
+    phone: string().optional(),
+    location: string().optional(),
+    metadata: json(),
     createdAt: number().from('created_at'),
     updatedAt: number().from('updated_at'),
   })
@@ -118,6 +123,40 @@ const auditEvent = table('auditEvent')
     kind: string(),
     payload: json().optional(),
     createdAt: number().from('created_at'),
+  })
+  .primaryKey('id');
+
+const customerNote = table('customerNote')
+  .from('customer_note')
+  .columns({
+    id: string(),
+    workspaceID: string().from('workspace_id'),
+    objectType: enumeration<'customer' | 'ticket'>().from('object_type'),
+    objectID: string().from('object_id'),
+    customerID: string().from('customer_id'),
+    bodyHtml: string().from('body_html'),
+    bodyText: string().from('body_text'),
+    pinned: boolean(),
+    createdByID: string().from('created_by_id'),
+    editedAt: number().from('edited_at').optional(),
+    deletedAt: number().from('deleted_at').optional(),
+    createdAt: number().from('created_at'),
+    updatedAt: number().from('updated_at'),
+  })
+  .primaryKey('id');
+
+const customEvent = table('customEvent')
+  .from('custom_event')
+  .columns({
+    id: string(),
+    workspaceID: string().from('workspace_id'),
+    customerID: string().from('customer_id'),
+    eventName: string().from('event_name'),
+    properties: json(),
+    source: string(),
+    occurredAt: number().from('occurred_at'),
+    ingestedAt: number().from('ingested_at'),
+    idempotencyKey: string().from('idempotency_key').optional(),
   })
   .primaryKey('id');
 
@@ -438,6 +477,11 @@ const userRelationships = relationships(user, ({ many }) => ({
     destField: ['closedByID'],
     destSchema: ticket,
   }),
+  customerNotes: many({
+    sourceField: ['id'],
+    destField: ['createdByID'],
+    destSchema: customerNote,
+  }),
   assignedInboundRoutingRules: many({
     sourceField: ['id'],
     destField: ['assignAgentID'],
@@ -465,6 +509,16 @@ const organizationRelationships = relationships(organization, ({ many }) => ({
     sourceField: ['id'],
     destField: ['workspaceID'],
     destSchema: customer,
+  }),
+  customerNotes: many({
+    sourceField: ['id'],
+    destField: ['workspaceID'],
+    destSchema: customerNote,
+  }),
+  customEvents: many({
+    sourceField: ['id'],
+    destField: ['workspaceID'],
+    destSchema: customEvent,
   }),
   tagGroups: many({
     sourceField: ['id'],
@@ -532,6 +586,16 @@ const customerRelationships = relationships(customer, ({ many }) => ({
     destField: ['customerID'],
     destSchema: auditEvent,
   }),
+  notes: many({
+    sourceField: ['id'],
+    destField: ['customerID'],
+    destSchema: customerNote,
+  }),
+  customEvents: many({
+    sourceField: ['id'],
+    destField: ['customerID'],
+    destSchema: customEvent,
+  }),
   channelIdentities: many({
     sourceField: ['id'],
     destField: ['customerID'],
@@ -574,6 +638,11 @@ const ticketRelationships = relationships(ticket, ({ one, many }) => ({
     sourceField: ['id'],
     destField: ['ticketID'],
     destSchema: auditEvent,
+  }),
+  customerNotes: many({
+    sourceField: ['id'],
+    destField: ['objectID'],
+    destSchema: customerNote,
   }),
   tags: many({
     sourceField: ['id'],
@@ -653,6 +722,27 @@ const auditEventRelationships = relationships(auditEvent, ({ one }) => ({
     sourceField: ['actorID'],
     destField: ['id'],
     destSchema: user,
+  }),
+}));
+
+const customerNoteRelationships = relationships(customerNote, ({ one }) => ({
+  customer: one({
+    sourceField: ['customerID'],
+    destField: ['id'],
+    destSchema: customer,
+  }),
+  createdBy: one({
+    sourceField: ['createdByID'],
+    destField: ['id'],
+    destSchema: user,
+  }),
+}));
+
+const customEventRelationships = relationships(customEvent, ({ one }) => ({
+  customer: one({
+    sourceField: ['customerID'],
+    destField: ['id'],
+    destSchema: customer,
   }),
 }));
 
@@ -971,6 +1061,8 @@ export const schema = createSchema({
     message,
     attachment,
     auditEvent,
+    customerNote,
+    customEvent,
     tagGroup,
     tag,
     ticketTag,
@@ -997,6 +1089,8 @@ export const schema = createSchema({
     messageRelationships,
     attachmentRelationships,
     auditEventRelationships,
+    customerNoteRelationships,
+    customEventRelationships,
     tagGroupRelationships,
     tagRelationships,
     ticketTagRelationships,
@@ -1029,6 +1123,8 @@ export type Ticket = Row<typeof schema.tables.ticket>;
 export type Message = Row<typeof schema.tables.message>;
 export type Attachment = Row<typeof schema.tables.attachment>;
 export type AuditEvent = Row<typeof schema.tables.auditEvent>;
+export type CustomerNote = Row<typeof schema.tables.customerNote>;
+export type CustomEvent = Row<typeof schema.tables.customEvent>;
 export type TagGroup = Row<typeof schema.tables.tagGroup>;
 export type Tag = Row<typeof schema.tables.tag>;
 export type TicketTag = Row<typeof schema.tables.ticketTag>;

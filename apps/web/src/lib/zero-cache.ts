@@ -18,6 +18,7 @@ import type { TTL } from '@rocicorp/zero';
 
 export const CACHE_FOREVER: { readonly ttl: TTL } = { ttl: '10m' } as const;
 export const CACHE_NAV: { readonly ttl: TTL } = { ttl: '5m' } as const;
+export const CACHE_TICKET_DETAIL: { readonly ttl: TTL } = { ttl: '5m' } as const;
 export const CACHE_NONE: { readonly ttl: TTL } = { ttl: 'none' } as const;
 
 // Alias used at preload sites — same payload as CACHE_FOREVER but the name

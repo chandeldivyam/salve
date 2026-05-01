@@ -102,7 +102,9 @@ function TagsSettingsPage() {
                 onClick={() => setShowArchived((s) => !s)}
                 className="h-8"
               >
-                {showArchived ? 'Hide archived' : `Show archived (${archivedGroups.length + archivedTags.length})`}
+                {showArchived
+                  ? 'Hide archived'
+                  : `Show archived (${archivedGroups.length + archivedTags.length})`}
               </Button>
             ) : null}
             <Button size="sm" onClick={() => setSheet({ kind: 'create-group' })} className="h-8">
@@ -234,9 +236,7 @@ function GroupCard({
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              onSelect={() =>
-                z.mutate(supportMetadataMutators.tagGroup.archive({ id: group.id }))
-              }
+              onSelect={() => z.mutate(supportMetadataMutators.tagGroup.archive({ id: group.id }))}
             >
               <Archive className="h-3.5 w-3.5" />
               Archive group
@@ -733,10 +733,10 @@ function EditTagSheet({
 
 function FormRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-1.5">
       <span className="text-[12px] font-medium text-fg-primary">{label}</span>
       {children}
-    </label>
+    </div>
   );
 }
 

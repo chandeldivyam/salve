@@ -9,6 +9,7 @@ import {
   type DefaultSchema,
   defineQueries,
   defineQuery,
+  escapeLike,
   type Query,
   type QueryResultType,
 } from '@rocicorp/zero';
@@ -17,7 +18,12 @@ import type { AuthData } from './schema.js';
 import { builder } from './schema.js';
 
 type WorkspaceScopedTable =
+  | 'customer'
   | 'ticket'
+  | 'message'
+  | 'auditEvent'
+  | 'customerNote'
+  | 'customEvent'
   | 'tagGroup'
   | 'tag'
   | 'customField'
@@ -99,6 +105,52 @@ const customFieldCategoryArg = z.object({
 const inboxOpenArg = z.object({ limit: z.number().int().min(1).max(2000).optional() }).optional();
 const DEFAULT_INBOX_LIMIT = 200;
 const MAX_INBOX_LIMIT = 2000;
+const DEFAULT_TIMELINE_LIMIT = 200;
+const MAX_TIMELINE_LIMIT = 2000;
+const DEFAULT_TICKET_ANCHOR_LIMIT = 51;
+const MAX_TICKET_ANCHOR_LIMIT = 2000;
+const DEFAULT_CUSTOMER_EVENT_LIMIT = 50;
+const DEFAULT_RELATED_TICKET_LIMIT = 5;
+const DEFAULT_CUSTOMER_LIST_LIMIT = 50;
+
+const boundedTimelineLimit = z.number().int().min(1).max(MAX_TIMELINE_LIMIT).optional();
+const ticketAnchorArg = z.object({
+  id: z.string(),
+  messageLimit: z.number().int().min(1).max(MAX_TICKET_ANCHOR_LIMIT).optional(),
+  activityLimit: z.number().int().min(1).max(MAX_TICKET_ANCHOR_LIMIT).optional(),
+});
+const ticketTimelineRowsArg = z.object({
+  ticketID: z.string(),
+  limit: boundedTimelineLimit,
+});
+const customerListArg = z.object({
+  search: z.string().trim().max(120).optional(),
+  limit: boundedTimelineLimit,
+});
+const customerTicketSummariesArg = z
+  .object({
+    customerID: z.string(),
+    before: z.number().optional(),
+    after: z.number().optional(),
+    limit: z.number().int().min(1).max(200).optional(),
+  })
+  .refine((args) => args.before === undefined || args.after === undefined, {
+    message: 'customerTicketSummaries accepts either before or after, not both',
+  });
+const customerNotesArg = z.object({
+  customerID: z.string(),
+  limit: boundedTimelineLimit,
+});
+const customerEventsArg = z.object({
+  customerID: z.string(),
+  limit: boundedTimelineLimit,
+});
+const relatedTicketsArg = z.object({
+  customerID: z.string(),
+  excludeTicketID: z.string().optional(),
+  includeClosed: z.boolean().optional(),
+  limit: z.number().int().min(1).max(200).optional(),
+});
 
 // ---------- Queries ----------
 
@@ -140,6 +192,243 @@ export const queries = defineQueries({
       )
       .one(),
   ),
+
+  /**
+   * Customer profile header and right-rail data. Workspace-scoped by customer
+   * row and preloads tags/custom fields for the profile card.
+   */
+  customerByID: defineQuery(idArg, ({ args: { id }, ctx: auth }) =>
+    applyWorkspaceScope(builder.customer.where('id', '=', id), auth)
+      .related('tags', (ct) =>
+        ct
+          .related('tag', (t) => t.related('group'))
+          .related('addedBy')
+          .orderBy('addedAt', 'desc')
+          .orderBy('tagID', 'asc'),
+      )
+      .related('customFieldValues', (v) =>
+        v.related('field').related('updatedBy').orderBy('updatedAt', 'desc').orderBy('id', 'asc'),
+      )
+      .one(),
+  ),
+
+  /**
+   * Bounded customer list for the initial customers surface. Search is escaped
+   * before being used in ILIKE patterns.
+   */
+  customerList: defineQuery(customerListArg, ({ args, ctx: auth }) => {
+    const limit = Math.min(args.limit ?? DEFAULT_CUSTOMER_LIST_LIMIT, MAX_TIMELINE_LIMIT);
+    const search = args.search?.trim();
+    let q = applyWorkspaceScope(builder.customer, auth).related('tags', (ct) =>
+      ct
+        .related('tag', (t) => t.related('group'))
+        .orderBy('addedAt', 'desc')
+        .orderBy('tagID', 'asc'),
+    );
+    if (search) {
+      const pattern = `%${escapeLike(search)}%`;
+      q = q.where(({ cmp, or }) =>
+        or(
+          cmp('email', 'ILIKE', pattern),
+          cmp('name', 'ILIKE', pattern),
+          cmp('displayName', 'ILIKE', pattern),
+        ),
+      );
+    }
+    return q
+      .orderBy('lastSeenAt', 'desc')
+      .orderBy('updatedAt', 'desc')
+      .orderBy('id', 'desc')
+      .limit(limit);
+  }),
+
+  /**
+   * Anchor conversation for the timeline: current ticket with recent messages,
+   * recent ticket activities, and ticket-scoped customer notes. Message and
+   * activity limits use the +1 sentinel model from zbugs.
+   */
+  ticketAnchor: defineQuery(ticketAnchorArg, ({ args, ctx: auth }) => {
+    const messageLimit = Math.min(
+      args.messageLimit ?? DEFAULT_TICKET_ANCHOR_LIMIT,
+      MAX_TICKET_ANCHOR_LIMIT,
+    );
+    const activityLimit = Math.min(
+      args.activityLimit ?? DEFAULT_TICKET_ANCHOR_LIMIT,
+      MAX_TICKET_ANCHOR_LIMIT,
+    );
+    return applyTicketRead(builder.ticket.where('id', '=', args.id), auth)
+      .related('customer')
+      .related('assignee')
+      .related('createdBy')
+      .related('closedBy')
+      .related('tags', (tt) =>
+        tt
+          .related('tag', (t) => t.related('group'))
+          .related('addedBy')
+          .orderBy('addedAt', 'desc')
+          .orderBy('tagID', 'asc'),
+      )
+      .related('customFieldValues', (v) =>
+        v.related('field').related('updatedBy').orderBy('updatedAt', 'desc').orderBy('id', 'asc'),
+      )
+      .related('messages', (m) =>
+        m
+          .related('attachments')
+          .related('authorUser')
+          .related('authorCustomer')
+          .related('outboundMessages', (o) =>
+            o
+              .related('channel')
+              .related('emailAddress')
+              .orderBy('createdAt', 'asc')
+              .orderBy('id', 'asc'),
+          )
+          .orderBy('createdAt', 'desc')
+          .orderBy('id', 'desc')
+          .limit(messageLimit),
+      )
+      .related('auditEvents', (a) =>
+        a
+          .related('actor')
+          .where('kind', 'LIKE', 'ticket.%')
+          .orderBy('createdAt', 'desc')
+          .orderBy('id', 'desc')
+          .limit(activityLimit),
+      )
+      .related('customerNotes', (n) =>
+        n
+          .where('objectType', '=', 'ticket')
+          .where('deletedAt', 'IS', null)
+          .related('createdBy')
+          .orderBy('createdAt', 'desc')
+          .orderBy('id', 'desc')
+          .limit(messageLimit),
+      )
+      .one();
+  }),
+
+  /**
+   * Explicit bounded fetch for older/all messages in a conversation. The UI can
+   * raise `limit` up to MAX_TIMELINE_LIMIT when "show earlier" is clicked.
+   */
+  ticketMessagesAll: defineQuery(ticketTimelineRowsArg, ({ args, ctx: auth }) => {
+    const limit = Math.min(args.limit ?? MAX_TIMELINE_LIMIT, MAX_TIMELINE_LIMIT);
+    return applyWorkspaceScope(builder.message.where('ticketID', '=', args.ticketID), auth)
+      .related('attachments')
+      .related('authorUser')
+      .related('authorCustomer')
+      .related('outboundMessages', (o) =>
+        o
+          .related('channel')
+          .related('emailAddress')
+          .orderBy('createdAt', 'asc')
+          .orderBy('id', 'asc'),
+      )
+      .orderBy('createdAt', 'asc')
+      .orderBy('id', 'asc')
+      .limit(limit);
+  }),
+
+  /**
+   * Explicit bounded fetch for ticket activities in a conversation.
+   */
+  ticketActivitiesAll: defineQuery(ticketTimelineRowsArg, ({ args, ctx: auth }) => {
+    const limit = Math.min(args.limit ?? MAX_TIMELINE_LIMIT, MAX_TIMELINE_LIMIT);
+    return applyWorkspaceScope(
+      builder.auditEvent.where('ticketID', '=', args.ticketID).where('kind', 'LIKE', 'ticket.%'),
+      auth,
+    )
+      .related('actor')
+      .orderBy('createdAt', 'asc')
+      .orderBy('id', 'asc')
+      .limit(limit);
+  }),
+
+  /**
+   * Header-only customer conversations around an anchor. `limit + 1` gives the
+   * UI a sentinel row for "show earlier/later" without a count query.
+   */
+  customerTicketSummaries: defineQuery(customerTicketSummariesArg, ({ args, ctx: auth }) => {
+    const limit = Math.min(args.limit ?? 10, 200);
+    const orderDirection = args.after !== undefined ? 'asc' : 'desc';
+    let q = applyTicketRead(builder.ticket.where('customerID', '=', args.customerID), auth)
+      .related('customer')
+      .related('assignee')
+      .related('tags', (tt) =>
+        tt
+          .related('tag', (t) => t.related('group'))
+          .orderBy('addedAt', 'desc')
+          .orderBy('tagID', 'asc'),
+      )
+      .related('messages', (m) =>
+        m
+          .related('authorUser')
+          .related('authorCustomer')
+          .orderBy('createdAt', 'desc')
+          .orderBy('id', 'desc')
+          .limit(1),
+      );
+    if (args.before !== undefined) {
+      q = q.where('createdAt', '<', args.before);
+    } else if (args.after !== undefined) {
+      q = q.where('createdAt', '>', args.after);
+    }
+    return q
+      .orderBy('createdAt', orderDirection)
+      .orderBy('id', orderDirection)
+      .limit(limit + 1);
+  }),
+
+  /**
+   * Customer-level and ticket-scoped notes for a customer timeline/profile.
+   */
+  customerNotes: defineQuery(customerNotesArg, ({ args, ctx: auth }) => {
+    const limit = Math.min(args.limit ?? DEFAULT_TIMELINE_LIMIT, MAX_TIMELINE_LIMIT);
+    return applyWorkspaceScope(
+      builder.customerNote.where('customerID', '=', args.customerID).where('deletedAt', 'IS', null),
+      auth,
+    )
+      .related('createdBy')
+      .orderBy('pinned', 'desc')
+      .orderBy('createdAt', 'desc')
+      .orderBy('id', 'desc')
+      .limit(limit);
+  }),
+
+  /**
+   * Customer custom events, newest first.
+   */
+  customerEvents: defineQuery(customerEventsArg, ({ args, ctx: auth }) => {
+    const limit = Math.min(args.limit ?? DEFAULT_CUSTOMER_EVENT_LIMIT, MAX_TIMELINE_LIMIT);
+    return applyWorkspaceScope(builder.customEvent.where('customerID', '=', args.customerID), auth)
+      .orderBy('occurredAt', 'desc')
+      .orderBy('id', 'desc')
+      .limit(limit);
+  }),
+
+  /**
+   * Right-rail related conversations for any conversation header.
+   */
+  relatedTickets: defineQuery(relatedTicketsArg, ({ args, ctx: auth }) => {
+    const limit = Math.min(args.limit ?? DEFAULT_RELATED_TICKET_LIMIT, 200);
+    let q = applyTicketRead(builder.ticket.where('customerID', '=', args.customerID), auth)
+      .related('assignee')
+      .related('tags', (tt) =>
+        tt
+          .related('tag', (t) => t.related('group'))
+          .orderBy('addedAt', 'desc')
+          .orderBy('tagID', 'asc'),
+      );
+    if (args.excludeTicketID) {
+      q = q.where(({ cmp, not }) => not(cmp('id', '=', args.excludeTicketID)));
+    }
+    if (!args.includeClosed) {
+      q = q.where(({ and, cmp, not }) =>
+        and(not(cmp('status', '=', 'resolved')), not(cmp('status', '=', 'closed'))),
+      );
+    }
+    return q.orderBy('updatedAt', 'desc').orderBy('id', 'desc').limit(limit);
+  }),
 
   /**
    * Inbox — open / in_progress / snoozed tickets in the caller's workspace,
@@ -397,6 +686,35 @@ export type Queries = typeof queries;
 
 /** Single ticket with relateds (returned by `.one()`). */
 export type TicketDetailRow = QueryResultType<typeof queries.ticketByID>;
+
+/** Customer profile row with tags and custom field values. */
+export type CustomerDetailRow = QueryResultType<typeof queries.customerByID>;
+
+/** Bounded customer list row for the customers surface. */
+export type CustomerListRow = QueryResultType<typeof queries.customerList>[number];
+
+/** Timeline anchor ticket with recent messages and activities. */
+export type TicketAnchorRow = QueryResultType<typeof queries.ticketAnchor>;
+
+/** Full-message window row for a ticket timeline. */
+export type TicketMessageTimelineRow = QueryResultType<typeof queries.ticketMessagesAll>[number];
+
+/** Full-activity window row for a ticket timeline. */
+export type TicketActivityTimelineRow = QueryResultType<typeof queries.ticketActivitiesAll>[number];
+
+/** Header-only customer conversation summary. */
+export type CustomerTicketSummaryRow = QueryResultType<
+  typeof queries.customerTicketSummaries
+>[number];
+
+/** Customer note row for timeline/profile surfaces. */
+export type CustomerNoteRow = QueryResultType<typeof queries.customerNotes>[number];
+
+/** Customer custom event row. */
+export type CustomerEventRow = QueryResultType<typeof queries.customerEvents>[number];
+
+/** Related ticket row for the profile rail. */
+export type RelatedTicketRow = QueryResultType<typeof queries.relatedTickets>[number];
 
 /** Inbox row (open/in_progress/snoozed list, with customer + assignee). */
 export type InboxRow = QueryResultType<typeof queries.inboxOpen>[number];

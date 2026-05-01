@@ -10,6 +10,7 @@ import { Hono, type MiddlewareHandler } from 'hono';
 import { cors } from 'hono/cors';
 import { serve as inngestServe } from 'inngest/hono';
 import { auth } from './auth.js';
+import { handleCustomerEventIngest } from './customer-events.js';
 import { handleGetSigned, handlePresign } from './files.js';
 import { handleDevInboundEmail, handleSesInboundEmail } from './inbound/email.js';
 import { inngest } from './inngest/client.js';
@@ -131,6 +132,7 @@ app.post('/api/auth/switch-workspace', requireUser, async (c) => {
 // `apps/api/src/files.ts`.
 app.post('/api/files/presign', requireWorkspace, handlePresign);
 app.post('/api/files/get', requireWorkspace, handleGetSigned);
+app.post('/api/customers/:customerID/events', requireWorkspace, handleCustomerEventIngest);
 
 // Phase 3a settings: email domains (BYO sending domain).
 //   POST /api/settings/email/domains       — add a domain + default email channel/address

@@ -98,71 +98,71 @@ function AddressesTab() {
       />
       <SettingsBody maxWidth="wide">
         <div className="flex flex-col gap-4">
-      {showForm && !noDomains ? (
-        <AddAddressForm
-          domains={domains}
-          selectedDomain={selectedDomain}
-          selectedDomainID={selectedDomainID}
-          workspaceID={workspaceID}
-          onSelectDomain={setSelectedDomainID}
-          onDone={() => setShowForm(false)}
-        />
-      ) : null}
+          {showForm && !noDomains ? (
+            <AddAddressForm
+              domains={domains}
+              selectedDomain={selectedDomain}
+              selectedDomainID={selectedDomainID}
+              workspaceID={workspaceID}
+              onSelectDomain={setSelectedDomainID}
+              onDone={() => setShowForm(false)}
+            />
+          ) : null}
 
-      {noDomains ? (
-        <EmptyState
-          icon={Mail}
-          title="Add a domain first"
-          description="Create at least one sending domain before configuring receive addresses."
-          action={
-            <Button asChild size="sm">
-              <Link to="/app/settings/channels/email/domains">
-                Go to domains <ArrowRight className="h-3 w-3" />
-              </Link>
-            </Button>
-          }
-        />
-      ) : noAddresses && !showForm ? (
-        <EmptyState
-          icon={Inbox}
-          title="No addresses yet"
-          description="Once a domain is verified, add support@ or comms@ so customers can reach you."
-          action={
-            <Button size="sm" onClick={() => setShowForm(true)}>
-              <Plus className="h-3.5 w-3.5" /> Add address
-            </Button>
-          }
-        />
-      ) : noAddresses ? null : (
-        <div className="grid gap-4">
-          {domains.map((d) => {
-            const list = grouped.get(d.id) ?? [];
-            if (list.length === 0) return null;
-            return (
-              <section key={d.id} className="flex flex-col gap-1">
-                <div className="flex h-7 items-center justify-between gap-2 px-1 pb-1">
-                  <p className="truncate text-[11px] font-semibold uppercase tracking-[0.06em] text-fg-quaternary">
-                    {d.domain}
-                  </p>
-                  <Badge variant={d.dnsStatus === 'verified' ? 'success' : 'warning'}>
-                    DNS: {d.dnsStatus}
-                  </Badge>
-                </div>
-                <ul className="flex flex-col">
-                  {list.map((a) => (
-                    <li
-                      key={a.id}
-                      className="rounded-md transition-colors hover:bg-bg-elevated/30"
-                    >
-                      <AddressRow address={a} />
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            );
-          })}
-        </div>
-      )}
+          {noDomains ? (
+            <EmptyState
+              icon={Mail}
+              title="Add a domain first"
+              description="Create at least one sending domain before configuring receive addresses."
+              action={
+                <Button asChild size="sm">
+                  <Link to="/app/settings/channels/email/domains">
+                    Go to domains <ArrowRight className="h-3 w-3" />
+                  </Link>
+                </Button>
+              }
+            />
+          ) : noAddresses && !showForm ? (
+            <EmptyState
+              icon={Inbox}
+              title="No addresses yet"
+              description="Once a domain is verified, add support@ or comms@ so customers can reach you."
+              action={
+                <Button size="sm" onClick={() => setShowForm(true)}>
+                  <Plus className="h-3.5 w-3.5" /> Add address
+                </Button>
+              }
+            />
+          ) : noAddresses ? null : (
+            <div className="grid gap-4">
+              {domains.map((d) => {
+                const list = grouped.get(d.id) ?? [];
+                if (list.length === 0) return null;
+                return (
+                  <section key={d.id} className="flex flex-col gap-1">
+                    <div className="flex h-7 items-center justify-between gap-2 px-1 pb-1">
+                      <p className="truncate text-[11px] font-semibold uppercase tracking-[0.06em] text-fg-quaternary">
+                        {d.domain}
+                      </p>
+                      <Badge variant={d.dnsStatus === 'verified' ? 'success' : 'warning'}>
+                        DNS: {d.dnsStatus}
+                      </Badge>
+                    </div>
+                    <ul className="flex flex-col">
+                      {list.map((a) => (
+                        <li
+                          key={a.id}
+                          className="rounded-md transition-colors hover:bg-bg-elevated/30"
+                        >
+                          <AddressRow address={a} />
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                );
+              })}
+            </div>
+          )}
         </div>
       </SettingsBody>
     </>

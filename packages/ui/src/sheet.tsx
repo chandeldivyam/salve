@@ -53,10 +53,7 @@ SheetContent.displayName = 'SheetContent';
 
 export const SheetHeader = ({ className, ...props }: HTMLAttributes<HTMLDivElement>) => (
   <div
-    className={cn(
-      'flex shrink-0 flex-col gap-1 border-b border-border px-5 py-4 pr-12',
-      className,
-    )}
+    className={cn('flex shrink-0 flex-col gap-1 border-b border-border px-5 py-4 pr-12', className)}
     {...props}
   />
 );

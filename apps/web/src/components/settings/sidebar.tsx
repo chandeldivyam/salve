@@ -34,8 +34,8 @@ export function SettingsSidebar({
 
   return (
     <div className={cn('flex flex-col gap-3', className)}>
-      {groups.map((group, groupIndex) => (
-        <div key={`${group.label ?? 'group'}-${groupIndex}`}>
+      {groups.map((group) => (
+        <div key={group.label ?? group.items.map((item) => item.to).join('|')}>
           {group.label && !collapsed ? (
             <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-fg-quaternary">
               {group.label}

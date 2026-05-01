@@ -247,6 +247,12 @@ function SortableWorkbenchTab({
         if (editing) return;
         activate();
       }}
+      onKeyDown={(event) => {
+        if (editing) return;
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        activate();
+      }}
       onAuxClick={(event) => {
         if (event.button === 1 && canClose) {
           event.preventDefault();
@@ -259,11 +265,12 @@ function SortableWorkbenchTab({
       }}
       {...attributes}
       {...listeners}
+      role="tab"
+      tabIndex={active ? 0 : -1}
+      aria-selected={active}
     >
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <div
-          role="tab"
-          aria-selected={active}
           className={cn(
             'group flex h-9 min-w-0 cursor-default items-center rounded-t-md border border-transparent text-[13px]',
             tab.pinned ? 'justify-center px-1' : 'px-2',
@@ -358,15 +365,11 @@ function SortableWorkbenchTab({
             <DropdownMenuItem onSelect={() => setEditing(true)}>Rename tab</DropdownMenuItem>
           ) : null}
           <DropdownMenuItem
-            onSelect={() =>
-              navigator.clipboard?.writeText(`${window.location.origin}${tab.href}`)
-            }
+            onSelect={() => navigator.clipboard?.writeText(`${window.location.origin}${tab.href}`)}
           >
             <Copy className="h-3.5 w-3.5" /> Copy URL
           </DropdownMenuItem>
-          <DropdownMenuItem
-            onSelect={() => window.open(tab.href, '_blank', 'noopener,noreferrer')}
-          >
+          <DropdownMenuItem onSelect={() => window.open(tab.href, '_blank', 'noopener,noreferrer')}>
             <ExternalLink className="h-3.5 w-3.5" /> Open browser tab
           </DropdownMenuItem>
           <DropdownMenuSeparator />

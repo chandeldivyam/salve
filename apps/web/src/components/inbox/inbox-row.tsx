@@ -52,10 +52,7 @@ export function InboxRow({
   }
 
   return (
-    <WorkbenchLink
-      href={`/app/inbox/t/${ticket.id}`}
-      source="ticket-row"
-      onClick={onNavigate}
+    <div
       className={cn(
         'group flex h-9 items-center gap-2.5 px-3',
         multiSelected
@@ -119,15 +116,31 @@ export function InboxRow({
         </button>
       </span>
 
-      <div className="min-w-0 flex-1 truncate leading-tight">
+      <WorkbenchLink
+        href={`/app/inbox/t/${ticket.id}`}
+        source="ticket-row"
+        onClick={onNavigate}
+        className="min-w-0 flex-1 truncate leading-tight"
+      >
         <span className="text-[14px] font-medium tracking-[-0.011em] text-fg-primary">
           {ticket.title}
         </span>
-        <span className="text-[13px] text-fg-tertiary"> · </span>
-        <span className="text-[13px] text-fg-tertiary" title={customerLabel}>
+      </WorkbenchLink>
+      <span className="text-[13px] text-fg-tertiary">·</span>
+      {ticket.customer?.id ? (
+        <WorkbenchLink
+          href={`/app/customers/${ticket.customer.id}`}
+          source="ticket-row"
+          className="max-w-[140px] truncate text-[13px] text-fg-tertiary transition-colors hover:text-fg-primary hover:underline"
+          title={customerLabel}
+        >
+          {customerLabel}
+        </WorkbenchLink>
+      ) : (
+        <span className="max-w-[140px] truncate text-[13px] text-fg-tertiary" title={customerLabel}>
           {customerLabel}
         </span>
-      </div>
+      )}
       {isHighPriority ? (
         <Tooltip>
           <TooltipTrigger asChild>
@@ -162,7 +175,7 @@ export function InboxRow({
       <span className="shrink-0 text-[11px] tabular-nums text-fg-tertiary">
         {formatDistanceToNowStrict(updated)}
       </span>
-    </WorkbenchLink>
+    </div>
   );
 }
 

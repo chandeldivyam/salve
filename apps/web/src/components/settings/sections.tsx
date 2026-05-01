@@ -51,9 +51,7 @@ export function FormSection({
               {title}
             </h2>
           ) : null}
-          {description ? (
-            <p className="mt-1 text-[12px] text-fg-tertiary">{description}</p>
-          ) : null}
+          {description ? <p className="mt-1 text-[12px] text-fg-tertiary">{description}</p> : null}
         </div>
       ) : null}
       <div className="flex flex-col gap-6">{children}</div>

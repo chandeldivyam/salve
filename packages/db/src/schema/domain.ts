@@ -46,6 +46,8 @@ export const ticketPriority = pgEnum('ticket_priority', ['low', 'normal', 'high'
 
 export const messageAuthorType = pgEnum('message_author_type', ['customer', 'agent', 'system']);
 
+export const customerNoteObjectType = pgEnum('customer_note_object_type', ['customer', 'ticket']);
+
 // ---------- Tables ----------
 
 export const customer = pgTable(
@@ -64,6 +66,14 @@ export const customer = pgTable(
     alternateEmails: jsonb('alternate_emails').notNull().default(sql`'[]'::jsonb`),
     displayName: text('display_name'),
     avatarUrl: text('avatar_url'),
+    firstSeenAt: timestamp('first_seen_at', { withTimezone: true }),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
+    phone: text('phone'),
+    location: text('location'),
+    metadata: jsonb('metadata')
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -177,6 +187,70 @@ export const auditEvent = pgTable(
   (t) => ({
     ticketCreatedIdx: index('audit_event_ticket_created_idx').on(t.ticketId, t.createdAt),
     customerCreatedIdx: index('audit_event_customer_created_idx').on(t.customerId, t.createdAt),
+  }),
+);
+
+export const customerNote = pgTable(
+  'customer_note',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    objectType: customerNoteObjectType('object_type').notNull(),
+    objectId: uuid('object_id').notNull(),
+    customerId: uuid('customer_id')
+      .notNull()
+      .references(() => customer.id, { onDelete: 'cascade' }),
+    bodyHtml: text('body_html').notNull(),
+    bodyText: text('body_text').notNull(),
+    pinned: boolean('pinned').notNull().default(false),
+    createdById: text('created_by_id')
+      .notNull()
+      .references(() => user.id),
+    editedAt: timestamp('edited_at', { withTimezone: true }),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    customerIdx: index('customer_note_customer_idx').on(
+      t.workspaceId,
+      t.customerId,
+      t.deletedAt,
+      t.createdAt,
+    ),
+    objectIdx: index('customer_note_object_idx').on(t.workspaceId, t.objectType, t.objectId),
+  }),
+);
+
+export const customEvent = pgTable(
+  'custom_event',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    customerId: uuid('customer_id')
+      .notNull()
+      .references(() => customer.id, { onDelete: 'cascade' }),
+    eventName: text('event_name').notNull(),
+    properties: jsonb('properties')
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    source: text('source').notNull().default('api'),
+    occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
+    ingestedAt: timestamp('ingested_at', { withTimezone: true }).notNull().defaultNow(),
+    idempotencyKey: text('idempotency_key'),
+  },
+  (t) => ({
+    customerIdx: index('custom_event_customer_idx').on(t.workspaceId, t.customerId, t.occurredAt),
+    workspaceIdx: index('custom_event_workspace_idx').on(t.workspaceId, t.occurredAt),
+    nameIdx: index('custom_event_name_idx').on(t.workspaceId, t.eventName),
+    idempotencyUnique: uniqueIndex('custom_event_idem_idx')
+      .on(t.workspaceId, t.idempotencyKey)
+      .where(sql`${t.idempotencyKey} IS NOT NULL`),
   }),
 );
 
