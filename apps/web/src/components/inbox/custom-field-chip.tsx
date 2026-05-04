@@ -56,6 +56,7 @@ export function CustomFieldChip({
   onRemove,
   currentUserID,
 }: CustomFieldChipProps) {
+  const [open, setOpen] = useState(false);
   const triggerLabel = useMemo(
     () => describeFilterValue(filter, field, currentUserID),
     [filter, field, currentUserID],
@@ -63,7 +64,7 @@ export function CustomFieldChip({
 
   return (
     <div className="inline-flex items-stretch overflow-hidden rounded-md border border-border bg-bg-elevated text-xs">
-      <DropdownMenu>
+      <DropdownMenu open={open} onOpenChange={setOpen}>
         <DropdownMenuTrigger asChild>
           <button
             type="button"
@@ -76,7 +77,13 @@ export function CustomFieldChip({
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-auto">
-          <Editor field={field} filter={filter} onChange={onChange} currentUserID={currentUserID} />
+          <Editor
+            field={field}
+            filter={filter}
+            onChange={onChange}
+            currentUserID={currentUserID}
+            onClose={() => setOpen(false)}
+          />
         </DropdownMenuContent>
       </DropdownMenu>
       <button
@@ -99,17 +106,21 @@ function Editor({
   filter,
   onChange,
   currentUserID,
+  onClose,
 }: {
   field: CustomFieldDef;
   filter: Filter;
   onChange: (next: Filter) => void;
   currentUserID: string;
+  onClose: () => void;
 }) {
   const fieldKey = `customField:${field.key}` as const;
   const type = field.type as CustomFieldType;
 
   if (type === 'text' || type === 'url' || type === 'address') {
-    return <TextLikeEditor field={fieldKey} filter={filter} onChange={onChange} />;
+    return (
+      <TextLikeEditor field={fieldKey} filter={filter} onChange={onChange} onClose={onClose} />
+    );
   }
   if (type === 'number' || type === 'decimal') {
     return (
@@ -118,6 +129,7 @@ function Editor({
         filter={filter}
         onChange={onChange}
         integerOnly={type === 'number'}
+        onClose={onClose}
       />
     );
   }
@@ -125,7 +137,9 @@ function Editor({
     return <BooleanEditor field={fieldKey} filter={filter} onChange={onChange} />;
   }
   if (type === 'date') {
-    return <DatePickerPopover field={fieldKey} filter={filter} onChange={onChange} />;
+    return (
+      <DatePickerPopover field={fieldKey} filter={filter} onChange={onChange} onClose={onClose} />
+    );
   }
   if (type === 'list' || type === 'multi_select') {
     return (
@@ -155,7 +169,9 @@ function Editor({
     // Dynamic options aren't statically known on the client; the most
     // reliable v1 surface is a text "contains" filter — agents typically
     // know the value they're searching for.
-    return <TextLikeEditor field={fieldKey} filter={filter} onChange={onChange} />;
+    return (
+      <TextLikeEditor field={fieldKey} filter={filter} onChange={onChange} onClose={onClose} />
+    );
   }
   // ticket type — soft-fail with a presence toggle.
   return <PresenceEditor field={fieldKey} filter={filter} onChange={onChange} />;
@@ -165,19 +181,22 @@ function TextLikeEditor({
   field,
   filter,
   onChange,
+  onClose,
 }: {
   field: `customField:${string}`;
   filter: Filter;
   onChange: (next: Filter) => void;
+  onClose: () => void;
 }) {
   const initial = filter.operator === 'contains' ? (filter.value as string) : '';
   const [text, setText] = useState(initial);
   const apply = () => {
     if (text.trim().length === 0) {
       onChange({ field, operator: 'nempty' });
-      return;
+    } else {
+      onChange({ field, operator: 'contains', value: text });
     }
-    onChange({ field, operator: 'contains', value: text });
+    onClose();
   };
   return (
     <div className="flex w-64 flex-col gap-1.5 p-1.5">
@@ -216,11 +235,13 @@ function NumberEditor({
   filter,
   onChange,
   integerOnly,
+  onClose,
 }: {
   field: `customField:${string}`;
   filter: Filter;
   onChange: (next: Filter) => void;
   integerOnly: boolean;
+  onClose: () => void;
 }) {
   const [op, setOp] = useState<'eq' | 'before' | 'after' | 'between'>(() => {
     if (filter.operator === 'eq') return 'eq';
@@ -238,22 +259,28 @@ function NumberEditor({
     return Number.isFinite(n) ? n : undefined;
   };
 
-  const apply = () => {
+  // `apply` is invoked from Enter, blur, and the Apply button. It commits
+  // unconditionally when the input parses; `closeAfter` controls whether
+  // the popover closes after committing. We close on Enter / Apply, but
+  // leave the popover open on blur (so tabbing between the two `between`
+  // inputs doesn't slam the popover shut between keystrokes).
+  const apply = (closeAfter: boolean) => {
     const av = parse(a);
+    let committed = false;
     if (op === 'eq' && av !== undefined) {
       onChange({ field, operator: 'eq', value: av });
-      return;
-    }
-    if ((op === 'before' || op === 'after') && av !== undefined) {
+      committed = true;
+    } else if ((op === 'before' || op === 'after') && av !== undefined) {
       onChange({ field, operator: op, value: av });
-      return;
-    }
-    if (op === 'between') {
+      committed = true;
+    } else if (op === 'between') {
       const bv = parse(b);
       if (av !== undefined && bv !== undefined) {
         onChange({ field, operator: 'between', values: [Math.min(av, bv), Math.max(av, bv)] });
+        committed = true;
       }
     }
+    if (committed && closeAfter) onClose();
   };
 
   return (
@@ -273,6 +300,13 @@ function NumberEditor({
           type="number"
           value={a}
           onChange={(e) => setA(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              apply(true);
+            }
+          }}
+          onBlur={() => apply(false)}
           step={integerOnly ? 1 : 'any'}
           autoFocus
           className="h-7 flex-1 text-xs"
@@ -284,12 +318,24 @@ function NumberEditor({
               type="number"
               value={b}
               onChange={(e) => setB(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  apply(true);
+                }
+              }}
+              onBlur={() => apply(false)}
               step={integerOnly ? 1 : 'any'}
               className="h-7 flex-1 text-xs"
             />
           </>
         ) : null}
-        <Button size="sm" variant="default" onClick={apply} className="h-7 px-2 text-xs">
+        <Button
+          size="sm"
+          variant="default"
+          onClick={() => apply(true)}
+          className="h-7 px-2 text-xs"
+        >
           Apply
         </Button>
       </div>

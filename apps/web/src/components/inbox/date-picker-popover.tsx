@@ -17,6 +17,13 @@ interface DatePickerPopoverProps {
   field: FilterField;
   filter: Filter;
   onChange: (next: Filter) => void;
+  /**
+   * Called after a commit (Apply / Enter / preset chip). Lets the caller
+   * close the surrounding dropdown — without this the user has to click
+   * outside the popover after every edit. Optional so `<DatePickerPopover>`
+   * can still be rendered standalone without forcing a close handler.
+   */
+  onClose?: () => void;
 }
 
 const RELATIVE_PRESETS: ReadonlyArray<{
@@ -32,7 +39,7 @@ const RELATIVE_PRESETS: ReadonlyArray<{
 
 type Mode = 'relative' | 'before' | 'after' | 'between';
 
-export function DatePickerPopover({ field, filter, onChange }: DatePickerPopoverProps) {
+export function DatePickerPopover({ field, filter, onChange, onClose }: DatePickerPopoverProps) {
   const initial = useMemo(() => readMode(filter), [filter]);
   const [mode, setMode] = useState<Mode>(initial.mode);
   const [absolute1, setAbsolute1] = useState<string>(initial.absolute1);
@@ -53,6 +60,7 @@ export function DatePickerPopover({ field, filter, onChange }: DatePickerPopover
 
   const applyRelative = (unit: DateUnit, n: number) => {
     onChange({ field, operator: 'inLast', value: { unit, n } });
+    onClose?.();
   };
 
   const applyAbsolute = (op: 'before' | 'after', iso: string) => {
@@ -60,6 +68,7 @@ export function DatePickerPopover({ field, filter, onChange }: DatePickerPopover
     const epoch = Date.parse(`${iso}T00:00:00.000Z`);
     if (!Number.isFinite(epoch)) return;
     onChange({ field, operator: op, value: epoch });
+    onClose?.();
   };
 
   const applyBetween = (lo: string, hi: string) => {
@@ -68,6 +77,7 @@ export function DatePickerPopover({ field, filter, onChange }: DatePickerPopover
     const b = Date.parse(`${hi}T23:59:59.999Z`);
     if (!Number.isFinite(a) || !Number.isFinite(b)) return;
     onChange({ field, operator: 'between', values: [a, b] });
+    onClose?.();
   };
 
   return (
@@ -112,6 +122,13 @@ export function DatePickerPopover({ field, filter, onChange }: DatePickerPopover
               max={9999}
               value={customN}
               onChange={(e) => setCustomN(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  const n = Number.parseInt(customN, 10);
+                  if (Number.isFinite(n) && n > 0) applyRelative(customUnit, n);
+                }
+              }}
               className="h-7 w-16 rounded-md border border-border bg-bg-elevated px-2 text-xs text-fg-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
             <select
@@ -149,6 +166,12 @@ export function DatePickerPopover({ field, filter, onChange }: DatePickerPopover
               type="date"
               value={absolute1}
               onChange={(e) => setAbsolute1(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  applyAbsolute(mode, absolute1);
+                }
+              }}
               className="h-7 flex-1 rounded-md border border-border bg-bg-elevated px-2 text-xs text-fg-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
             <Button
@@ -171,6 +194,12 @@ export function DatePickerPopover({ field, filter, onChange }: DatePickerPopover
               type="date"
               value={absolute1}
               onChange={(e) => setAbsolute1(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  applyBetween(absolute1, absolute2);
+                }
+              }}
               className="h-7 flex-1 rounded-md border border-border bg-bg-elevated px-2 text-xs text-fg-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
             <span className="text-xs text-fg-tertiary">→</span>
@@ -178,6 +207,12 @@ export function DatePickerPopover({ field, filter, onChange }: DatePickerPopover
               type="date"
               value={absolute2}
               onChange={(e) => setAbsolute2(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  applyBetween(absolute1, absolute2);
+                }
+              }}
               className="h-7 flex-1 rounded-md border border-border bg-bg-elevated px-2 text-xs text-fg-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
             <Button
