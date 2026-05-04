@@ -19,14 +19,27 @@ import {
   CUSTOMER_TICKET_LIMIT,
   DEFAULT_CUSTOMER_EVENT_LIMIT,
   DEFAULT_CUSTOMER_LIST_LIMIT,
+  DEFAULT_CUSTOMER_TICKET_SUMMARY_LIMIT,
   DEFAULT_RELATED_TICKET_LIMIT,
   INBOX_INITIAL_PAGE,
   MAX_INBOX_LIMIT,
+  MAX_LIST_LIMIT,
   MAX_LIST_LIMIT_QUERY,
+  SETTINGS_CATALOGUE_LIMIT,
   TICKET_ANCHOR_LIMIT,
+  VIEW_LIST_LIMIT,
+  VIEW_MEMBER_LIST_LIMIT,
 } from './consts.js';
 import type { AuthData } from './schema.js';
 import { builder } from './schema.js';
+import {
+  applyFilterToQuery,
+  resolveMeTokens,
+  type ViewQuery,
+  type ViewSort,
+  viewQueryZ,
+  viewSortToOrderBy,
+} from './views.js';
 
 type WorkspaceScopedTable =
   | 'customer'
@@ -43,7 +56,10 @@ type WorkspaceScopedTable =
   | 'suppression'
   | 'outboundMessage'
   | 'inboundMessageRaw'
-  | 'inboundRoutingRule';
+  | 'inboundRoutingRule'
+  | 'view'
+  | 'viewMember'
+  | 'builtinViewMember';
 
 // `Query<table, schema, any>` mirrors zbugs's `IssueQuery` — `any` is required
 // in the helper's TReturn so the `.one()`/list cases unify.
@@ -164,6 +180,32 @@ const relatedTicketsArg = z.object({
   limit: z.number().int().min(1).max(CUSTOMER_TICKET_LIMIT).optional(),
 });
 
+// `ticketsForView` accepts the resolved (post-`$ME`-substitution) `ViewQuery`
+// shape from the client. The full `viewQueryZ` validation lives in
+// view-mutators; here we only enforce the broad shape so a malformed payload
+// doesn't crash query subscription.
+// Args wire shape is JSON-compatible. Strict `ViewQuery` / `ViewSort` shapes
+// from `views.ts` don't carry an index signature, so we accept a loose
+// `z.any()` array here and cast inside the handler. `viewQueryZ` enforces the
+// strict shape at mutator write time.
+// biome-ignore lint/suspicious/noExplicitAny: Zero defineQuery requires JSON-compatible inferred type
+const ticketsForViewArg = z.object({
+  viewID: z.string(),
+  viewQuery: z.object({
+    // biome-ignore lint/suspicious/noExplicitAny: see comment above
+    filters: z.array(z.any()).max(40),
+    matchAll: z.boolean().optional(),
+    search: z.string().optional(),
+  }),
+  sort: z
+    .object({
+      field: z.string(),
+      direction: z.enum(['asc', 'desc']),
+    })
+    .optional(),
+  limit: z.number().int().min(1).max(MAX_INBOX_LIMIT).optional(),
+});
+
 // ---------- Queries ----------
 
 export const queries = defineQueries({
@@ -229,7 +271,7 @@ export const queries = defineQueries({
    * before being used in ILIKE patterns.
    */
   customerList: defineQuery(customerListArg, ({ args, ctx: auth }) => {
-    const limit = Math.min(args.limit ?? DEFAULT_CUSTOMER_LIST_LIMIT, ALL_TICKET_MESSAGE_LIMIT);
+    const limit = Math.min(args.limit ?? DEFAULT_CUSTOMER_LIST_LIMIT, MAX_LIST_LIMIT);
     const search = args.search?.trim();
     let q = applyWorkspaceScope(builder.customer, auth).related('tags', (ct) =>
       ct
@@ -361,7 +403,10 @@ export const queries = defineQueries({
    * UI a sentinel row for "show earlier/later" without a count query.
    */
   customerTicketSummaries: defineQuery(customerTicketSummariesArg, ({ args, ctx: auth }) => {
-    const limit = Math.min(args.limit ?? 10, 200);
+    const limit = Math.min(
+      args.limit ?? DEFAULT_CUSTOMER_TICKET_SUMMARY_LIMIT,
+      CUSTOMER_TICKET_LIMIT,
+    );
     const orderDirection = args.after !== undefined ? 'asc' : 'desc';
     let q = applyTicketRead(builder.ticket.where('customerID', '=', args.customerID), auth)
       .related('customer')
@@ -422,7 +467,7 @@ export const queries = defineQueries({
    * Right-rail related conversations for any conversation header.
    */
   relatedTickets: defineQuery(relatedTicketsArg, ({ args, ctx: auth }) => {
-    const limit = Math.min(args.limit ?? DEFAULT_RELATED_TICKET_LIMIT, 200);
+    const limit = Math.min(args.limit ?? DEFAULT_RELATED_TICKET_LIMIT, CUSTOMER_TICKET_LIMIT);
     let q = applyTicketRead(builder.ticket.where('customerID', '=', args.customerID), auth)
       .related('assignee')
       .related('tags', (tt) =>
@@ -474,13 +519,16 @@ export const queries = defineQueries({
   }),
 
   /**
-   * Active tag groups for settings and grouped tag pickers.
+   * Active tag groups for settings and grouped tag pickers. Capped at
+   * `SETTINGS_CATALOGUE_LIMIT` so the open subscription cost stays bounded
+   * for workspaces with thousands of tags.
    */
   tagGroups: defineQuery(emptyArg, ({ ctx: auth }) =>
     applyWorkspaceScope(builder.tagGroup.where('archivedAt', 'IS', null), auth)
       .orderBy('sortOrder', 'asc')
       .orderBy('label', 'asc')
-      .orderBy('id', 'asc'),
+      .orderBy('id', 'asc')
+      .limit(SETTINGS_CATALOGUE_LIMIT),
   ),
 
   /**
@@ -490,7 +538,8 @@ export const queries = defineQueries({
     applyWorkspaceScope(builder.tagGroup, auth)
       .orderBy('sortOrder', 'asc')
       .orderBy('label', 'asc')
-      .orderBy('id', 'asc'),
+      .orderBy('id', 'asc')
+      .limit(SETTINGS_CATALOGUE_LIMIT),
   ),
 
   /**
@@ -501,7 +550,8 @@ export const queries = defineQueries({
       .related('group')
       .orderBy('sortOrder', 'asc')
       .orderBy('label', 'asc')
-      .orderBy('id', 'asc'),
+      .orderBy('id', 'asc')
+      .limit(SETTINGS_CATALOGUE_LIMIT),
   ),
 
   /**
@@ -512,7 +562,8 @@ export const queries = defineQueries({
       .related('group')
       .orderBy('sortOrder', 'asc')
       .orderBy('label', 'asc')
-      .orderBy('id', 'asc'),
+      .orderBy('id', 'asc')
+      .limit(SETTINGS_CATALOGUE_LIMIT),
   ),
 
   /**
@@ -525,7 +576,8 @@ export const queries = defineQueries({
     )
       .orderBy('sortOrder', 'asc')
       .orderBy('displayName', 'asc')
-      .orderBy('id', 'asc'),
+      .orderBy('id', 'asc')
+      .limit(SETTINGS_CATALOGUE_LIMIT),
   ),
 
   /**
@@ -539,7 +591,8 @@ export const queries = defineQueries({
         .orderBy('active', 'desc')
         .orderBy('sortOrder', 'asc')
         .orderBy('displayName', 'asc')
-        .orderBy('id', 'asc'),
+        .orderBy('id', 'asc')
+        .limit(SETTINGS_CATALOGUE_LIMIT),
   ),
 
   /**
@@ -684,6 +737,162 @@ export const queries = defineQueries({
       .orderBy('receivedAt', 'asc')
       .orderBy('id', 'asc'),
   ),
+
+  /**
+   * Phase 40: saved inbox views the caller can see.
+   *
+   * Returns:
+   *   - workspace-scoped views the agent has not hidden (via `view_member`)
+   *   - personal-scoped views the agent owns
+   *
+   * The related `members[0]` row carries the per-agent `position` used to
+   * sort the tab strip client-side. Built-ins are layered on top in the UI;
+   * they don't appear in this Zero result.
+   */
+  views: defineQuery(emptyArg, ({ ctx: auth }) => {
+    if (!auth?.workspaceID || !auth?.sub) {
+      return alwaysFalse(builder.view);
+    }
+    const userID = auth.sub;
+    // NOTE: Zero does not support `not(exists(...))` on the client
+    // (https://bugs.rocicorp.dev/issue/3438). We omit the "not hidden"
+    // workspace-view predicate here and filter hidden views client-side in
+    // `<InboxViewStrip>` using the related `members[0].hiddenAt` column.
+    return applyWorkspaceScope(builder.view, auth)
+      .where('archivedAt', 'IS', null)
+      .where(({ or, and, cmp }) =>
+        or(
+          cmp('scope', '=', 'workspace'),
+          and(cmp('scope', '=', 'personal'), cmp('ownerID', '=', userID)),
+        ),
+      )
+      .related('members', (m) => m.where('userID', '=', userID))
+      .related('owner')
+      .orderBy('createdAt', 'asc')
+      .orderBy('id', 'asc')
+      .limit(VIEW_LIST_LIMIT);
+  }),
+
+  /**
+   * Single saved view by id, with the caller's membership row joined.
+   *
+   * Scope hardening: a workspace-scoped view is readable by anyone in the
+   * workspace, a personal-scope view is readable only by its owner, and
+   * archived views are not readable at all (they live behind a separate
+   * "archived views" surface — Phase 50). Without this guard, any agent
+   * who knows a personal view's UUID could open it; that's the same hole
+   * the `views()` listing already closes.
+   */
+  viewByID: defineQuery(idArg, ({ args: { id }, ctx: auth }) => {
+    if (!auth?.sub) {
+      return alwaysFalse(builder.view).one();
+    }
+    const userID = auth.sub;
+    return applyWorkspaceScope(builder.view.where('id', '=', id), auth)
+      .where('archivedAt', 'IS', null)
+      .where(({ or, and, cmp }) =>
+        or(
+          cmp('scope', '=', 'workspace'),
+          and(cmp('scope', '=', 'personal'), cmp('ownerID', '=', userID)),
+        ),
+      )
+      .related('members', (m) => m.where('userID', '=', userID))
+      .related('owner')
+      .one();
+  }),
+
+  /**
+   * Built-in view membership rows for the caller (per-agent ordering and
+   * per-agent hide state for All / Unassigned / Mine / Resolved). The
+   * client merges these with the static `BUILTIN_VIEWS` constant.
+   */
+  builtinViewMembers: defineQuery(emptyArg, ({ ctx: auth }) => {
+    if (!auth?.workspaceID || !auth?.sub) {
+      return alwaysFalse(builder.builtinViewMember);
+    }
+    const userID = auth.sub;
+    return applyWorkspaceScope(builder.builtinViewMember, auth)
+      .where('userID', '=', userID)
+      .orderBy('builtinKey', 'asc')
+      .limit(VIEW_MEMBER_LIST_LIMIT);
+  }),
+
+  /**
+   * Phase 40: tickets matching a saved view. The `viewQuery` is composed
+   * imperatively over a base `applyTicketRead(builder.ticket)` query — the
+   * exact pattern from zbugs's `buildListQuery` (see `views.ts`).
+   *
+   * Free-text `search` is not applied here; the client intersects with
+   * the FTS endpoint result set in a follow-up phase. Custom-field
+   * filtering is currently limited to existence checks.
+   */
+  ticketsForView: defineQuery(ticketsForViewArg, ({ args, ctx: auth }) => {
+    const { viewQuery, sort, limit } = args;
+    const cap = Math.min(limit ?? INBOX_INITIAL_PAGE, MAX_INBOX_LIMIT);
+
+    // Pull `customFieldValues` only when a custom-field filter is in play.
+    // The Zero subscription cost is N tickets × M field rows × per-row
+    // metadata; on a stock inbox (no custom-field chips) this would
+    // multiply the wire traffic without any benefit. Client-side
+    // post-filtering in `customFieldPredicate` reads from the same shape
+    // when the relation is present and short-circuits when it isn't.
+    const needsCustomFieldValues = (viewQuery.filters as Array<{ field?: unknown }>).some(
+      (f) => typeof f?.field === 'string' && (f.field as string).startsWith('customField:'),
+    );
+
+    let q = applyTicketRead(builder.ticket, auth)
+      .related('customer')
+      .related('assignee')
+      .related('tags', (tt) =>
+        tt
+          .related('tag', (t) => t.related('group'))
+          .orderBy('addedAt', 'desc')
+          .orderBy('tagID', 'asc'),
+      );
+
+    if (needsCustomFieldValues) {
+      // Filtering on the actual jsonb `value` happens client-side via
+      // `matchesCustomFieldFilter` because the type-dependent shapes (esp.
+      // arrays for multi_select) can't be uniformly expressed with
+      // `.where('value', op, ...)`. Server-side narrowing is by *existence*
+      // (see `applyCustomFieldExistence` in views.ts).
+      q = q.related('customFieldValues', (cv) =>
+        cv.related('field').orderBy('updatedAt', 'desc').orderBy('id', 'asc'),
+      );
+    }
+
+    // Re-validate `viewQuery` shape with the strict `viewQueryZ` schema
+    // before consuming any filter. The wire arg uses `z.any()` for each
+    // filter (Zero `defineQuery` requires a JSON-compatible inferred
+    // type; the strict discriminated-union shape doesn't satisfy that
+    // constraint), so this is the actual safety net at the read path.
+    // A malformed payload short-circuits to the result `alwaysFalse`
+    // would produce: an empty query.
+    const validated = viewQueryZ.safeParse(viewQuery);
+    if (!validated.success) {
+      return alwaysFalse(q).limit(0);
+    }
+    // Resolve any `$ME` tokens client-side at call time so the saved
+    // view serves every agent.
+    const resolved = resolveMeTokens(validated.data, auth?.sub ?? '');
+
+    // v1 only supports AND across filters. `viewQueryZ` constrains
+    // `matchAll` to `true` at write time so any saved view that lands
+    // here will already be AND-shaped; the field is retained on the
+    // wire for forward compatibility once OR lands.
+    for (const filter of resolved.filters) {
+      q = applyFilterToQuery(q, filter);
+    }
+
+    const [orderField, orderDir] = viewSortToOrderBy(sort as ViewSort | undefined);
+    return (
+      q
+        // biome-ignore lint/suspicious/noExplicitAny: dynamic order field
+        .orderBy(orderField as any, orderDir)
+        .orderBy('id', 'desc')
+        .limit(cap)
+    );
+  }),
 });
 
 export type Queries = typeof queries;
@@ -730,6 +939,9 @@ export type RelatedTicketRow = QueryResultType<typeof queries.relatedTickets>[nu
 
 /** Inbox row (open/in_progress/snoozed list, with customer + assignee). */
 export type InboxRow = QueryResultType<typeof queries.inboxOpen>[number];
+
+/** Inbox row from `ticketsForView` — includes `customFieldValues` with `field`. */
+export type ViewTicketRow = QueryResultType<typeof queries.ticketsForView>[number];
 
 /** "Mine" inbox row (workspace + assignee scoped). */
 export type MyTicketRow = QueryResultType<typeof queries.myTickets>[number];

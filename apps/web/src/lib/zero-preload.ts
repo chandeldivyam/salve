@@ -10,8 +10,29 @@
 // subscription stays alive until `cleanup()` is called. The returned
 // composite cleanup releases all underlying subscriptions at once.
 
-import { queries } from '@opendesk/zero-schema';
+import { INBOX_INITIAL_PAGE, queries } from '@opendesk/zero-schema';
 import { CACHE_PRELOAD } from './zero-cache';
+
+// Phase 40 default-view warm-up: the inbox now subscribes to
+// `ticketsForView` keyed on the active view's id + filters. Match the
+// `builtin:all` shape exactly so the preload pipeline is the same one
+// `<InboxList>` later subscribes to. If the agent lands on a different
+// view, that one's subscription opens cold — acceptable since the
+// view-strip pills are bounded and most agents start at All open.
+const DEFAULT_BUILTIN_ALL: {
+  viewID: string;
+  viewQuery: { filters: unknown[]; matchAll?: boolean };
+  sort: { field: string; direction: 'asc' | 'desc' };
+  limit: number;
+} = {
+  viewID: 'builtin:all',
+  viewQuery: {
+    filters: [{ field: 'status', operator: 'in', values: ['open', 'in_progress', 'snoozed'] }],
+    matchAll: true,
+  },
+  sort: { field: 'updatedAt', direction: 'desc' },
+  limit: INBOX_INITIAL_PAGE,
+};
 
 interface PreloadHandle {
   cleanup: () => void;
@@ -31,7 +52,9 @@ type ZeroLike = { preload: (q: any, opts?: any) => PreloadHandle };
  */
 export function preloadWorkspace(z: ZeroLike): () => void {
   const handles: PreloadHandle[] = [
-    z.preload(queries.inboxOpen(), CACHE_PRELOAD),
+    z.preload(queries.ticketsForView(DEFAULT_BUILTIN_ALL), CACHE_PRELOAD),
+    z.preload(queries.views(), CACHE_PRELOAD),
+    z.preload(queries.builtinViewMembers(), CACHE_PRELOAD),
     z.preload(queries.workspaceMembers(), CACHE_PRELOAD),
     z.preload(queries.sendableEmailAddresses(), CACHE_PRELOAD),
     z.preload(queries.receivableEmailAddresses(), CACHE_PRELOAD),

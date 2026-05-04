@@ -64,6 +64,7 @@ interface WorkbenchStore extends WorkbenchPersistedState {
     title: string,
     iconId?: string,
     forRouteId?: string,
+    expectedHref?: string,
   ) => void;
   setCommandOpen: (open: boolean) => void;
   setLeftRailCollapsed: (collapsed: boolean) => void;
@@ -72,6 +73,20 @@ interface WorkbenchStore extends WorkbenchPersistedState {
 
 const MAX_UNPINNED_TABS = 20;
 const STORAGE_PREFIX = 'opendesk.workbench.v1';
+
+/**
+ * The canonical inbox tab — the always-pinned home surface that ships with
+ * every workspace and can't be closed. Forked inbox-view tabs share the
+ * same `routeId` ('inbox') but have a `tabKey` of `inbox:fork:<id>`, so
+ * `routeId` alone is the wrong discriminator: every check that means
+ * "the inbox shell tab" must read `tabKey === 'inbox'`.
+ *
+ * Without this guard, forks inherited the canonical's "uncloseable" and
+ * "scrubbed-on-any-close" behaviours and effectively could not be removed.
+ */
+export function isCanonicalInbox(tab: { routeId: string; tabKey: string }): boolean {
+  return tab.routeId === 'inbox' && tab.tabKey === 'inbox';
+}
 
 const workbenchTabSchema = z.object({
   id: z.string(),
@@ -141,6 +156,14 @@ export const useWorkbenchStore = create<WorkbenchStore>((set, get) => ({
       const active = tabs.find((tab) => tab.id === activeID) ?? tabs[0];
       const activeMatchesLocation =
         active?.routeId === match.route.id && active.href === match.href;
+      // A forked tab shares its routeId with non-fork tabs of the same kind
+      // (e.g. `inbox` + `inbox:fork:<id>`). When the active tab is a fork
+      // and the user navigates within it (left-click on a different view
+      // pill, ?view=… changes), the fork should stay active and refresh —
+      // not get hijacked by the original tab via the `existing` lookup.
+      const isForked = active?.tabKey?.includes(':fork:') ?? false;
+      const activeCanHostMatch =
+        active?.routeId === match.route.id && (active.tabKey === match.tabKey || isForked);
       const existing = tabs.find((tab) => tab.tabKey === match.tabKey);
       let nextTabs = tabs;
       let nextActive = activeID;
@@ -149,6 +172,21 @@ export const useWorkbenchStore = create<WorkbenchStore>((set, get) => ({
       // Heals any past corruption (e.g. a stale-effect race that stamped a
       // tab with the wrong iconId) on the very next navigation.
       if (activeMatchesLocation && active) {
+        nextTabs = tabs.map((tab) =>
+          tab.id === active.id
+            ? {
+                ...tab,
+                href: match.href,
+                title: tab.customTitle ? tab.title : match.title,
+                iconId: match.route.iconId,
+                lastActiveAt: Date.now(),
+              }
+            : tab,
+        );
+        nextActive = active.id;
+      } else if (activeCanHostMatch && active) {
+        // Same routeId and the active tab is either the canonical tab for
+        // this tabKey *or* a fork. Keep it active, refresh href/title.
         nextTabs = tabs.map((tab) =>
           tab.id === active.id
             ? {
@@ -374,13 +412,17 @@ export const useWorkbenchStore = create<WorkbenchStore>((set, get) => ({
     return reopened;
   },
 
-  // `forRouteId` guards against a stale-effect race: a route component's
-  // useEffect can fire AFTER the user has navigated away (because Zero
-  // re-emits a query result with a new array reference). Without the guard,
-  // the call would relabel whatever tab is *now* active — corrupting an
-  // unrelated tab. Pass the caller's own routeId; the update is a no-op
-  // unless the active tab still belongs to that route.
-  setActiveTabTitle: (workspaceID, title, iconId, forRouteId) => {
+  // `forRouteId` + `expectedHref` together guard against a stale-effect
+  // race: a route component's useEffect can fire AFTER the user has
+  // navigated away (because Zero re-emits a query result with a new array
+  // reference). Without the guard, the call would relabel whatever tab is
+  // *now* active — corrupting an unrelated tab. `forRouteId` catches
+  // route-type changes (ticket→customer). `expectedHref` catches
+  // ticket-to-ticket and customer-to-customer races where the route type
+  // hasn't changed but the entity has; pass the *current* href the caller
+  // believes it owns and the update is a no-op if the active tab has moved
+  // to a different href under the same route type.
+  setActiveTabTitle: (workspaceID, title, iconId, forRouteId, expectedHref) => {
     const key = workspaceKey(workspaceID);
     set((state) => {
       const activeID = state.activeTabIdByWorkspace[key];
@@ -390,6 +432,7 @@ export const useWorkbenchStore = create<WorkbenchStore>((set, get) => ({
       if (!active) return state;
       if (active.routeId === 'inbox') return state;
       if (forRouteId && active.routeId !== forRouteId) return state;
+      if (expectedHref && active.href !== expectedHref) return state;
       return {
         tabsByWorkspace: {
           ...state.tabsByWorkspace,
@@ -489,7 +532,7 @@ function setPinned(workspaceID: string | null, tabID: string, pinned: boolean) {
       ...state.tabsByWorkspace,
       [key]: sortTabs(
         (state.tabsByWorkspace[key] ?? []).map((tab) =>
-          tab.id === tabID ? { ...tab, pinned: tab.routeId === 'inbox' ? true : pinned } : tab,
+          tab.id === tabID ? { ...tab, pinned: isCanonicalInbox(tab) ? true : pinned } : tab,
         ),
       ),
     },
@@ -506,8 +549,12 @@ function closeTabs(
   useWorkbenchStore.setState((state) => {
     const tabs = state.tabsByWorkspace[key] ?? [];
     const closed = tabs.find((tab) => tab.id === closedTabID);
+    // Only scrub a stray *canonical* inbox that somehow ended up unpinned —
+    // never the user's forked inbox views. The previous version filtered
+    // every unpinned inbox tab and silently deleted forks whenever any
+    // other tab was closed (e.g. close Settings → fork disappears).
     const nextTabs = sortTabs(
-      getNextTabs(tabs).filter((tab) => tab.routeId !== 'inbox' || tab.pinned),
+      getNextTabs(tabs).filter((tab) => !isCanonicalInbox(tab) || tab.pinned),
     );
     const safeTabs = ensureInboxTab(nextTabs, key, tabs);
     const currentActive = state.activeTabIdByWorkspace[key];
@@ -522,7 +569,9 @@ function closeTabs(
         [key]: nextActive ?? safeTabs[0]?.id ?? '',
       },
       recentClosedTabsByWorkspace:
-        !closed || closed.routeId === 'inbox'
+        // Forked inbox views can be closed (and therefore reopened); only
+        // the canonical inbox is sealed off from the recent-closed list.
+        !closed || isCanonicalInbox(closed)
           ? state.recentClosedTabsByWorkspace
           : {
               ...state.recentClosedTabsByWorkspace,
@@ -534,8 +583,11 @@ function closeTabs(
 }
 
 function ensureInboxTab(tabs: WorkbenchTab[], key: string, previousTabs: WorkbenchTab[]) {
-  if (tabs.some((tab) => tab.routeId === 'inbox')) return tabs;
-  const previousInbox = previousTabs.find((tab) => tab.routeId === 'inbox');
+  // Re-add the canonical inbox specifically — checking just `routeId` would
+  // treat a surviving fork as "inbox is present" and leave the workspace
+  // without its home surface.
+  if (tabs.some(isCanonicalInbox)) return tabs;
+  const previousInbox = previousTabs.find(isCanonicalInbox);
   const inbox = previousInbox ?? tabFromMatch(key, resolveWorkbenchHref('/app/inbox'));
   return sortTabs([{ ...inbox, pinned: true }, ...tabs]);
 }

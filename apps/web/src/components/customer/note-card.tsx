@@ -1,6 +1,13 @@
 import { mutators } from '@opendesk/mutators';
 import {
+  Button,
   cn,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -25,6 +32,8 @@ interface NoteCardProps {
 export function NoteCard({ note, currentUserID, variant = 'default', className }: NoteCardProps) {
   const z = useZero();
   const [editing, setEditing] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const isAuthor = note.createdByID === currentUserID;
   const author = note.createdBy?.name ?? note.createdBy?.email ?? null;
   const labelPrefix = note.objectType === 'ticket' ? 'Conversation note' : 'Customer note';
@@ -53,12 +62,15 @@ export function NoteCard({ note, currentUserID, variant = 'default', className }
     }
   }
 
-  async function deleteNote() {
-    if (!window.confirm('Delete this note?')) return;
+  async function performDelete() {
+    setDeleting(true);
     try {
       await z.mutate(mutators.customerNote.delete({ id: note.id }));
+      setConfirmingDelete(false);
     } catch (error) {
       showError(error, 'Could not delete note');
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -96,7 +108,7 @@ export function NoteCard({ note, currentUserID, variant = 'default', className }
           </p>
         </div>
         {isAuthor ? (
-          <div className="absolute right-1.5 top-1.5 opacity-0 transition-opacity group-hover/note:opacity-100 focus-within:opacity-100">
+          <div className="pointer-events-none absolute right-1.5 top-1.5 opacity-0 transition-opacity group-hover/note:pointer-events-auto group-hover/note:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
@@ -126,7 +138,7 @@ export function NoteCard({ note, currentUserID, variant = 'default', className }
                   )}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={deleteNote}>
+                <DropdownMenuItem onSelect={() => setConfirmingDelete(true)}>
                   <Trash2 className="h-3.5 w-3.5" />
                   Delete
                 </DropdownMenuItem>
@@ -135,6 +147,35 @@ export function NoteCard({ note, currentUserID, variant = 'default', className }
           </div>
         ) : null}
       </div>
+      <Dialog open={confirmingDelete} onOpenChange={setConfirmingDelete}>
+        <DialogContent
+          hideClose
+          className="w-[min(calc(100vw-2rem),28rem)] gap-0"
+          onEscapeKeyDown={deleting ? (event) => event.preventDefault() : undefined}
+        >
+          <DialogHeader>
+            <DialogTitle>Delete note</DialogTitle>
+            <DialogDescription>
+              The note will be removed from this{' '}
+              {note.objectType === 'ticket' ? 'conversation' : 'customer profile'}. This can't be
+              undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setConfirmingDelete(false)}
+              disabled={deleting}
+            >
+              Cancel
+            </Button>
+            <Button type="button" variant="destructive" onClick={performDelete} disabled={deleting}>
+              {deleting ? 'Deleting…' : 'Delete note'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </article>
   );
 }

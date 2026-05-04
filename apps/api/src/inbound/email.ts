@@ -173,10 +173,13 @@ function devWorkspaceID(c: Context): string | null {
 
 export async function handleSesInboundEmail(c: Context): Promise<Response> {
   const secret = process.env.SES_INBOUND_WEBHOOK_SECRET ?? process.env.SES_WEBHOOK_SECRET;
-  if (!secret && process.env.NODE_ENV === 'production') {
+  // The inbound webhook writes `inbound_message_raw` rows for any
+  // workspace that owns the resolved channel; an unauthenticated POST is
+  // a cross-tenant ingestion vector. Require the secret unconditionally.
+  if (!secret) {
     return c.json({ error: 'webhook-secret-required' }, 500);
   }
-  if (secret && c.req.header('x-opendesk-webhook-secret') !== secret) {
+  if (c.req.header('x-opendesk-webhook-secret') !== secret) {
     return c.json({ error: 'unauthorized' }, 401);
   }
 
@@ -188,7 +191,12 @@ export async function handleSesInboundEmail(c: Context): Promise<Response> {
 
   if ('Type' in raw && raw.Type === 'SubscriptionConfirmation') {
     if (process.env.SES_SNS_AUTO_CONFIRM === '1' && raw.SubscribeURL) {
-      await fetch(raw.SubscribeURL);
+      try {
+        await fetch(raw.SubscribeURL);
+      } catch (error) {
+        console.error('[ses-inbound] auto-confirm fetch failed', error);
+        return c.json({ error: 'auto-confirm-failed' }, 502);
+      }
     }
     return c.json({ ok: true, subscriptionConfirmation: true });
   }

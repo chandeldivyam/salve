@@ -20,12 +20,15 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { Context } from 'hono';
 import { authOf } from './middleware.js';
 
+// SVG is intentionally excluded. SVGs can carry inline `<script>` tags and
+// are served same-origin via signed GETs, so allowing them is a stored XSS
+// vector. If we ever need vector previews, sanitize via SVGO with scripts
+// stripped before upload AND serve with `Content-Disposition: attachment`.
 const ALLOWED_MIME = new Set<string>([
   'image/png',
   'image/jpeg',
   'image/gif',
   'image/webp',
-  'image/svg+xml',
   'image/avif',
   'application/pdf',
   'text/plain',
@@ -150,7 +153,27 @@ export async function handleGetSigned(c: Context) {
   }
 
   await ensureBucket();
-  const cmd = new GetObjectCommand({ Bucket: bucket, Key: body.s3Key });
+  // Force download semantics on signed GETs so an attacker who slips a
+  // dangerous file past the upload allowlist (or an old SVG predating the
+  // allowlist tightening) cannot run inline. The S3 SDK signs the response
+  // override; the browser sees `Content-Disposition: attachment` regardless
+  // of what the bucket has stored. Filename is the trailing key segment.
+  const filename = filenameFromKey(body.s3Key);
+  const cmd = new GetObjectCommand({
+    Bucket: bucket,
+    Key: body.s3Key,
+    ResponseContentDisposition: `attachment; filename="${escapeContentDispositionFilename(filename)}"`,
+  });
   const getUrl = await getSignedUrl(s3, cmd, { expiresIn: 60 });
   return c.json({ getUrl, expiresIn: 60 });
+}
+
+function filenameFromKey(key: string): string {
+  const tail = key.split('/').at(-1) ?? key;
+  const dash = tail.indexOf('-');
+  return dash >= 0 ? tail.slice(dash + 1) : tail;
+}
+
+function escapeContentDispositionFilename(name: string): string {
+  return name.replace(/[\\"\r\n]/g, '_');
 }

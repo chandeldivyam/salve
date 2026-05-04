@@ -25,6 +25,7 @@ import { customFieldMutators } from './custom-field-mutators.js';
 import { customerMutators, customerNoteMutators } from './customer-mutators.js';
 import { MutationError, MutationErrorCode } from './error.js';
 import { tagGroupMutators, tagMutators } from './tag-mutators.js';
+import { viewMutators } from './view-mutators.js';
 
 // ---------- Argument schemas ----------
 
@@ -166,6 +167,7 @@ export const mutators = defineMutators({
   customField: customFieldMutators,
   customer: customerMutators,
   customerNote: customerNoteMutators,
+  view: viewMutators,
 
   ticket: {
     create: defineMutator(createTicketArgsSchema, async ({ tx, args, ctx: authData }) => {
@@ -514,3 +516,14 @@ export {
   updateTagArgsSchema,
   updateTagGroupArgsSchema,
 } from './tag-mutators.js';
+export {
+  type ViewCreateArgs,
+  type ViewDuplicateArgs,
+  type ViewReorderArgs,
+  type ViewUpdateArgs,
+  viewCreateArgsSchema,
+  viewDuplicateArgsSchema,
+  viewIDOnlyArgsSchema,
+  viewReorderArgsSchema,
+  viewUpdateArgsSchema,
+} from './view-mutators.js';

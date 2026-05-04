@@ -11,7 +11,6 @@ import { schema } from '@opendesk/zero-schema/schema';
 import { ZeroProvider } from '@rocicorp/zero/react';
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
 import { useEffect, useMemo } from 'react';
-import { BrandSplash } from '@/components/brand-splash';
 import { RouteErrorFeedback, RouteNotFoundFeedback } from '@/components/route-feedback';
 import { WorkbenchShell } from '@/components/workbench/shell';
 import { fetchSession, listOrganizations, type SessionData } from '@/lib/session-loader';
@@ -32,7 +31,12 @@ export const Route = createFileRoute('/app')({
     }
     return { session };
   },
-  pendingComponent: BrandSplash,
+  // No `pendingComponent` override here. The cold-start window is covered
+  // by the inline splash in `index.html`; warm SPA navigations resolve from
+  // the module-cached session before `defaultPendingMs` (200ms) elapses.
+  // Falling back to the router-default `RoutePendingFeedback` (a card) for
+  // the rare slow case avoids the full-screen brand takeover that any
+  // future slow-down on `/app`'s `beforeLoad` would otherwise trigger.
   errorComponent: RouteErrorFeedback,
   notFoundComponent: RouteNotFoundFeedback,
   component: AppLayout,

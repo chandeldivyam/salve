@@ -122,7 +122,7 @@ export function messageSnippet(ticket: TimelineTicket) {
   const last = [...(ticket.messages ?? [])].sort((a, b) => b.createdAt - a.createdAt)[0];
   const source = last?.bodyText || (last?.bodyHtml ? stripHtml(last.bodyHtml) : ticket.description);
   const text = source?.replace(/\s+/g, ' ').trim();
-  if (!text) return 'No messages yet';
+  if (!text) return 'No messages';
   return text.length > 120 ? `${text.slice(0, 117)}...` : text;
 }
 

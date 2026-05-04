@@ -8,7 +8,14 @@ import { useShortcut } from '@/lib/shortcuts';
 
 export function BackToInbox() {
   const navigate = useNavigate();
-  const back = () => navigate({ to: '/app/inbox' });
+  // Preserve `view` + `f` so returning to the inbox lands on the saved view
+  // and chip filter set the user came from. Without this, back-from-ticket
+  // resets the inbox to the default built-in.
+  const back = () =>
+    navigate({
+      to: '/app/inbox',
+      search: (prev) => ({ view: prev?.view, f: prev?.f }),
+    });
 
   // Esc returns to the list. Gated to skip while the user is typing
   // (composer focus, search field) — `useShortcut` enforces that.
@@ -27,6 +34,10 @@ export function BackToInbox() {
   return (
     <Link
       to="/app/inbox"
+      search={(prev: { view?: string; f?: string } | undefined) => ({
+        view: prev?.view,
+        f: prev?.f,
+      })}
       aria-label="Back to inbox"
       className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-[12px] text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >

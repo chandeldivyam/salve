@@ -55,9 +55,14 @@ export const auth = betterAuth({
     }),
     magicLink({
       // Placeholder transport — Phase 1 doesn't wire mail yet.
-      // Logs the link so a developer can copy it from API stdout if needed.
+      // In dev we log the link to API stdout so it can be copied; in
+      // production we silently drop it until a real mail transport is
+      // wired. Logging links to stdout in prod would leak a sign-in
+      // credential into the platform's log pipeline.
       sendMagicLink: async ({ email, url }) => {
-        console.log(`[opendesk-api] magic-link → ${email} → ${url}`);
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`[opendesk-api] magic-link → ${email} → ${url}`);
+        }
       },
     }),
   ],

@@ -287,7 +287,7 @@ export function CommandPalette({ workspaceID }: CommandPaletteProps) {
               value={query}
               onValueChange={setQuery}
               placeholder={page?.title ?? 'Search commands…'}
-              className="h-12 min-w-0 flex-1 bg-transparent text-[14px] outline-none placeholder:text-fg-quaternary"
+              className="h-12 min-w-0 flex-1 bg-transparent text-[14px] outline-none placeholder:text-fg-quaternary focus-visible:outline-none focus-visible:ring-0"
             />
             <kbd className="rounded border border-line-default bg-bg-elevated px-1.5 py-0.5 text-[11px] text-fg-tertiary">
               {searchPending ? 'Searching' : 'Esc'}
@@ -359,6 +359,7 @@ function SearchResultGroups({
               className={cn(
                 'flex h-9 cursor-pointer items-center gap-2 rounded-md px-2 text-[13px] outline-none',
                 'aria-selected:bg-brand-soft aria-selected:text-brand-soft-foreground',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
               )}
             >
               <Ticket className="h-4 w-4 shrink-0" />
@@ -388,6 +389,7 @@ function SearchResultGroups({
               className={cn(
                 'flex h-9 cursor-pointer items-center gap-2 rounded-md px-2 text-[13px] outline-none',
                 'aria-selected:bg-brand-soft aria-selected:text-brand-soft-foreground',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
               )}
             >
               <UserRound className="h-4 w-4 shrink-0" />
@@ -429,6 +431,7 @@ function CommandRow({
       className={cn(
         'flex h-9 cursor-pointer items-center gap-2 rounded-md px-2 text-[13px] outline-none',
         'aria-selected:bg-brand-soft aria-selected:text-brand-soft-foreground',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
       )}
     >
       {Icon ? <Icon className="h-4 w-4 shrink-0" /> : <span className="h-4 w-4 shrink-0" />}

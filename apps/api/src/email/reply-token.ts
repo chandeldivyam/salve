@@ -121,6 +121,49 @@ export function parseReplyAddress(address: string, opts: ParseReplyOpts = {}): P
   return { workspaceID, ticketID };
 }
 
+// ---------- Body-marker HMAC (defense against marker spoofing) ----------
+//
+// `::tid:<ticketID>::` is the unsigned legacy form — accepted by some
+// inbound mail (e.g. older outbound flows from third-party systems). It's
+// trivially forgeable: a customer who knows another ticket's UUID can
+// inject the marker into a reply and have it threaded into the wrong
+// ticket. Replace with `::tid:<ticketID>:<sigPrefix>::` and only treat
+// markers whose HMAC verifies as authoritative thread hints. A `null`
+// return means "ignore this marker, fall back to other layers".
+const BODY_MARKER_SIG_LEN = 12;
+
+function bodyMarkerSig(workspaceID: string, ticketID: string, secret: string): string {
+  const h = createHmac('sha256', secret);
+  h.update(`body-marker:${workspaceID}:${ticketID}`);
+  return base64url(h.digest()).slice(0, BODY_MARKER_SIG_LEN);
+}
+
+export function signBodyMarker(
+  workspaceID: string,
+  ticketID: string,
+  secretOverride?: string,
+): string {
+  const secret = secretOverride ?? getSecret();
+  return `::tid:${ticketID}:${bodyMarkerSig(workspaceID, ticketID, secret)}::`;
+}
+
+export function verifyBodyMarker(
+  workspaceID: string,
+  ticketID: string,
+  sig: string,
+  secretOverride?: string,
+): boolean {
+  let secret: string;
+  try {
+    secret = secretOverride ?? getSecret();
+  } catch {
+    return false;
+  }
+  const expected = bodyMarkerSig(workspaceID, ticketID, secret);
+  if (expected.length !== sig.length) return false;
+  return timingSafeEqual(Buffer.from(expected), Buffer.from(sig));
+}
+
 // ---------- Inline tests (run with `tsx reply-token.ts`) ----------
 //
 // Guard with import.meta.url check so the module is import-safe. There is no
@@ -188,6 +231,18 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     secretOverride: SECRET,
   });
   assert(parseReplyAddress(expired, opts) === null, 'past-expiry rejected');
+
+  // Body markers — HMAC verification
+  const marker = signBodyMarker('ws_a', 't_1', SECRET);
+  assert(/^::tid:t_1:[A-Za-z0-9_-]{12}::$/.test(marker), 'body marker has expected shape');
+  const sigPart = marker.slice(marker.indexOf(':t_1:') + ':t_1:'.length, marker.length - 2);
+  assert(verifyBodyMarker('ws_a', 't_1', sigPart, SECRET), 'verify accepts own signature');
+  assert(!verifyBodyMarker('ws_b', 't_1', sigPart, SECRET), 'verify rejects different workspace');
+  assert(!verifyBodyMarker('ws_a', 't_2', sigPart, SECRET), 'verify rejects different ticket');
+  assert(
+    !verifyBodyMarker('ws_a', 't_1', 'forged000000', SECRET),
+    'verify rejects forged signature',
+  );
 
   console.log(`\n${pass} passed, ${fail} failed`);
   if (fail > 0) process.exit(1);

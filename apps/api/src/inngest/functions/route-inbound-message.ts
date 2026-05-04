@@ -9,7 +9,7 @@ import {
 import { getClient } from '@opendesk/db';
 import { type AddressObject, type EmailAddress, type ParsedMail, simpleParser } from 'mailparser';
 import type postgres from 'postgres';
-import { parseReplyAddress } from '../../email/reply-token.js';
+import { parseReplyAddress, verifyBodyMarker } from '../../email/reply-token.js';
 import { inngest } from '../client.js';
 import { INBOUND_EVENT, inboundMessageReceivedDataSchema } from '../events.js';
 
@@ -21,6 +21,7 @@ interface RawInboundRow {
   channel_id: string;
   provider_message_id: string | null;
   raw_blob_s3_key: string | null;
+  raw_blob_size_bytes: number | null;
   headers: Record<string, unknown> | null;
   envelope_to: string | null;
   destination_address: string | null;
@@ -31,6 +32,14 @@ interface RawInboundRow {
   default_priority: TicketPriority;
   new_ticket_after_closed_days: number;
 }
+
+// Inbound mail above this size is rejected before mail parsing. A 50 MB
+// hard cap keeps the worker memory-bounded against an attacker (or a real
+// mailing-list digest) sending a multi-hundred-megabyte payload that would
+// OOM `simpleParser`. AWS SES already enforces a similar limit at ingress;
+// this is defense in depth for the rare case where the row was queued via a
+// different path.
+const MAX_INBOUND_RAW_BYTES = 50 * 1024 * 1024;
 
 type TicketPriority = 'low' | 'normal' | 'high' | 'urgent';
 
@@ -285,6 +294,7 @@ async function loadRawInbound(
       imr.channel_id,
       imr.provider_message_id,
       imr.raw_blob_s3_key,
+      imr.raw_blob_size_bytes,
       imr.headers,
       imr.envelope_to,
       imr.destination_address,
@@ -306,18 +316,38 @@ async function loadRawInbound(
 }
 
 async function loadRawRFC822(row: RawInboundRow): Promise<string> {
+  if (row.raw_blob_size_bytes && row.raw_blob_size_bytes > MAX_INBOUND_RAW_BYTES) {
+    throw new Error(
+      `inbound raw exceeds ${MAX_INBOUND_RAW_BYTES} bytes (got ${row.raw_blob_size_bytes})`,
+    );
+  }
   const devRaw = nestedString(row.headers, ['opendesk', 'devRawRFC822']);
   if (row.raw_blob_s3_key?.startsWith('dev://')) {
     if (!devRaw) throw new Error('dev inbound raw row is missing opendesk.devRawRFC822');
+    if (Buffer.byteLength(devRaw) > MAX_INBOUND_RAW_BYTES) {
+      throw new Error(`inbound raw exceeds ${MAX_INBOUND_RAW_BYTES} bytes`);
+    }
     return devRaw;
   }
   if (!row.raw_blob_s3_key) throw new Error('raw_blob_s3_key is empty');
 
   const s3Ref = parseS3Ref(row.raw_blob_s3_key);
   const object = await s3.send(new GetObjectCommand({ Bucket: s3Ref.bucket, Key: s3Ref.key }));
+  // Trust the metadata size when the row was inserted with one (cheap),
+  // otherwise fall back to checking ContentLength on the S3 response. Both
+  // are still pre-parse so an oversized payload never reaches `simpleParser`.
+  const contentLength = Number(object.ContentLength ?? 0);
+  if (contentLength > MAX_INBOUND_RAW_BYTES) {
+    throw new Error(
+      `inbound raw exceeds ${MAX_INBOUND_RAW_BYTES} bytes (s3 content-length ${contentLength})`,
+    );
+  }
   const body = object.Body as { transformToByteArray?: () => Promise<Uint8Array> } | undefined;
   if (!body?.transformToByteArray) throw new Error('S3 object body is not readable');
   const bytes = await body.transformToByteArray();
+  if (bytes.length > MAX_INBOUND_RAW_BYTES) {
+    throw new Error(`inbound raw exceeds ${MAX_INBOUND_RAW_BYTES} bytes (post-read)`);
+  }
   return Buffer.from(bytes).toString('utf8');
 }
 
@@ -518,7 +548,7 @@ async function matchThread(
   const bodyMarkerMatch = await candidateFromBodyTicketID(
     sql,
     row,
-    extractMagicTicketIDs(`${email.text}\n${email.html ?? ''}`),
+    extractMagicTicketIDs(`${email.text}\n${email.html ?? ''}`, row.workspace_id),
     'body_marker',
   );
   const validBody = chooseSubjectCompatible(bodyMarkerMatch, email.subject);
@@ -1347,10 +1377,23 @@ function extractCSSMarkerTicketIDs(html: string): string[] {
   return Array.from(ids);
 }
 
-function extractMagicTicketIDs(body: string): string[] {
+// Magic body markers must carry a workspace-scoped HMAC suffix:
+// `::tid:<ticketID>:<sig>::`. Unsigned `::tid:<id>::` markers are ignored
+// — they're trivially forgeable in customer replies, and a forged marker
+// would jump a reply into a different ticket. Markers without a sig
+// (older callers, third-party-emitted) silently drop through to the
+// other threading layers (header chain, reply token, recipient routing).
+function extractMagicTicketIDs(body: string, workspaceID: string): string[] {
   const ids = new Set<string>();
-  for (const match of body.matchAll(/::tid:([0-9a-f-]{32,36}|[A-Za-z0-9_-]+)::/g)) {
-    if (match[1]) ids.add(match[1]);
+  for (const match of body.matchAll(
+    /::tid:([0-9a-f-]{32,36}|[A-Za-z0-9_-]+):([A-Za-z0-9_-]{12})::/g,
+  )) {
+    const ticketID = match[1];
+    const sig = match[2];
+    if (!ticketID || !sig) continue;
+    if (verifyBodyMarker(workspaceID, ticketID, sig)) {
+      ids.add(ticketID);
+    }
   }
   return Array.from(ids);
 }
@@ -1432,13 +1475,35 @@ function ruleEnabled(rule: Record<string, unknown>): boolean {
   return typeof enabled === 'boolean' ? enabled : true;
 }
 
+// Routing rule patterns are user-authored regex strings that run against
+// inbound headers/subjects. JavaScript regex has no execution timeout and a
+// pattern like `(a+)+b` against a long no-match string hangs the worker.
+// Defense in depth:
+//  1. Cap candidate value length so any match terminates in bounded time.
+//  2. Cap pattern length and reject patterns that look pathological
+//     (nested unbounded quantifiers — the canonical ReDoS shape).
+//  3. Patterns that fail validation fall back to a literal-glob match,
+//     same as compile errors.
+const MAX_PATTERN_VALUE_LENGTH = 4096;
+const MAX_PATTERN_LENGTH = 256;
+const PATHOLOGICAL_PATTERN = /(\([^)]*[+*][^)]*\)|\[[^\]]*[+*][^\]]*\])[+*]/;
+
 function matchesPattern(pattern: string | null, value: string): boolean {
   if (!pattern) return true;
+  const trimmedValue =
+    value.length > MAX_PATTERN_VALUE_LENGTH ? value.slice(0, MAX_PATTERN_VALUE_LENGTH) : value;
+  if (pattern.length <= MAX_PATTERN_LENGTH && !PATHOLOGICAL_PATTERN.test(pattern)) {
+    try {
+      return new RegExp(pattern, 'i').test(trimmedValue);
+    } catch {
+      // fall through to glob fallback
+    }
+  }
+  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
   try {
-    return new RegExp(pattern, 'i').test(value);
+    return new RegExp(`^${escaped}$`, 'i').test(trimmedValue);
   } catch {
-    const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
-    return new RegExp(`^${escaped}$`, 'i').test(value);
+    return false;
   }
 }
 

@@ -269,6 +269,55 @@ const customFieldValue = table('customFieldValue')
   })
   .primaryKey('id');
 
+// ---------- Views (Phase 40)
+
+const view = table('view')
+  .columns({
+    id: string(),
+    workspaceID: string().from('workspace_id'),
+    kind: enumeration<'inbox'>(),
+    scope: enumeration<'workspace' | 'personal'>(),
+    ownerID: string().from('owner_id').optional(),
+    label: string(),
+    description: string().optional(),
+    icon: string().optional(),
+    color: string().optional(),
+    query: json(),
+    sort: json(),
+    groupBy: string().from('group_by').optional(),
+    displayProps: json().from('display_props').optional(),
+    archivedAt: number().from('archived_at').optional(),
+    createdAt: number().from('created_at'),
+    updatedAt: number().from('updated_at'),
+  })
+  .primaryKey('id');
+
+const viewMember = table('viewMember')
+  .from('view_member')
+  .columns({
+    viewID: string().from('view_id'),
+    userID: string().from('user_id'),
+    workspaceID: string().from('workspace_id'),
+    position: number(),
+    hiddenAt: number().from('hidden_at').optional(),
+    createdAt: number().from('created_at'),
+    updatedAt: number().from('updated_at'),
+  })
+  .primaryKey('viewID', 'userID');
+
+const builtinViewMember = table('builtinViewMember')
+  .from('builtin_view_member')
+  .columns({
+    builtinKey: string().from('builtin_key'),
+    userID: string().from('user_id'),
+    workspaceID: string().from('workspace_id'),
+    position: number(),
+    hiddenAt: number().from('hidden_at').optional(),
+    createdAt: number().from('created_at'),
+    updatedAt: number().from('updated_at'),
+  })
+  .primaryKey('builtinKey', 'userID', 'workspaceID');
+
 // ---------- Polymorphic delivery tables
 
 const channel = table('channel')
@@ -1049,6 +1098,45 @@ const customerChannelIdentityRelationships = relationships(customerChannelIdenti
   }),
 }));
 
+const viewRelationships = relationships(view, ({ one, many }) => ({
+  workspace: one({
+    sourceField: ['workspaceID'],
+    destField: ['id'],
+    destSchema: organization,
+  }),
+  owner: one({
+    sourceField: ['ownerID'],
+    destField: ['id'],
+    destSchema: user,
+  }),
+  members: many({
+    sourceField: ['id'],
+    destField: ['viewID'],
+    destSchema: viewMember,
+  }),
+}));
+
+const viewMemberRelationships = relationships(viewMember, ({ one }) => ({
+  view: one({
+    sourceField: ['viewID'],
+    destField: ['id'],
+    destSchema: view,
+  }),
+  user: one({
+    sourceField: ['userID'],
+    destField: ['id'],
+    destSchema: user,
+  }),
+}));
+
+const builtinViewMemberRelationships = relationships(builtinViewMember, ({ one }) => ({
+  user: one({
+    sourceField: ['userID'],
+    destField: ['id'],
+    destSchema: user,
+  }),
+}));
+
 // ---------- Schema
 
 export const schema = createSchema({
@@ -1079,6 +1167,9 @@ export const schema = createSchema({
     suppression,
     webhookEvent,
     customerChannelIdentity,
+    view,
+    viewMember,
+    builtinViewMember,
   ],
   relationships: [
     userRelationships,
@@ -1107,6 +1198,9 @@ export const schema = createSchema({
     suppressionRelationships,
     webhookEventRelationships,
     customerChannelIdentityRelationships,
+    viewRelationships,
+    viewMemberRelationships,
+    builtinViewMemberRelationships,
   ],
   enableLegacyMutators: false,
   enableLegacyQueries: false,
@@ -1141,6 +1235,9 @@ export type InboundRoutingRule = Row<typeof schema.tables.inboundRoutingRule>;
 export type Suppression = Row<typeof schema.tables.suppression>;
 export type WebhookEvent = Row<typeof schema.tables.webhookEvent>;
 export type CustomerChannelIdentity = Row<typeof schema.tables.customerChannelIdentity>;
+export type View = Row<typeof schema.tables.view>;
+export type ViewMember = Row<typeof schema.tables.viewMember>;
+export type BuiltinViewMember = Row<typeof schema.tables.builtinViewMember>;
 
 export type AuthData = {
   sub: string;

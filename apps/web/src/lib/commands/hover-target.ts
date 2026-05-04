@@ -5,9 +5,13 @@
 // never disagree about which row is the target.
 //
 // Conflict rule: when the keyboard sets the target, hover updates are
-// frozen until the mouse moves to a *different* row. Holding the mouse
-// over row A while pressing `j` should leave the cursor on row B (the
-// keyboard's target), not snap back to A.
+// frozen until the user *physically moves the mouse*. That's not the
+// same as "until the row id under the pointer changes": pressing `j`
+// scrolls the list, which puts a different row under a stationary
+// pointer and fires `mouseover` for the new row. Treating that as a
+// real hover would yank the cursor back to wherever the mouse happens
+// to overlap after the scroll. We track an explicit `mousemove` flag
+// and only accept hover updates once that has fired.
 
 import { type RefObject, useEffect } from 'react';
 import { create } from 'zustand';
@@ -18,33 +22,36 @@ export type CursorSource = 'hover' | 'keyboard';
 interface HoverTargetState {
   target: Target | null;
   source: CursorSource | null;
-  /** Last row id the mouse actually entered. Distinct from `target` so the
-   *  store can tell "mouse stationary while keyboard moved" from "mouse
-   *  moved to a new row". */
-  lastHoverId: string | null;
+  /** Set to false whenever the keyboard takes the cursor; flipped to true
+   *  on the next real `mousemove`. While false, scroll-induced
+   *  `mouseover` events under a stationary pointer are ignored. */
+  mouseMovedSinceKeyboard: boolean;
   setHoverTarget: (target: Target | null) => void;
   setKeyboardTarget: (target: Target | null) => void;
+  noteMouseMoved: () => void;
   clear: () => void;
 }
 
 export const useHoverTargetStore = create<HoverTargetState>((set, get) => ({
   target: null,
   source: null,
-  lastHoverId: null,
+  mouseMovedSinceKeyboard: true,
   setHoverTarget: (target) => {
-    const targetId = target?.kind === 'ticket' ? target.id : null;
     const state = get();
-    // While the keyboard owns the cursor, block hover updates until the
-    // mouse moves to a *different* row from where it last entered. This
-    // ignores the rapid mouseover bubbles fired on sub-elements of the
-    // same row when the mouse is stationary.
-    if (state.source === 'keyboard' && targetId && targetId === state.lastHoverId) {
-      return;
-    }
-    set({ target, source: target ? 'hover' : null, lastHoverId: targetId });
+    // Keyboard owns the cursor and the mouse hasn't moved since — ignore.
+    // The pointer is stationary; the row id under it only changed because
+    // a keyboard-driven scroll re-aligned the viewport. The user's intent
+    // is still on the keyboard cursor.
+    if (state.source === 'keyboard' && !state.mouseMovedSinceKeyboard) return;
+    set({ target, source: target ? 'hover' : null });
   },
-  setKeyboardTarget: (target) => set({ target, source: target ? 'keyboard' : null }),
-  clear: () => set({ target: null, source: null, lastHoverId: null }),
+  setKeyboardTarget: (target) =>
+    set({ target, source: target ? 'keyboard' : null, mouseMovedSinceKeyboard: false }),
+  noteMouseMoved: () => {
+    if (get().mouseMovedSinceKeyboard) return;
+    set({ mouseMovedSinceKeyboard: true });
+  },
+  clear: () => set({ target: null, source: null, mouseMovedSinceKeyboard: true }),
 }));
 
 export function useHoverTargetRoot(ref: RefObject<HTMLElement | null>): void {
@@ -66,11 +73,19 @@ export function useHoverTargetRoot(ref: RefObject<HTMLElement | null>): void {
     };
 
     const onMouseLeave = () => useHoverTargetStore.getState().setHoverTarget(null);
+    // `mousemove` fires only on real pointer movement — never on scroll.
+    // That's the signal we need to distinguish "user reached for the
+    // mouse" from "the row under a stationary pointer slid into a new
+    // position". Listen at document level so a movement that starts
+    // outside the inbox still unlocks hover when it re-enters.
+    const onMouseMove = () => useHoverTargetStore.getState().noteMouseMoved();
     node.addEventListener('mouseover', onMouseOver);
     node.addEventListener('mouseleave', onMouseLeave);
+    document.addEventListener('mousemove', onMouseMove, { passive: true });
     return () => {
       node.removeEventListener('mouseover', onMouseOver);
       node.removeEventListener('mouseleave', onMouseLeave);
+      document.removeEventListener('mousemove', onMouseMove);
       useHoverTargetStore.getState().clear();
     };
   }, [ref]);

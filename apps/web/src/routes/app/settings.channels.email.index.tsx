@@ -59,7 +59,7 @@ function OverviewTab() {
               primary={`${domains.length}`}
               secondary={
                 domains.length === 0
-                  ? 'No domains yet'
+                  ? 'No domains'
                   : `${verifiedDomains} verified · ${domains.length - verifiedDomains} pending`
               }
             />
@@ -69,9 +69,7 @@ function OverviewTab() {
               to="/app/settings/channels/email/addresses"
               primary={`${addresses.length}`}
               secondary={
-                addresses.length === 0
-                  ? 'No addresses yet'
-                  : `${sendable} send · ${receivable} receive`
+                addresses.length === 0 ? 'No addresses' : `${sendable} send · ${receivable} receive`
               }
             />
             <SummaryCard
@@ -79,7 +77,7 @@ function OverviewTab() {
               label="Routing rules"
               to="/app/settings/channels/email/routing"
               primary={`${routingRules.length}`}
-              secondary={routingRules.length === 0 ? 'No rules yet' : `${enabledRules} enabled`}
+              secondary={routingRules.length === 0 ? 'No rules' : `${enabledRules} enabled`}
             />
             <SummaryCard
               icon={ShieldOff}

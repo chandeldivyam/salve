@@ -24,11 +24,14 @@ import {
   CUSTOMER_EVENT_LIMIT,
   CUSTOMER_NOTE_LIMIT,
   CUSTOMER_TICKET_LIMIT,
-  MAX_INBOX_LIMIT,
+  type Filter,
+  INBOX_INITIAL_PAGE,
   queries,
+  type ViewQuery,
+  type ViewSort,
 } from '@opendesk/zero-schema';
 import { useQuery } from '@rocicorp/zero/react';
-import { Link, useNavigate, useRouteContext } from '@tanstack/react-router';
+import { Link, useNavigate, useRouteContext, useSearch } from '@tanstack/react-router';
 import { formatDistanceToNow } from 'date-fns';
 import {
   Activity,
@@ -54,6 +57,8 @@ import { BackToInbox } from '@/components/inbox/back-to-inbox';
 import { TicketDetailSkeleton } from '@/components/skeletons';
 import { WorkbenchLink } from '@/components/workbench/workbench-link';
 import { useCommandRegistry } from '@/lib/commands/registry';
+import { BUILTIN_VIEWS, builtinViewByID, DEFAULT_VIEW_ID } from '@/lib/inbox/builtin-views';
+import { decodeFilters } from '@/lib/inbox/url-filters';
 import { TIMELINE_NEWER_VISIBLE, TIMELINE_OLDER_VISIBLE } from '@/lib/list-constants';
 import type { SessionData } from '@/lib/session-loader';
 import { useShortcut } from '@/lib/shortcuts';
@@ -145,7 +150,45 @@ function SingleTicketTimeline({ ticketID }: { ticketID: string }) {
   const ticket = rawTicket as TimelineTicket | undefined;
   const customerID = ticket?.customer?.id ?? ticket?.customerID ?? '';
   const [members] = useQuery(queries.workspaceMembers(), CACHE_FOREVER);
-  const [inboxList] = useQuery(queries.inboxOpen({ limit: MAX_INBOX_LIMIT }), CACHE_FOREVER);
+  // j/k navigation in the ticket detail must walk the *same* list the
+  // user came from — the active view's `ticketsForView` window. Reading
+  // `view` + `f` from the URL keeps that window in sync without a
+  // round-trip back through the inbox component. The query shape mirrors
+  // `<InboxList>` exactly so Zero reuses the same pipeline, instead of
+  // opening a parallel `inboxOpen` subscription (the legacy code did
+  // that and it was the source of overlap the audit flagged).
+  const inboxSearch = useSearch({ strict: false }) as { view?: string; f?: string };
+  const navInboxQuery: {
+    viewID: string;
+    viewQuery: ViewQuery;
+    sort: ViewSort;
+    limit: number;
+  } = useMemo(() => {
+    const viewID = inboxSearch.view ?? DEFAULT_VIEW_ID;
+    const builtin = builtinViewByID(viewID) ?? BUILTIN_VIEWS[0];
+    const driftFilters = decodeFilters(inboxSearch.f);
+    const filters: Filter[] =
+      inboxSearch.f !== undefined ? driftFilters : ((builtin?.query.filters as Filter[]) ?? []);
+    return {
+      viewID,
+      viewQuery: { filters, matchAll: true },
+      sort: (builtin?.sort as ViewSort) ?? { field: 'updatedAt', direction: 'desc' },
+      limit: INBOX_INITIAL_PAGE,
+    };
+  }, [inboxSearch.view, inboxSearch.f]);
+  const [inboxList] = useQuery(
+    queries.ticketsForView({
+      viewID: navInboxQuery.viewID,
+      viewQuery: navInboxQuery.viewQuery as unknown as {
+        filters: unknown[];
+        matchAll?: boolean;
+        search?: string;
+      },
+      sort: navInboxQuery.sort,
+      limit: navInboxQuery.limit,
+    }),
+    CACHE_FOREVER,
+  );
   const [customerTicketRows] = useQuery(
     queries.customerTicketSummaries({ customerID, limit: CUSTOMER_TICKET_LIMIT }),
     CACHE_TICKET_DETAIL,
@@ -217,7 +260,7 @@ function SingleTicketTimeline({ ticketID }: { ticketID: string }) {
   useEffect(() => {
     if (!ticket) return;
     const title = ticket.shortID > 0 ? `#${ticket.shortID} ${ticket.title}` : ticket.title;
-    setActiveTabTitle(workspaceID, title, 'ticket', 'ticket');
+    setActiveTabTitle(workspaceID, title, 'ticket', 'ticket', `/app/inbox/t/${ticketID}`);
     recordRecentTicket(workspaceID, ticketID);
     useCommandRegistry.getState().setUrlTarget({
       pathname: `/app/inbox/t/${ticket.id}`,
@@ -473,8 +516,14 @@ function CustomerTimeline({ customerID }: { customerID: string }) {
 
   useEffect(() => {
     if (!customer) return;
-    setActiveTabTitle(workspaceID, customerName(customer), 'customer', 'customer');
-  }, [customer, setActiveTabTitle, workspaceID]);
+    setActiveTabTitle(
+      workspaceID,
+      customerName(customer),
+      'customer',
+      'customer',
+      `/app/customers/${customerID}`,
+    );
+  }, [customer, customerID, setActiveTabTitle, workspaceID]);
 
   function toggle(ticketID: string) {
     setExpandedIDs((current) => {
@@ -514,7 +563,7 @@ function CustomerTimeline({ customerID }: { customerID: string }) {
           <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-4 py-4 lg:px-6">
             {feedItems.length === 0 ? (
               <div className="rounded-lg bg-bg-panel px-4 py-8 text-center text-[13px] text-fg-tertiary ring-1 ring-line-default">
-                No timeline activity for this customer yet.
+                No timeline activity for this customer.
               </div>
             ) : (
               <CustomerFeedItems
@@ -982,7 +1031,7 @@ function TimelineHeader({
             ) : null}
             <DropdownMenuSeparator />
             {members.length === 0 ? (
-              <DropdownMenuItem disabled>No teammates yet</DropdownMenuItem>
+              <DropdownMenuItem disabled>No teammates</DropdownMenuItem>
             ) : (
               members.map((member) => (
                 <DropdownMenuItem key={member.id} onSelect={() => onAssigneeChange(member.userId)}>

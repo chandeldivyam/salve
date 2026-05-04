@@ -213,7 +213,7 @@ export function CustomerProfileCard({
                 </div>
               ))}
               {tickets.length === 0 && events.length === 0 ? (
-                <p className="px-3 py-3 text-[12px] text-fg-tertiary">No conversations yet.</p>
+                <p className="px-3 py-3 text-[12px] text-fg-tertiary">No conversations.</p>
               ) : null}
             </div>
           </div>

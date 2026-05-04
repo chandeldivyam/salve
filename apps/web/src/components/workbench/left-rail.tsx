@@ -335,7 +335,7 @@ function WorkspaceSwitcher({
       >
         <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
         {orgs.length === 0 ? (
-          <DropdownMenuItem disabled>No workspaces yet</DropdownMenuItem>
+          <DropdownMenuItem disabled>No workspaces</DropdownMenuItem>
         ) : (
           orgs.map((org) => {
             const isActive = activeOrg?.id === org.id;

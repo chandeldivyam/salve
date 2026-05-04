@@ -25,6 +25,7 @@ import { Copy, ExternalLink, MoreHorizontal, Pin, PinOff, Plus, RotateCcw, X } f
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { useKeyBinding } from '@/lib/commands/use-key-binding';
 import {
+  isCanonicalInbox,
   selectActiveWorkspaceTab,
   useWorkbenchStore,
   type WorkbenchTab,
@@ -172,7 +173,9 @@ function SortableWorkbenchTab({
   const Icon =
     workbenchIconMap[tab.iconId as keyof typeof workbenchIconMap] ?? workbenchIconMap.ticket;
   const title = tab.customTitle ?? tab.title;
-  const canClose = tab.routeId !== 'inbox';
+  // Forked inbox view tabs share `routeId === 'inbox'` with the canonical
+  // home tab; only the latter (tabKey === 'inbox') is unclosable.
+  const canClose = !isCanonicalInbox(tab);
 
   useEffect(() => setEditValue(tab.customTitle ?? tab.title), [tab.customTitle, tab.title]);
   useEffect(() => {

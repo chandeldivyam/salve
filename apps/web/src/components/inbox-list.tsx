@@ -1,37 +1,40 @@
 // Phase 2c inbox list — Linear-tight, virtualized, keyboard-driven.
-//
-// Reads `inboxOpen` (workspace-scoped) with a growing window for infinite
-// scroll, applies `filter` + `search` client-side, and renders rows from
-// IndexedDB immediately on mount so a hard reload never flashes a loading
-// state. The query is paged: initial limit `INBOX_INITIAL_PAGE`, grown by
-// `INBOX_PAGE_GROWTH` whenever the user scrolls within `LOAD_MORE_THRESHOLD` of
-// the bottom. Mirrors zbugs `issueListV2` cursor pattern in spirit (limit
-// instead of cursor, since Zero already de-duplicates an expanded window
-// efficiently).
-//
-// Phase 2 multi-select: bulk selection state is kept in
-// `lib/inbox-selection.ts` (Zustand, transient — no persist) so the
-// command palette can read it. Per-row state used by InboxRow is wired
-// down via props to keep the row component dumb.
+// Phase 40: refactored to subscribe to `ticketsForView({viewID, viewQuery})`.
+// The hardcoded 4-button strip is now `<InboxViewStrip>`. Built-in views
+// (`builtin:all`, `builtin:unassigned`, `builtin:mine`, `builtin:resolved`)
+// drive the same query path as custom views. Free-text search remains
+// client-side for v1; FTS intersection lands in T-4006.
 
 import { mutators } from '@opendesk/mutators';
-import { Button, cn, Input, Tooltip, TooltipContent, TooltipTrigger } from '@opendesk/ui';
+import { Button, Input } from '@opendesk/ui';
 import {
+  type Filter,
   INBOX_INITIAL_PAGE,
   INBOX_PAGE_GROWTH,
-  type InboxRow as InboxRowData,
+  type ViewTicketRow as InboxRowData,
   MAX_INBOX_LIMIT,
   queries,
+  type View,
+  type ViewMember,
+  type ViewQuery,
+  type ViewSort,
 } from '@opendesk/zero-schema';
 import { useQuery } from '@rocicorp/zero/react';
-import { Link, useNavigate, useRouteContext } from '@tanstack/react-router';
+import { Link, useNavigate, useRouteContext, useSearch } from '@tanstack/react-router';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { ArrowRight, Filter, Inbox, ListChecks, Search } from 'lucide-react';
+import { ArrowRight, Inbox, ListChecks, Search } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BulkActionBar } from '@/components/inbox/bulk-action-bar';
+import { InboxFilterBar } from '@/components/inbox/inbox-filter-bar';
 import { InboxRow } from '@/components/inbox/inbox-row';
+import { InboxViewStrip } from '@/components/inbox/inbox-view-strip';
+import { SaveViewModal } from '@/components/inbox/save-view-modal';
 import { useHoverTargetRoot, useHoverTargetStore } from '@/lib/commands/hover-target';
 import { useKeyBinding } from '@/lib/commands/use-key-binding';
+import { BUILTIN_VIEWS, builtinViewByID, DEFAULT_VIEW_ID } from '@/lib/inbox/builtin-views';
+import { clientFilterPredicate } from '@/lib/inbox/custom-field-filter';
+import { decodeFilters, encodeFilters, filtersEqual } from '@/lib/inbox/url-filters';
+import { useViewCommands } from '@/lib/inbox/use-view-commands';
 import { useInboxSelectionStore } from '@/lib/inbox-selection';
 import { INBOX_ROW_HEIGHT, LOAD_MORE_THRESHOLD } from '@/lib/list-constants';
 import { useSetupProgress } from '@/lib/setup-progress';
@@ -39,19 +42,10 @@ import { useZero } from '@/lib/zero';
 import { CACHE_FOREVER } from '@/lib/zero-cache';
 import { InboxListSkeleton } from './skeletons';
 
-type InboxFilter = 'all' | 'unassigned' | 'mine' | 'resolved';
-
 interface InboxListProps {
   selectedTicketID: string | null;
   currentUserID: string;
 }
-
-const FILTERS: Array<{ id: InboxFilter; label: string }> = [
-  { id: 'all', label: 'All open' },
-  { id: 'unassigned', label: 'Unassigned' },
-  { id: 'mine', label: 'Mine' },
-  { id: 'resolved', label: 'Resolved' },
-];
 
 interface SavedInboxState {
   offset: number;
@@ -60,35 +54,48 @@ interface SavedInboxState {
 
 const SCROLL_KEY_PREFIX = 'opendesk.inbox.state.';
 
-function scrollKeyFor(workspaceID: string | null) {
-  return `${SCROLL_KEY_PREFIX}${workspaceID ?? 'no-workspace'}`;
+function scrollKeyFor(workspaceID: string | null, viewID: string) {
+  return `${SCROLL_KEY_PREFIX}${workspaceID ?? 'no-workspace'}.${viewID}`;
 }
 
-function readSavedInboxState(workspaceID: string | null): SavedInboxState {
+function readSavedInboxState(workspaceID: string | null, viewID: string): SavedInboxState {
   const fallback: SavedInboxState = { offset: 0, pageLimit: INBOX_INITIAL_PAGE };
   if (typeof window === 'undefined') return fallback;
-  const raw = window.sessionStorage.getItem(scrollKeyFor(workspaceID));
+  const raw = window.sessionStorage.getItem(scrollKeyFor(workspaceID, viewID));
   if (!raw) return fallback;
   try {
     const parsed = JSON.parse(raw) as Partial<SavedInboxState>;
     const offset =
       Number.isFinite(parsed.offset) && (parsed.offset ?? 0) > 0 ? Number(parsed.offset) : 0;
-    const limit =
+    // Restore pageLimit *only* when we also have a scroll offset to restore.
+    // Without this, switching back to an inbox view replays whatever
+    // pageLimit the user had grown the window to — even though the
+    // virtualizer is at row 0 and could happily start from
+    // `INBOX_INITIAL_PAGE`. A 2000-row materialization on every cold load
+    // is exactly what made the inbox feel like "all tickets at once".
+    // The grow-on-scroll effect still bumps the limit back up the moment
+    // the user scrolls past `LOAD_MORE_THRESHOLD`.
+    const savedLimit =
       Number.isFinite(parsed.pageLimit) &&
       (parsed.pageLimit ?? 0) >= INBOX_INITIAL_PAGE &&
       (parsed.pageLimit ?? 0) <= MAX_INBOX_LIMIT
         ? Number(parsed.pageLimit)
         : INBOX_INITIAL_PAGE;
+    const limit = offset > 0 ? savedLimit : INBOX_INITIAL_PAGE;
     return { offset, pageLimit: limit };
   } catch {
     return fallback;
   }
 }
 
-function writeSavedInboxState(workspaceID: string | null, state: SavedInboxState) {
+function writeSavedInboxState(workspaceID: string | null, viewID: string, state: SavedInboxState) {
   if (typeof window === 'undefined') return;
-  window.sessionStorage.setItem(scrollKeyFor(workspaceID), JSON.stringify(state));
+  window.sessionStorage.setItem(scrollKeyFor(workspaceID, viewID), JSON.stringify(state));
 }
+
+type ViewWithMembers = View & {
+  members: ReadonlyArray<ViewMember>;
+};
 
 export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
   const navigate = useNavigate();
@@ -99,20 +106,169 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
   const workspaceID = ctx.session.session.activeOrganizationId ?? null;
   const setupProgress = useSetupProgress(workspaceID);
 
-  // Both `pageLimit` and the virtualizer's initial scroll offset are
-  // restored from sessionStorage at mount. Without rehydrating pageLimit
-  // the list resets to INBOX_INITIAL_PAGE rows on back-nav, the content isn't
-  // tall enough for the saved offset, and the virtualizer's scroll clamps
-  // to the last visible row — defeating the restore.
-  const restored = useMemo(() => readSavedInboxState(workspaceID), [workspaceID]);
+  // Active view from URL. Default to `builtin:all`. Self-heal happens inside
+  // `<InboxViewStrip>` if the param points at a missing view.
+  const search = useSearch({ from: '/app/inbox' }) as { view?: string; f?: string };
+  const activeViewID = search.view ?? DEFAULT_VIEW_ID;
+
+  // Resolve the active view's saved query/sort/group. Built-ins are
+  // resolved from a static constant; custom views fall through to a Zero
+  // subscription on `viewByID`.
+  const builtin = useMemo(() => builtinViewByID(activeViewID), [activeViewID]);
+  const [customView, customViewStatus] = useQuery(
+    builtin
+      ? queries.viewByID({ id: BUILTIN_VIEWS[0]!.id })
+      : queries.viewByID({ id: activeViewID }),
+    CACHE_FOREVER,
+  ) as unknown as [ViewWithMembers | undefined, { type?: string } | undefined];
+
+  // Self-heal a URL pointing at a custom view that doesn't exist (or that
+  // the caller can't see — `viewByID` filters by scope + archived). The
+  // previous code fell through to `{ filters: [] }` and rendered the
+  // entire workspace's tickets, which is both wrong UX and a small
+  // information leak (count of tickets visible).
+  //
+  // Wait for the Zero subscription to confirm "complete + null" before
+  // navigating away — without this, the redirect fires during initial
+  // hydration and steals the URL the user typed.
+  const customViewMissing = !builtin && customViewStatus?.type === 'complete' && customView == null;
+  useEffect(() => {
+    if (!customViewMissing) return;
+    navigate({
+      to: '/app/inbox',
+      search: { view: DEFAULT_VIEW_ID },
+      replace: true,
+    });
+  }, [customViewMissing, navigate]);
+
+  // Drift model: the URL `f` param holds the *full* effective filter set
+  // when the user has touched anything. When `f` is absent, the saved
+  // view's baseline is the effective set. This is deliberately *not* a
+  // merge-by-field model — that one made the chip bar invisible to the
+  // user and forced "edit a saved view" through "remove + create new".
+  // Now: the chip bar always shows the view's filters, edits replace the
+  // full list, and `Save changes` pushes them back to `view.update`.
+  const hasDrift = search.f !== undefined;
+  const urlFilters = useMemo<Filter[]>(() => decodeFilters(search.f), [search.f]);
+
+  const baselineQuery: ViewQuery = useMemo(() => {
+    if (builtin) return builtin.query;
+    if (customView) return customView.query as unknown as ViewQuery;
+    // Custom view hasn't materialized yet, or doesn't exist / isn't
+    // visible to this caller. Fall back to a never-match filter (status
+    // = unreachable sentinel) instead of "no filter, show everything"
+    // — important for the brief window before the self-heal redirect
+    // above fires, and for cases where Zero's subscription stays
+    // hydrating longer than expected. The redirect handles the
+    // permanent state; this guards the transient one.
+    return {
+      filters: [{ field: 'status', operator: 'eq', value: '__no_view__' }],
+      matchAll: true,
+    };
+  }, [builtin, customView]);
+
+  const effectiveFilters: Filter[] = useMemo(
+    () => (hasDrift ? urlFilters : baselineQuery.filters),
+    [hasDrift, urlFilters, baselineQuery.filters],
+  );
+
+  const resolvedQuery: ViewQuery = useMemo(
+    () => ({ ...baselineQuery, filters: effectiveFilters }),
+    [baselineQuery, effectiveFilters],
+  );
+
+  // Editing a chip writes the entire new chip-bar state into the URL. We
+  // always encode (even an empty list) so "remove the last chip" stays
+  // distinct from "no drift" — see `encodeFilters` for the rationale.
+  const setEffectiveFilters = useCallback(
+    (next: Filter[]) => {
+      navigate({
+        to: '/app/inbox',
+        search: (prev) => ({
+          ...prev,
+          view: prev.view ?? activeViewID,
+          f: encodeFilters(next),
+        }),
+        replace: true,
+      });
+    },
+    [activeViewID, navigate],
+  );
+
+  // Reset clears the `f` param entirely so we fall back to the saved
+  // baseline. Distinct from "set f to []" (which would mean "the user
+  // explicitly wants no filters"); `Reset` says "discard my drift".
+  const resetDrift = useCallback(() => {
+    navigate({
+      to: '/app/inbox',
+      search: (prev) => ({ ...prev, view: prev.view ?? activeViewID, f: undefined }),
+      replace: true,
+    });
+  }, [activeViewID, navigate]);
+
+  // Save changes pushes the live URL state back to the view definition.
+  // Built-ins reject this (they have no DB row); only owners can edit
+  // custom views. Failures stay silent for v1 — drift remains in URL so
+  // the user can retry.
+  const driftedFromBaseline = hasDrift && !filtersEqual(effectiveFilters, baselineQuery.filters);
+  const canSaveChanges =
+    !builtin && customView != null && customView.ownerID === currentUserID && driftedFromBaseline;
+  const saveChanges = useCallback(async () => {
+    if (!canSaveChanges) return;
+    try {
+      await z.mutate(
+        mutators.view.update({
+          id: activeViewID,
+          query: { ...baselineQuery, filters: effectiveFilters },
+        }),
+      );
+      // Drop the `f` param — the URL state is now the saved baseline.
+      resetDrift();
+    } catch (err) {
+      console.error('view.update failed', err);
+    }
+  }, [canSaveChanges, z, activeViewID, baselineQuery, effectiveFilters, resetDrift]);
+
+  const resolvedSort: ViewSort = useMemo(() => {
+    if (builtin) return builtin.sort;
+    if (customView) return customView.sort as unknown as ViewSort;
+    return { field: 'updatedAt', direction: 'desc' };
+  }, [builtin, customView]);
+
+  const resolvedGroupBy: string | null = useMemo(() => {
+    if (builtin) return null;
+    return (customView?.groupBy as string | null | undefined) ?? null;
+  }, [builtin, customView]);
+
+  // sessionStorage scroll state is keyed per-(workspace, view).
+  const restored = useMemo(
+    () => readSavedInboxState(workspaceID, activeViewID),
+    [workspaceID, activeViewID],
+  );
   const [pageLimit, setPageLimit] = useState(restored.pageLimit);
-  // CACHE_FOREVER (10m) so the inbox hydrates from IDB before the first
-  // render after a hard reload. Without this, a fresh mount has nothing
-  // to show until the server replies and the UI flashes a loading state.
-  const [tickets, status] = useQuery(queries.inboxOpen({ limit: pageLimit }), CACHE_FOREVER);
+  // Reset scroll/limit when switching views.
+  useEffect(() => {
+    setPageLimit(restored.pageLimit);
+  }, [restored.pageLimit]);
+
+  const [tickets, status] = useQuery(
+    queries.ticketsForView({
+      viewID: activeViewID,
+      // The query arg type is `{ filters: any[]; ... }` because `ViewQuery`
+      // doesn't carry an index signature (see `queries.ts`). Cast through.
+      viewQuery: resolvedQuery as unknown as {
+        filters: unknown[];
+        matchAll?: boolean;
+        search?: string;
+      },
+      sort: resolvedSort,
+      limit: pageLimit,
+    }),
+    CACHE_FOREVER,
+  ) as unknown as [ReadonlyArray<InboxRowData>, { type?: string } | undefined];
   const ready = status?.type === 'complete';
-  const [filter, setFilter] = useState<InboxFilter>('all');
-  const [search, setSearch] = useState('');
+
+  const [search_text, setSearchText] = useState('');
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   // Bulk selection (transient — see lib/inbox-selection.ts).
@@ -126,53 +282,47 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
   const selectionSet = useMemo(() => new Set(selectionIds), [selectionIds]);
   const hasSelection = selectionIds.length > 0;
 
-  // Reset selection on workspace change (and on mount). The store keys by
-  // workspaceID and clears its own state when it changes.
   useEffect(() => {
     setSelectionWorkspace(workspaceID);
   }, [workspaceID, setSelectionWorkspace]);
 
-  // Drop selection on filter / search change so the bar's count stays
-  // honest (selection refers to ids, not indices, but the user's mental
-  // model is "this list" — switching the list resets the operation).
-  // Tracked via a ref so biome's exhaustive-deps rule sees a single
-  // legitimate dep (`clearSelection`).
-  const lastFilterRef = useRef<string>(`${filter}\u0000${search}`);
+  // Drop selection on view / search change so the bar's count stays honest.
+  const lastFilterRef = useRef<string>(`${activeViewID}\u0000${search_text}`);
   useEffect(() => {
-    const next = `${filter}\u0000${search}`;
+    const next = `${activeViewID}\u0000${search_text}`;
     if (lastFilterRef.current !== next) {
       lastFilterRef.current = next;
       clearSelection();
     }
   });
 
+  // Client-side post-filter for any operator Zero can't fully express:
+  // every custom-field comparison (jsonb shape varies by field type) plus
+  // the negation-style tag operators (`empty`, `includesNone`, `nin`)
+  // that would need `not(exists(...))` — unsupported on the client.
+  const cfPredicate = useMemo(
+    () => clientFilterPredicate(resolvedQuery.filters),
+    [resolvedQuery.filters],
+  );
+
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = search_text.trim().toLowerCase();
+    const textOnly = !q;
     return tickets.filter((t: InboxRowData) => {
-      // status filter
-      if (filter === 'unassigned' && t.assigneeID) return false;
-      if (filter === 'mine' && t.assigneeID !== currentUserID) return false;
-      if (filter === 'resolved') {
-        if (t.status !== 'resolved' && t.status !== 'closed') return false;
-      } else if (t.status === 'resolved' || t.status === 'closed') {
-        // The default `inboxOpen` query already excludes resolved/closed —
-        // this branch is a defence in depth in case the query changes.
-        return false;
-      }
-      if (!q) return true;
+      // `customFieldValues` only ships when a custom-field filter is active
+      // (see `ticketsForView` in queries.ts). The cast is safe because
+      // `customFieldPredicate` short-circuits to `() => true` whenever the
+      // filter list contains no custom-field entries.
+      if (!cfPredicate(t as unknown as Parameters<typeof cfPredicate>[0])) return false;
+      if (textOnly) return true;
       return (
         t.title.toLowerCase().includes(q) ||
         (t.customer?.email?.toLowerCase().includes(q) ?? false) ||
         (t.customer?.name?.toLowerCase().includes(q) ?? false)
       );
     });
-  }, [tickets, filter, search, currentUserID]);
+  }, [tickets, search_text, cfPredicate]);
 
-  // Selected index based on URL — keeps the URL-selected highlight in
-  // sync with the actual route param. The j/k cursor is now independent
-  // of URL (see `cursorIndex` below); URL only seeds the cursor when we
-  // remount with a ticket already focused (e.g. after Esc-back from a
-  // ticket detail).
   const selectedIndex = useMemo(() => {
     if (!selectedTicketID) return -1;
     return filtered.findIndex((t) => t.id === selectedTicketID);
@@ -188,16 +338,6 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
     initialOffset: restored.offset,
   });
 
-  // Cursor model — Linear-style. The cursor is what `x`, `Enter`, and
-  // every command targets; it follows whichever input was used most
-  // recently.
-  //   • Mouse hover writes to `useHoverTargetStore` via
-  //     `useHoverTargetRoot`. While the keyboard owns the cursor, the
-  //     store ignores hover updates until the mouse moves to a *new* row.
-  //   • `j`/`k` move the cursor and publish the new target into the same
-  //     store, so palette commands (`s`, `p`, `a`) act on the same row
-  //     the user sees highlighted.
-  //   • The URL (current ticket) seeds the cursor only on first mount.
   const cursorTarget = useHoverTargetStore((state) => state.target);
   const cursorSource = useHoverTargetStore((state) => state.source);
   const cursorTicketID = cursorTarget?.kind === 'ticket' ? cursorTarget.id : null;
@@ -210,11 +350,11 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
     return filtered.length > 0 ? 0 : -1;
   }, [cursorTicketID, filtered, selectedIndex]);
 
-  // Reset cursor when the list itself changes shape.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: filter/search are the trigger; we never read them
+  // Reset cursor when the list changes shape.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: activeViewID/search_text are the trigger; we never read them
   useEffect(() => {
     useHoverTargetStore.getState().clear();
-  }, [filter, search]);
+  }, [activeViewID, search_text]);
 
   const moveCursor = useCallback(
     (delta: 1 | -1) => {
@@ -233,30 +373,40 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
     [cursorIndex, filtered, virtualizer],
   );
 
-  // Refs so the capture callbacks always read fresh state without
-  // resubscribing every render.
   const pageLimitRef = useRef(pageLimit);
   pageLimitRef.current = pageLimit;
   const captureScroll = useCallback(() => {
     const node = parentRef.current;
     if (!node) return;
-    writeSavedInboxState(workspaceID, {
+    writeSavedInboxState(workspaceID, activeViewID, {
       offset: node.scrollTop,
       pageLimit: pageLimitRef.current,
     });
-  }, [workspaceID]);
+  }, [workspaceID, activeViewID]);
 
-  // Capture on unmount as a safety net (covers j/k navigation that doesn't
-  // run a click handler).
   useEffect(() => captureScroll, [captureScroll]);
 
-  // J/K + arrow keys for keyboard navigation. E archives (close mutator).
+  // Pre-encoded `?view=…&f=…` suffix appended to ticket-detail hrefs so the
+  // saved view + chip filters survive a ticket round-trip. `BackToInbox`
+  // preserves the same params on the way back.
+  const inboxSearchQS = useMemo(() => {
+    const params = new URLSearchParams();
+    if (search.view) params.set('view', search.view);
+    if (search.f) params.set('f', search.f);
+    const qs = params.toString();
+    return qs ? `?${qs}` : '';
+  }, [search.view, search.f]);
+
   const goToIndex = useCallback(
     (idx: number) => {
       const t = filtered[idx];
       if (!t) return;
       captureScroll();
-      navigate({ to: '/app/inbox/t/$ticketId', params: { ticketId: t.id } });
+      navigate({
+        to: '/app/inbox/t/$ticketId',
+        params: { ticketId: t.id },
+        search: (prev) => prev,
+      });
     },
     [filtered, navigate, captureScroll],
   );
@@ -287,10 +437,6 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
     { scopes: ['inbox'], label: 'Close ticket', group: 'Ticket', commandId: 'ticket.close' },
   );
 
-  // Selection toggling. Range mode looks up the indexes in the *current*
-  // filtered list — not the underlying ticket array — because that's the
-  // user's mental model. Selection survives sort/order changes since it's
-  // ID-based, but range bounds are recomputed each call.
   const toggleSelection = useCallback(
     (id: string, opts: { shiftRange?: boolean }) => {
       const idx = filtered.findIndex((t) => t.id === id);
@@ -299,8 +445,6 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
         const start = Math.min(lastToggledIndex, idx);
         const end = Math.max(lastToggledIndex, idx);
         const rangeIDs = filtered.slice(start, end + 1).map((t) => t.id);
-        // Union with existing selection so shift-click extends rather than
-        // replaces — matches Linear / macOS Finder semantics.
         const next = Array.from(new Set([...selectionIds, ...rangeIDs]));
         setMany(next);
       } else {
@@ -311,7 +455,6 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
     [filtered, lastToggledIndex, selectionIds, setMany, toggleOne, setLastToggledIndex],
   );
 
-  // `x` toggles selection on the cursor row (hovered or keyboard).
   useKeyBinding(
     'x',
     () => {
@@ -322,9 +465,6 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
     { scopes: ['inbox'], label: 'Select ticket at cursor', group: 'Ticket' },
   );
 
-  // Shift+J/K extends selection from the cursor and advances the cursor
-  // by one row. Unlike the previous version, it does NOT push-navigate
-  // — staying on the list lets the user keep multi-selecting with x.
   const extendSelection = useCallback(
     (delta: 1 | -1) => {
       if (filtered.length === 0 || cursorIndex < 0) return;
@@ -376,8 +516,6 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
     { scopes: ['inbox'], label: 'Focus inbox search', group: 'Navigation' },
   );
 
-  // Esc clears selection — but only when a selection exists, so it falls
-  // through to BackToInbox / other Esc handlers when there's nothing to clear.
   useKeyBinding(
     'Escape',
     (event) => {
@@ -388,7 +526,6 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
     { scopes: ['inbox'], preventDefault: false, enabled: hasSelection },
   );
 
-  // Cmd/Ctrl + A selects all visible (filtered) rows.
   useKeyBinding(
     '$mod+a',
     (event) => {
@@ -404,16 +541,65 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
     },
   );
 
-  // Infinite scroll — when the last virtualized row index is within
-  // LOAD_MORE_THRESHOLD of the end, grow the query window. Capped at
-  // MAX_INBOX_LIMIT (also enforced server-side in the
-  // schema). Done via the virtualizer's reported items so we don't have
-  // to attach our own scroll listener.
+  // Save-view modal triggered by `+` button or `Alt+V`. `editTarget` switches
+  // the modal into edit mode; null means "create a new view".
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<{
+    id: string;
+    label: string;
+    scope: 'workspace' | 'personal';
+  } | null>(null);
+  const openCreateView = useCallback(() => {
+    setEditTarget(null);
+    setSaveOpen(true);
+  }, []);
+  const openEditView = useCallback(
+    (target: { id: string; label: string; scope: 'workspace' | 'personal' }) => {
+      setEditTarget(target);
+      setSaveOpen(true);
+    },
+    [],
+  );
+  useKeyBinding('Alt+v', openCreateView, {
+    scopes: ['inbox'],
+    label: 'Save view…',
+    group: 'View',
+    commandId: 'view.save_current',
+  });
+
+  // Dynamic per-view Cmd+K commands. Returns the visible view list ordered
+  // for the strip; we reuse the array for `[`/`]` next/prev nav.
+  const navigableViews = useViewCommands();
+  const cycleView = useCallback(
+    (delta: 1 | -1) => {
+      if (navigableViews.length === 0) return;
+      const idx = navigableViews.findIndex((v) => v.id === activeViewID);
+      const start = idx < 0 ? 0 : idx;
+      const next = (start + delta + navigableViews.length) % navigableViews.length;
+      const nextID = navigableViews[next]?.id;
+      if (!nextID) return;
+      navigate({ to: '/app/inbox', search: { view: nextID } });
+    },
+    [activeViewID, navigableViews, navigate],
+  );
+  useKeyBinding(']', () => cycleView(1), {
+    scopes: ['inbox'],
+    label: 'Next view',
+    group: 'View',
+    commandId: 'view.next',
+  });
+  useKeyBinding('[', () => cycleView(-1), {
+    scopes: ['inbox'],
+    label: 'Previous view',
+    group: 'View',
+    commandId: 'view.prev',
+  });
+
   const virtualItems = virtualizer.getVirtualItems();
   const lastVirtualIndex = virtualItems[virtualItems.length - 1]?.index ?? 0;
   useEffect(() => {
     if (!ready) return;
-    if (tickets.length < pageLimit) return; // server has fewer rows than the cap → fully loaded
+    if (tickets.length < pageLimit) return;
     if (pageLimit >= MAX_INBOX_LIMIT) return;
     if (filtered.length - lastVirtualIndex <= LOAD_MORE_THRESHOLD) {
       setPageLimit((p) => Math.min(MAX_INBOX_LIMIT, p + INBOX_PAGE_GROWTH));
@@ -459,48 +645,41 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
             <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               ref={searchInputRef}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              value={search_text}
+              onChange={(e) => setSearchText(e.target.value)}
               placeholder="Search title or customer…"
               className="h-9 pl-8 text-sm"
             />
           </div>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                aria-label="Filters"
-                className="grid h-9 w-9 place-items-center rounded-md border border-border text-muted-foreground hover:bg-surface-muted"
-              >
-                <Filter className="h-4 w-4" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>Filters (placeholder)</TooltipContent>
-          </Tooltip>
         </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          {FILTERS.map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              onClick={() => setFilter(f.id)}
-              className={cn(
-                'h-6 rounded-md px-2 py-1 text-xs transition-colors',
-                filter === f.id
-                  ? 'bg-bg-elevated font-medium text-fg-primary'
-                  : 'text-fg-tertiary hover:bg-bg-elevated hover:text-fg-primary',
-              )}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
+        <InboxViewStrip
+          activeViewID={activeViewID}
+          onCreateView={openCreateView}
+          onEditView={openEditView}
+          workspaceID={workspaceID}
+          currentUserID={currentUserID}
+        />
+        <InboxFilterBar
+          filters={effectiveFilters}
+          onFiltersChange={setEffectiveFilters}
+          currentUserID={currentUserID}
+        />
+        {driftedFromBaseline ? (
+          <DriftBanner
+            isBuiltin={Boolean(builtin)}
+            canSaveChanges={canSaveChanges}
+            onSaveChanges={saveChanges}
+            onSaveAsNew={openCreateView}
+            onReset={resetDrift}
+          />
+        ) : null}
       </div>
 
       <div className="relative flex-1 overflow-hidden">
         <div
           ref={parentRef}
           data-input-mode={cursorSource ?? 'hover'}
+          data-active-view={activeViewID}
           className="h-full overflow-y-auto [&[data-input-mode=keyboard]_[data-ticket-id]:hover]:!bg-transparent"
           onClickCapture={captureScroll}
         >
@@ -509,16 +688,16 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
            *   1. tickets present → render the list (covers both "live data"
            *      and "IDB cache from a previous mount", so reload never
            *      flashes a loading state).
-           *   2. server confirmed empty + matches the empty filter → empty state.
-           *   3. server hasn't responded yet → skeleton at the row shape.
-           * Gating purely on `ready` (zbugs `ticketStatus.type === 'complete'`)
-           * was the source of the previous loading flash on every mount.
+           *   2. server confirmed empty + no search → empty state.
+           *   3. server hasn't responded yet → skeleton.
            */}
           {filtered.length === 0 && !ready ? (
             <InboxListSkeleton />
           ) : filtered.length === 0 ? (
             <EmptyInbox
-              showSampleCreate={tickets.length === 0 && filter === 'all' && search === ''}
+              showSampleCreate={
+                tickets.length === 0 && activeViewID === DEFAULT_VIEW_ID && search_text === ''
+              }
               onCreate={onCreateSampleTicket}
               setup={setupProgress}
             />
@@ -535,11 +714,6 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
                 if (!t) return null;
                 const isSelected = t.id === selectedTicketID;
                 const multiSelected = selectionSet.has(t.id);
-                // Keyboard-cursor highlight kicks in only when the
-                // keyboard owns the cursor. The parent's
-                // `data-input-mode='keyboard'` attribute also suppresses
-                // the CSS `:hover` rule on every row so we never paint
-                // the keyboard cursor and a stale mouse hover at once.
                 const isCursor = cursorSource === 'keyboard' && vi.index === cursorIndex;
                 return (
                   <div
@@ -564,6 +738,7 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
                       multiSelected={multiSelected}
                       showCheckbox={hasSelection}
                       isCursor={isCursor}
+                      inboxSearchQS={inboxSearchQS}
                       onToggleSelect={toggleSelection}
                       onNavigate={clearSelection}
                     />
@@ -575,6 +750,20 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
         </div>
         <BulkActionBar currentUserID={currentUserID} />
       </div>
+
+      <SaveViewModal
+        open={saveOpen}
+        onOpenChange={(open) => {
+          setSaveOpen(open);
+          if (!open) setEditTarget(null);
+        }}
+        baseQuery={resolvedQuery}
+        baseSort={resolvedSort}
+        baseGroupBy={resolvedGroupBy}
+        driftFilters={effectiveFilters}
+        activeViewLabel={builtin?.label ?? customView?.label ?? 'view'}
+        editing={editTarget}
+      />
     </div>
   );
 }
@@ -629,8 +818,10 @@ function EmptyInbox({
         <Inbox className="h-6 w-6" />
       </div>
       <div className="space-y-1">
-        <p className="text-sm font-medium text-foreground">Your inbox is empty</p>
-        <p className="text-xs text-muted-foreground">Replies will appear here.</p>
+        <p className="text-sm font-medium text-foreground">Nothing in this view</p>
+        <p className="text-xs text-muted-foreground">
+          Replies and matching tickets will appear here.
+        </p>
       </div>
       {isDev && showSampleCreate ? (
         <button
@@ -654,3 +845,60 @@ const NEXT_LABEL: Record<ReturnType<typeof useSetupProgress>['items'][number]['i
   firstMessage: 'receive your first message',
   invite: 'invite a teammate',
 };
+
+function DriftBanner({
+  isBuiltin,
+  canSaveChanges,
+  onSaveChanges,
+  onSaveAsNew,
+  onReset,
+}: {
+  isBuiltin: boolean;
+  canSaveChanges: boolean;
+  onSaveChanges: () => void;
+  onSaveAsNew: () => void;
+  onReset: () => void;
+}) {
+  return (
+    <div
+      data-testid="drift-banner"
+      className="flex items-center justify-between rounded-md border border-border bg-bg-elevated px-2.5 py-1 text-xs"
+    >
+      <span className="text-fg-tertiary">
+        {isBuiltin
+          ? 'Filters changed. Built-ins can’t be edited; save as a new view to keep them.'
+          : canSaveChanges
+            ? 'Filters differ from the saved view.'
+            : 'Filters differ from the saved view. Only the owner can save changes.'}
+      </span>
+      <div className="flex items-center gap-1">
+        {canSaveChanges ? (
+          <button
+            type="button"
+            data-testid="drift-save-changes"
+            onClick={onSaveChanges}
+            className="rounded-md bg-brand px-2 py-1 font-medium text-brand-foreground hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            Save changes
+          </button>
+        ) : null}
+        <button
+          type="button"
+          data-testid="drift-save-as-new"
+          onClick={onSaveAsNew}
+          className="rounded-md px-2 py-1 font-medium text-fg-primary hover:bg-bg-elevated-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          Save as new view
+        </button>
+        <button
+          type="button"
+          data-testid="drift-reset"
+          onClick={onReset}
+          className="rounded-md px-2 py-1 text-fg-tertiary hover:bg-bg-elevated-hover hover:text-fg-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          Reset
+        </button>
+      </div>
+    </div>
+  );
+}

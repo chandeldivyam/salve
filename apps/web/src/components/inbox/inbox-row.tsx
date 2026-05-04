@@ -33,6 +33,14 @@ interface InboxRowProps {
    * user can see which row `x` / `Enter` will act on after `j`/`k`.
    */
   isCursor: boolean;
+  /**
+   * Pre-encoded query string (with leading `?`) to append to the ticket
+   * detail href. Carries `view` + `f` from the inbox URL so the saved view
+   * and chip filters survive the ticket detail round-trip — without this,
+   * `BackToInbox` lands on the bare `/app/inbox` and the user loses their
+   * filtered context.
+   */
+  inboxSearchQS: string;
   onToggleSelect: (id: string, opts: { shiftRange?: boolean }) => void;
   /** Called when the row navigates (single click). Used to clear selection. */
   onNavigate: () => void;
@@ -44,6 +52,7 @@ export function InboxRow({
   multiSelected,
   showCheckbox,
   isCursor,
+  inboxSearchQS,
   onToggleSelect,
   onNavigate,
 }: InboxRowProps) {
@@ -79,7 +88,7 @@ export function InboxRow({
        * triggers) sit on a higher z-index so they intercept first.
        */}
       <WorkbenchLink
-        href={`/app/inbox/t/${ticket.id}`}
+        href={`/app/inbox/t/${ticket.id}${inboxSearchQS}`}
         source="ticket-row"
         onClick={onNavigate}
         aria-label={ticket.title}

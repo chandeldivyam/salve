@@ -7,7 +7,8 @@
 export const ZERO_SCHEMA_NAME = 'opendesk' as const;
 // Tags, tag joins, custom field definitions, custom field values, and
 // customer-scoped audit events.
-export const ZERO_SCHEMA_VERSION = 6 as const;
+// Phase 40: view, view_member, builtin_view_member tables and relationships.
+export const ZERO_SCHEMA_VERSION = 7 as const;
 
 export {
   ALL_TICKET_MESSAGE_LIMIT,
@@ -79,12 +80,14 @@ export {
   type TagRow,
   type TicketCountRow,
   type TicketDetailRow,
+  type ViewTicketRow,
   type WorkspaceMemberRow,
 } from './queries.js';
 export {
   type Attachment,
   type AuditEvent,
   type AuthData,
+  type BuiltinViewMember,
   builder,
   type Channel,
   type Customer,
@@ -112,5 +115,35 @@ export {
   type Ticket,
   type TicketTag,
   type User,
+  type View,
+  type ViewMember,
   type WebhookEvent,
 } from './schema.js';
+export {
+  applyFilterToQuery,
+  DEFAULT_DISPLAY_PROPS,
+  DEFAULT_VIEW_SORT,
+  type DisplayPropKey,
+  type DisplayProps,
+  displayPropsZ,
+  FILTER_FIELDS,
+  type Filter,
+  type FilterField,
+  type FilterOperator,
+  filterZ,
+  type GroupByAxis,
+  groupByZ,
+  ME_TOKEN,
+  relativeCutoff,
+  resolveMeTokens,
+  type StaticFilterField,
+  type TicketPriority,
+  type TicketStatus,
+  ticketPriorities,
+  ticketStatuses,
+  type ViewQuery,
+  type ViewSort,
+  viewQueryZ,
+  viewSortToOrderBy,
+  viewSortZ,
+} from './views.js';

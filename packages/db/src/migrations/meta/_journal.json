@@ -64,6 +64,13 @@
       "when": 1777656058512,
       "tag": "0008_wooden_dark_phoenix",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1777803266833,
+      "tag": "0009_tan_radioactive_man",
+      "breakpoints": true
     }
   ]
 }

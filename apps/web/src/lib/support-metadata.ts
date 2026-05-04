@@ -1,7 +1,10 @@
 import { mutators } from '@opendesk/mutators';
 import { queries } from '@opendesk/zero-schema';
 
-type SupportMetadataQuery = ReturnType<typeof queries.inboxOpen>;
+// Pick any cheap workspace-scoped list query — this is a structural
+// alias used only to coerce `queries` into a flexible map shape; it
+// doesn't actually run.
+type SupportMetadataQuery = ReturnType<typeof queries.tags>;
 type SupportMetadataMutation = ReturnType<typeof mutators.ticket.close>;
 
 export type CustomFieldCategory = 'ticket' | 'customer';

@@ -19,8 +19,17 @@ interface SesNotification {
 }
 
 export async function handleSesWebhook(c: Context): Promise<Response> {
+  // The webhook lets external callers write `webhook_event` rows for any
+  // `provider_message_id` and fan out an Inngest job that touches whatever
+  // workspace owns that ID. With no secret configured ANY request would be
+  // accepted — that's a cross-tenant write. Require the secret
+  // unconditionally; refuse with 500 if env is mis-configured rather than
+  // silently allowing forged notifications.
   const secret = process.env.SES_WEBHOOK_SECRET;
-  if (secret && c.req.header('x-opendesk-webhook-secret') !== secret) {
+  if (!secret) {
+    return c.json({ error: 'webhook-secret-required' }, 500);
+  }
+  if (c.req.header('x-opendesk-webhook-secret') !== secret) {
     return c.json({ error: 'unauthorized' }, 401);
   }
 
@@ -29,7 +38,15 @@ export async function handleSesWebhook(c: Context): Promise<Response> {
 
   if (raw.Type === 'SubscriptionConfirmation') {
     if (process.env.SES_SNS_AUTO_CONFIRM === '1' && raw.SubscribeURL) {
-      await fetch(raw.SubscribeURL);
+      try {
+        await fetch(raw.SubscribeURL);
+      } catch (error) {
+        // SNS retries the confirmation, so a single failed fetch is not
+        // fatal. Log and surface so an operator can investigate; never
+        // 200-OK a confirmation we didn't actually fetch.
+        console.error('[ses-webhook] auto-confirm fetch failed', error);
+        return c.json({ error: 'auto-confirm-failed' }, 502);
+      }
     }
     return c.json({ ok: true, subscriptionConfirmation: true });
   }
