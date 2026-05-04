@@ -1,7 +1,7 @@
 # Agent Platform RFC — CLI, MCP, and REST API over Zero
 
-Status: **draft v3 — Phase A shipped; Phase B is next**
-Date: 2026-05-04 (initial), 2026-05-04 (v2 revision), 2026-05-05 (v3 — Phase A landed)
+Status: **draft v4 — Phase A+B shipped; Phase C is next**
+Date: 2026-05-04 (initial), 2026-05-04 (v2 revision), 2026-05-05 (v3 — Phase A landed), 2026-05-05 (v4 — Phase B landed)
 Owner: TBD (implementation engineer)
 
 This document is the technical plan for opening opendesk to programmatic clients — a CLI, an MCP server for AI agents, and a public REST API — without compromising the Zero sync engine that powers the web client. It is the result of a deep audit of the current codebase plus a survey of how Vercel, Linear, GitHub `gh`, Stripe, Resend, and the official MCP servers structure equivalent layers.
@@ -37,7 +37,33 @@ All nine Phase-A items from §14 are landed. The codebase ships:
 4. **PAT prefix `slv_pat_` / service prefix `slv_svc_`** wired through Better Auth's `defaultPrefix` and our middleware's `tokenLooksLikeOpendeskApiKey()` — both prefixes accepted and resolved to the right principal.
 5. **`apikey` is a Zero table now** (schema version bumped 7 → 8). `member` got a `createdAt` column added so service-account ordering works.
 
-**What's left for Phase B** — see §14. Mutator gaps next: `ticket.resolve`, `ticket.markInProgress`, `message.update`, `message.delete`. Tested at the API layer end-to-end (sign-up → org → PAT → whoami → revoke → 401, plus service-account flow, plus cross-user isolation, plus expired-token rejection, plus idempotency-store unit behaviour). Web app type-checks, builds, and Phase A surface UI is shipped behind `Settings → Developer → API tokens`.
+Phase B is now shipped too — see §0b and §14. Tested at the API layer end-to-end (sign-up → org → PAT → whoami → revoke → 401, plus service-account flow, plus cross-user isolation, plus expired-token rejection, plus idempotency-store unit behaviour). Web app type-checks, builds, and Phase A surface UI is shipped behind `Settings → Developer → API tokens`.
+
+## 0b. Phase B — shipped (2026-05-05)
+
+The four mutator gaps from §14 are landed:
+
+- **`ticket.resolve`** sets `status='resolved'`, stamps `resolvedAt` and `resolvedByID`, clears closed fields, and emits `ticket.status_changed`.
+- **`ticket.markInProgress`** sets `status='in_progress'`, clears resolved/closed fields, and emits `ticket.status_changed`.
+- **`message.update`** — **internal notes only** (see below). Author-only, blocks deleted rows, enforces a 15-minute edit window, updates body HTML/text, stamps `editedAt` / `updatedAt`, bumps ticket activity, and emits `message.edited`.
+- **`message.delete`** — **internal notes only**. Author-only, soft-deletes via `deletedAt`, bumps ticket activity, and emits `message.deleted`.
+- **Schema support** added `ticket.resolved_by_id` and `message.edited_at` / `message.deleted_at` / `message.updated_at` in migration 0012, mirrored into Zero schema version 9.
+- **Delivery guard** retained in the Inngest delivery worker: a queued outbound row whose message is deleted before send is marked `suppressed` and skipped. With the internal-notes-only rule below this branch is unreachable today, but it stays as defence-in-depth + the path that opens up when send-delay (below) lands.
+- **Web affordances** shipped in the timeline: the status dropdown calls resolve / mark-in-progress directly; the per-message action menu only renders on internal notes the current agent authored, with menu items "Edit note" / "Delete note"; edited notes show an "edited" marker; deleted notes render a neutral "Note deleted" placeholder without leaking body content.
+
+### 0b.1 Edit / delete is internal-notes-only — by design
+
+We initially gated edit/delete on "agent-authored, within 15 min." That was wrong UX for outbound: once an email leaves through SES it's in the customer's inbox, and showing edit/delete pretends we can do something we can't. **Phase B rule:**
+
+- **Internal note** (`isInternal: true`) — edit/delete by author within the 15-min window. These never leave the platform, so the affordance is honest.
+- **Public outbound** (`isInternal: false`) — immutable once authored. Server-side, `assertCanModifyOwnMessage` rejects with `NOT_AUTHORIZED` ("public replies are immutable once sent"). Client-side, `MessageBubble` hides the action menu entirely.
+
+Two follow-ups, deliberately deferred:
+
+- **Per-channel send-delay setting.** A future Settings option ("delay outbound delivery by N seconds") opens a grace window during which the message sits in `outbound_message.status='queued'`. During that window, edit replaces the body and delete cancels delivery. The server check becomes `isInternal || (channel allows delay && status === 'queued' && now < scheduledFor)`. The Inngest delivery guard above is the path through which delete will actually cancel a queued send.
+- **Native channel edit/delete** for channels that natively support it (WhatsApp, Slack, Discord later). Per-channel capability registry: `{ canEditAfterSend, canDeleteAfterSend }`. Email's are both `false`, indefinitely. WhatsApp's `canDeleteAfterSend` is `true` within ~2h per Meta's API; Slack supports both freely.
+
+Both are real features with their own settings + worker work — out of scope for Phase B. The current rule is the safe default.
 
 ---
 
@@ -124,15 +150,15 @@ The auth middleware (`apps/api/src/middleware.ts:86`) reads the `opendesk-jwt` c
 
 ### 2.6 What's missing
 
-Status as of 2026-05-05 — Phase A is in.
+Status as of 2026-05-05 — Phase A and Phase B are in.
 
 | Item | Status |
 |---|---|
 | Programmatic auth (API keys / service accounts) | ✅ Phase A — Better Auth API Key plugin + `member.kind` + bearer middleware |
 | `agent` principal in audit log | ✅ Phase A — `auditEvent.actorKind` + `auditActorKind()` helper |
 | Idempotency primitive | ✅ Phase A — `idempotency_record` + `withIdempotency()` (not yet wired to actions) |
-| `ticket.resolve`, `ticket.markInProgress` | ⏳ **Phase B** |
-| `message.update`, `message.delete` | ⏳ **Phase B** |
+| `ticket.resolve`, `ticket.markInProgress` | ✅ Phase B |
+| `message.update`, `message.delete` | ✅ Phase B |
 | Bulk operations | ❌ v2 (see §9.1) |
 | Outbound webhooks | ❌ v2 |
 
@@ -836,7 +862,7 @@ Eight phases. Each is independently shippable to `main`; the web app keeps worki
 
 **Ship checklist verified end-to-end:** sign up → create org → switch workspace → mint PAT in Settings → curl whoami with `Authorization: Bearer slv_pat_…` → get full auth context. Service-account tokens work the same way. Cross-user isolation tested (Bob can't see/revoke Alice's PAT, gets 404). Expired-token rejection tested (backdated `expiresAt`, 401). Bearer-only enforcement on whoami tested (cookie auth gets 401 with `auth.bearer_required` code). Idempotency-store unit-tested. Web app type-checks, builds, ships the new chunk at ~12 kB. Nothing user-facing breaks.
 
-### Phase B — Mutator gap closures ⏳ active
+### Phase B — Mutator gap closures ✅ shipped
 
 1. **`ticket.resolve`** — sets status to `resolved`, stamps `resolvedAt` and `resolvedByID`. Audit: `ticket.status_changed` (or a new `ticket.resolved` kind — pick one).
 2. **`ticket.markInProgress`** — sets status to `in_progress`. Audit: `ticket.status_changed`.
@@ -845,7 +871,7 @@ Eight phases. Each is independently shippable to `main`; the web app keeps worki
 
 **Author the mutators in `packages/mutators/src/`** the same way existing ones are written: Zod arg schema + `assertCanModifyTicket`/`assertCanModifyMessage` (write a message-author helper) + audit emit using `auditActorKind(authData)`. Server wrappers in `apps/api/src/server-mutators.ts` only if there's a side-effect (probably no — these are pure DB writes).
 
-Ship: web app gets new affordances ("Resolve" button on ticket header, edit/delete on the message hover menu). Mutator registry is complete for v1. Bulk operations deferred to v2 (see §9.1).
+Shipped: web app gets new affordances (status dropdown uses dedicated resolve / mark-in-progress actions, edit/delete on the message hover menu). Mutator registry is complete for v1. Bulk operations deferred to v2 (see §9.1).
 
 ### Phase C — Action contracts package (week 3)
 
@@ -1095,4 +1121,4 @@ That's the model: contract declares the public shape, executor delegates to the 
 
 ---
 
-End of RFC. Phase A is shipped (see §0a, §14). Phase B is the next pickup point — `ticket.resolve` / `markInProgress` / `message.update` / `message.delete` mutators per §9, then onward through C → H.
+End of RFC. Phase A and Phase B are shipped (see §0a, §0b, §14). Phase C is the next pickup point — action-contract package scaffolding, then onward through D → H.

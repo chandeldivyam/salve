@@ -35,6 +35,7 @@ import { viewMutators } from './view-mutators.js';
 // ---------- Argument schemas ----------
 
 const idArg = z.string().min(1);
+export const MESSAGE_EDIT_WINDOW_MS = 15 * 60 * 1000;
 
 export const createTicketArgsSchema = z.object({
   id: idArg,
@@ -68,6 +69,7 @@ export const snoozeTicketArgsSchema = z.object({
 export type SnoozeTicketArgs = z.infer<typeof snoozeTicketArgsSchema>;
 
 export const ticketIdOnlyArgsSchema = z.object({ id: idArg });
+export type TicketIDOnlyArgs = z.infer<typeof ticketIdOnlyArgsSchema>;
 
 export const messageAttachmentSchema = z.object({
   id: idArg,
@@ -88,6 +90,20 @@ export const sendMessageArgsSchema = z.object({
   attachments: z.array(messageAttachmentSchema).optional(),
 });
 export type SendMessageArgs = z.infer<typeof sendMessageArgsSchema>;
+
+export const updateMessageArgsSchema = z.object({
+  id: idArg,
+  ticketID: idArg,
+  bodyHTML: z.string().min(1).max(200_000),
+  bodyText: z.string().min(1).max(100_000),
+});
+export type UpdateMessageArgs = z.infer<typeof updateMessageArgsSchema>;
+
+export const deleteMessageArgsSchema = z.object({
+  id: idArg,
+  ticketID: idArg,
+});
+export type DeleteMessageArgs = z.infer<typeof deleteMessageArgsSchema>;
 
 // ---------- Helpers ----------
 
@@ -152,6 +168,47 @@ async function emitAudit(
   });
 }
 
+async function assertCanModifyOwnMessage(
+  tx: Transaction,
+  authData: WorkspaceAuthData,
+  args: { id: string; ticketID: string },
+) {
+  await assertCanModifyTicket(tx, authData, args.ticketID);
+  const message = await tx.run(builder.message.where('id', '=', args.id).one());
+  if (!message || message.deletedAt) {
+    throw new MutationError('message not found', MutationErrorCode.NOT_FOUND, args.id);
+  }
+  if (message.workspaceID !== authData.workspaceID) {
+    throw new MutationError('message not found', MutationErrorCode.CROSS_WORKSPACE, args.id);
+  }
+  if (message.ticketID !== args.ticketID) {
+    throw new MutationError('message not found', MutationErrorCode.NOT_FOUND, args.id);
+  }
+  if (message.authorType !== 'agent' || message.authorUserID !== authData.sub) {
+    throw new MutationError(
+      'only the message author can change this message',
+      MutationErrorCode.NOT_AUTHORIZED,
+      args.id,
+    );
+  }
+  // Phase B: edit/delete is only permitted on internal notes. Public outbound
+  // messages (email today; WhatsApp/Slack/etc. in the future) become immutable
+  // the moment they're authored — there's nothing on our side to un-send.
+  // Future: a per-channel send-delay setting will open a grace window during
+  // which `outbound_message.status='queued'` is editable / cancellable, and
+  // channels that natively support edit (WhatsApp, Slack) will gain a
+  // post-send edit path that calls the channel API. Until those land, gating
+  // is binary: internal-only.
+  if (!message.isInternal) {
+    throw new MutationError(
+      'public replies are immutable once sent',
+      MutationErrorCode.NOT_AUTHORIZED,
+      args.id,
+    );
+  }
+  return message;
+}
+
 /**
  * Generate a fresh UUID for sub-rows the mutator creates server-side
  * (audit events, customers). Drizzle types these columns as Postgres `uuid`
@@ -211,6 +268,9 @@ export const mutators = defineMutators({
         updatedAt: ts,
         firstResponseAt: undefined,
         resolvedAt: undefined,
+        resolvedByID: undefined,
+        closedAt: undefined,
+        closedByID: undefined,
       });
 
       await emitAudit(
@@ -370,6 +430,68 @@ export const mutators = defineMutators({
       );
     }),
 
+    resolve: defineMutator(ticketIdOnlyArgsSchema, async ({ tx, args, ctx: authData }) => {
+      const ticket = await assertCanModifyTicket(tx, authData, args.id);
+      const auth = authData as WorkspaceAuthData;
+      const ts = now();
+      if (ticket.status === 'resolved') return;
+      await tx.mutate.ticket.update({
+        id: args.id,
+        status: 'resolved',
+        resolvedAt: ts,
+        resolvedByID: auth.sub,
+        closedAt: undefined,
+        closedByID: undefined,
+        updatedAt: ts,
+      });
+      await emitAudit(
+        tx,
+        auth,
+        {
+          id: newID(),
+          ticketID: args.id,
+          kind: 'ticket.status_changed',
+          payload: { oldStatus: ticket.status, status: 'resolved' },
+        },
+        ts,
+      );
+    }),
+
+    markInProgress: defineMutator(ticketIdOnlyArgsSchema, async ({ tx, args, ctx: authData }) => {
+      const ticket = await assertCanModifyTicket(tx, authData, args.id);
+      const auth = authData as WorkspaceAuthData;
+      const ts = now();
+      if (
+        ticket.status === 'in_progress' &&
+        !ticket.resolvedAt &&
+        !ticket.resolvedByID &&
+        !ticket.closedAt &&
+        !ticket.closedByID
+      ) {
+        return;
+      }
+      await tx.mutate.ticket.update({
+        id: args.id,
+        status: 'in_progress',
+        resolvedAt: undefined,
+        resolvedByID: undefined,
+        closedAt: undefined,
+        closedByID: undefined,
+        updatedAt: ts,
+      });
+      await emitAudit(
+        tx,
+        auth,
+        {
+          id: newID(),
+          ticketID: args.id,
+          kind: 'ticket.status_changed',
+          payload: { oldStatus: ticket.status, status: 'in_progress' },
+        },
+        ts,
+      );
+    }),
+
     reopen: defineMutator(ticketIdOnlyArgsSchema, async ({ tx, args, ctx: authData }) => {
       const ticket = await assertCanModifyTicket(tx, authData, args.id);
       const auth = authData as WorkspaceAuthData;
@@ -379,6 +501,7 @@ export const mutators = defineMutators({
         id: args.id,
         status: 'open',
         resolvedAt: undefined,
+        resolvedByID: undefined,
         closedAt: undefined,
         closedByID: undefined,
         updatedAt: ts,
@@ -414,7 +537,10 @@ export const mutators = defineMutators({
         bodyHtml: args.bodyHTML,
         bodyText: args.bodyText,
         isInternal,
+        editedAt: undefined,
+        deletedAt: undefined,
         createdAt: ts,
+        updatedAt: ts,
       });
 
       // Phase 2c: persist any uploaded-but-unattached attachments. Mutator
@@ -462,6 +588,63 @@ export const mutators = defineMutators({
       // Delivery fan-out for `delivery/message.requested` happens in the
       // server-mutator wrapper (`apps/api/src/server-mutators.ts`). The
       // wrapper re-checks the (`!isInternal && ticket.customerID`) condition.
+    }),
+
+    update: defineMutator(updateMessageArgsSchema, async ({ tx, args, ctx: authData }) => {
+      assertHasWorkspace(authData);
+      const message = await assertCanModifyOwnMessage(tx, authData, args);
+      const ts = now();
+      if (ts - message.createdAt > MESSAGE_EDIT_WINDOW_MS) {
+        throw new MutationError(
+          'message edit window has expired',
+          MutationErrorCode.NOT_AUTHORIZED,
+          args.id,
+        );
+      }
+      if (message.bodyHtml === args.bodyHTML && message.bodyText === args.bodyText) return;
+
+      await tx.mutate.message.update({
+        id: args.id,
+        bodyHtml: args.bodyHTML,
+        bodyText: args.bodyText,
+        editedAt: ts,
+        updatedAt: ts,
+      });
+      await tx.mutate.ticket.update({ id: args.ticketID, updatedAt: ts });
+      await emitAudit(
+        tx,
+        authData,
+        {
+          id: newID(),
+          ticketID: args.ticketID,
+          kind: 'message.edited',
+          payload: { messageID: args.id, isInternal: message.isInternal },
+        },
+        ts,
+      );
+    }),
+
+    delete: defineMutator(deleteMessageArgsSchema, async ({ tx, args, ctx: authData }) => {
+      assertHasWorkspace(authData);
+      const message = await assertCanModifyOwnMessage(tx, authData, args);
+      const ts = now();
+      await tx.mutate.message.update({
+        id: args.id,
+        deletedAt: ts,
+        updatedAt: ts,
+      });
+      await tx.mutate.ticket.update({ id: args.ticketID, updatedAt: ts });
+      await emitAudit(
+        tx,
+        authData,
+        {
+          id: newID(),
+          ticketID: args.ticketID,
+          kind: 'message.deleted',
+          payload: { messageID: args.id, isInternal: message.isInternal },
+        },
+        ts,
+      );
     }),
   },
 });

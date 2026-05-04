@@ -219,6 +219,7 @@ export const queries = defineQueries({
       .related('customer')
       .related('assignee')
       .related('createdBy')
+      .related('resolvedBy')
       .related('closedBy')
       .related('tags', (tt) =>
         tt
@@ -315,6 +316,7 @@ export const queries = defineQueries({
       .related('customer')
       .related('assignee')
       .related('createdBy')
+      .related('resolvedBy')
       .related('closedBy')
       .related('tags', (tt) =>
         tt

@@ -59,7 +59,10 @@ export interface TimelineMessage {
   readonly bodyHtml: string;
   readonly bodyText: string;
   readonly isInternal: boolean;
+  readonly editedAt?: number | null;
+  readonly deletedAt?: number | null;
   readonly createdAt: number;
+  readonly updatedAt?: number | null;
   readonly authorUser?: TimelineUser | null;
   readonly authorCustomer?: TimelineCustomer | null;
   readonly attachments?: ReadonlyArray<TimelineAttachment>;
@@ -128,6 +131,7 @@ export interface TimelineTicket {
   readonly customerID?: string | null;
   readonly assigneeID?: string | null;
   readonly createdByID?: string | null;
+  readonly resolvedByID?: string | null;
   readonly closedByID?: string | null;
   readonly createdAt: number;
   readonly updatedAt: number;
@@ -137,6 +141,7 @@ export interface TimelineTicket {
   readonly customer?: TimelineCustomer | null;
   readonly assignee?: TimelineUser | null;
   readonly createdBy?: TimelineUser | null;
+  readonly resolvedBy?: TimelineUser | null;
   readonly closedBy?: TimelineUser | null;
   readonly messages?: ReadonlyArray<TimelineMessage>;
   readonly auditEvents?: ReadonlyArray<TimelineAuditEvent>;

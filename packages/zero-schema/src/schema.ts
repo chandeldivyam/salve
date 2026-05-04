@@ -97,6 +97,7 @@ const ticket = table('ticket')
     customerID: string().from('customer_id').optional(),
     assigneeID: string().from('assignee_id').optional(),
     createdByID: string().from('created_by_id').optional(),
+    resolvedByID: string().from('resolved_by_id').optional(),
     closedByID: string().from('closed_by_id').optional(),
     createdAt: number().from('created_at'),
     updatedAt: number().from('updated_at'),
@@ -117,7 +118,10 @@ const message = table('message')
     bodyHtml: string().from('body_html'),
     bodyText: string().from('body_text'),
     isInternal: boolean().from('is_internal'),
+    editedAt: number().from('edited_at').optional(),
+    deletedAt: number().from('deleted_at').optional(),
     createdAt: number().from('created_at'),
+    updatedAt: number().from('updated_at'),
   })
   .primaryKey('id');
 
@@ -549,6 +553,11 @@ const userRelationships = relationships(user, ({ many }) => ({
     destField: ['closedByID'],
     destSchema: ticket,
   }),
+  resolvedTickets: many({
+    sourceField: ['id'],
+    destField: ['resolvedByID'],
+    destSchema: ticket,
+  }),
   customerNotes: many({
     sourceField: ['id'],
     destField: ['createdByID'],
@@ -693,6 +702,11 @@ const ticketRelationships = relationships(ticket, ({ one, many }) => ({
   }),
   createdBy: one({
     sourceField: ['createdByID'],
+    destField: ['id'],
+    destSchema: user,
+  }),
+  resolvedBy: one({
+    sourceField: ['resolvedByID'],
     destField: ['id'],
     destSchema: user,
   }),

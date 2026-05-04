@@ -302,11 +302,8 @@ function SingleTicketTimeline({ ticketID }: { ticketID: string }) {
 
   async function setStatus(next: TimelineTicketStatus) {
     if (next === 'resolved') {
-      await z.mutate(mutators.ticket.close({ id: ticketID }));
-    } else if (
-      next === 'open' &&
-      (activeTicket.status === 'resolved' || activeTicket.status === 'closed')
-    ) {
+      await z.mutate(mutators.ticket.resolve({ id: ticketID }));
+    } else if (next === 'open' && activeTicket.status !== 'open') {
       await z.mutate(mutators.ticket.reopen({ id: ticketID }));
     } else if (next === 'snoozed') {
       await z.mutate(
@@ -315,7 +312,7 @@ function SingleTicketTimeline({ ticketID }: { ticketID: string }) {
     } else if (next === 'closed') {
       await z.mutate(mutators.ticket.close({ id: ticketID }));
     } else if (next === 'in_progress') {
-      await z.mutate(mutators.ticket.reopen({ id: ticketID }));
+      await z.mutate(mutators.ticket.markInProgress({ id: ticketID }));
     }
   }
 
@@ -941,10 +938,29 @@ function TimelineHeader({
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={() => onStatusChange('snoozed')}>
-              Snooze 24h
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => onStatusChange('resolved')}>Close</DropdownMenuItem>
+            {/* Only show transitions that change state. The mutators are
+             * idempotent (re-resolving an already-resolved ticket is a
+             * no-op), so offering them when the ticket is already in that
+             * state misleads the user into expecting a fresh "Resolved
+             * just now" stamp. Match Linear's pattern: irrelevant
+             * transitions are hidden. */}
+            {ticket.status !== 'snoozed' &&
+            ticket.status !== 'resolved' &&
+            ticket.status !== 'closed' ? (
+              <DropdownMenuItem onSelect={() => onStatusChange('snoozed')}>
+                Snooze 24h
+              </DropdownMenuItem>
+            ) : null}
+            {ticket.status !== 'resolved' && ticket.status !== 'closed' ? (
+              <DropdownMenuItem onSelect={() => onStatusChange('resolved')}>
+                Resolve
+              </DropdownMenuItem>
+            ) : null}
+            {ticket.status === 'resolved' ||
+            ticket.status === 'closed' ||
+            ticket.status === 'snoozed' ? (
+              <DropdownMenuItem onSelect={() => onStatusChange('open')}>Reopen</DropdownMenuItem>
+            ) : null}
             <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={() => window.open(window.location.href, '_blank')}>
               <ExternalLink className="h-3.5 w-3.5" /> Open in new tab
