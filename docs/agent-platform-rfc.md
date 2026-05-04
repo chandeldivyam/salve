@@ -1,7 +1,7 @@
 # Agent Platform RFC — CLI, MCP, and REST API over Zero
 
-Status: **draft v4 — Phase A+B shipped; Phase C is next**
-Date: 2026-05-04 (initial), 2026-05-04 (v2 revision), 2026-05-05 (v3 — Phase A landed), 2026-05-05 (v4 — Phase B landed)
+Status: **draft v5 — Phases A–D shipped; Phase E is next (E0 mutators land first)**
+Date: 2026-05-04 (initial), 2026-05-04 (v2 revision), 2026-05-05 (v3 — Phase A landed), 2026-05-05 (v4 — Phase B landed), 2026-05-05 (v5 — Phase C/D landed; Phase E refined with E0 mutator prereqs and decision rule)
 Owner: TBD (implementation engineer)
 
 This document is the technical plan for opening opendesk to programmatic clients — a CLI, an MCP server for AI agents, and a public REST API — without compromising the Zero sync engine that powers the web client. It is the result of a deep audit of the current codebase plus a survey of how Vercel, Linear, GitHub `gh`, Stripe, Resend, and the official MCP servers structure equivalent layers.
@@ -557,6 +557,8 @@ V1 callers can loop. The CLI and MCP can do this client-side cleanly (`for ticke
 
 ## 10. Settings convergence
 
+> **Status:** scheduled as **Phase E0** (see §14). Land this before authoring any Phase E executors — every email-settings executor calls these mutators.
+
 `apps/api/src/settings/email-domains.ts` writes domain/address/routing-rule rows directly via Drizzle, outside the mutator system. Three handlers; only one has an external API dependency:
 
 | Handler | External calls | Shape |
@@ -892,11 +894,80 @@ Ship: `/v1/tickets/**` is live. Internal users can curl it.
 
 ### Phase E — Remaining domains (week 4-5)
 
-16. Customers, views, customer-notes, custom-field values executors + routes.
-17. Settings: tags, custom-fields contracts.
-18. Settings: email domain/address/routing — extract `services/email-domains.ts` and write thin executors over it (option (b) from §10).
+Phase E expands `/v1` from the tickets surface (Phase D) to customers, views, custom-field values, and the settings catalogue. It's mostly executors + routes wrapping mutators that already exist — **except** for three new mutators in the email-settings area that need to land first.
 
-Ship: `/v1/**` is feature-complete.
+**Decision rule for Phase E (and every phase after).** Before writing an executor, classify the operation:
+
+| If the operation… | …then it's a |
+|---|---|
+| Mutates Salve domain state visible in the web app (tickets, messages, notes, tags, fields, views, settings rows) | **Mutator** — call from the executor via `ctx.runMutation(...)`. |
+| Is a read | **Hand-rolled Drizzle** in the executor. Workspace-scoped via `ctx.auth.workspaceID` in every WHERE. |
+| Is a side-effect or external integration the web app doesn't render (S3 presign, AWS SES API, Better Auth token mint) | **Service** — invoked from the executor or via `postCommitTask` from a mutator. |
+
+Why this matters: writes through mutators stay consistent with the web client (Postgres replication → Zero), with the audit log (every mutator emits via `auditActorKind(authData)`), and with permission helpers (`assertHasWorkspace` / `assertCanModify*`). Direct Drizzle writes from executors break all three at once.
+
+#### E0. New mutators to land before executors
+
+These three are the only domain operations Phase E needs that don't already have mutators. Build them in the same pattern as `message.send` (mutator + server wrapper + Inngest postCommitTask for SES). RFC §10 has the full design; the work is:
+
+1. **Migration:** add `provision_status` column to `sending_domain` (enum: `pending` | `provisioning` | `provisioned` | `failed`). One migration, no backfill complexity since existing rows get `provisioned`.
+2. **`packages/mutators/src/settings/email.ts`** — three Zod-validated mutators:
+   - `settings.email.domain.create` — inserts `sending_domain` (`provision_status='pending'`, `dkim_tokens=[]`), `channel`, `email_channel` rows. Server wrapper appends `postCommitTask` → `DOMAIN_EVENT.PROVISION_REQUESTED`. Returns `{ id, status: 'pending' }` immediately.
+   - `settings.email.address.create` — pure DB. Validates address uniqueness within domain, validates `defaultTeamID` (when teams ship). Emits no audit event today; revisit when SLA/team activity needs it.
+   - `settings.email.routingRule.upsert` — pure DB. Adds an `assertCanAssignAgent(tx, authData, agentID)` helper that checks the agent is a workspace member.
+3. **`apps/api/src/inngest/functions/provision-domain.ts`** — sibling of `verifyDomain`. Calls `CreateEmailIdentityCommand` + `PutEmailIdentityMailFromAttributesCommand`, writes back DKIM tokens, flips `provision_status='provisioned'`. On `AlreadyExistsException` re-fetch tokens via `GetEmailIdentityCommand`. Permanent failure → `provision_status='failed'` with error surfaced in UI. Optionally chains to `DOMAIN_EVENT.VERIFICATION_REQUESTED` when tokens are written.
+4. **Web UI tweak**: domain-add flow becomes optimistic (insert → status `pending` → DKIM tokens arrive via Zero subscription → DNS records render).
+5. **Sunset the legacy handlers**: replace the bodies of `handleEmailDomainAdd` / `handleEmailAddressAdd` / `handleEmailRoutingRuleUpsert` with thin forwarders, then delete them once `/v1/settings/email/**` is the only client path.
+
+Land E0 as its own PR (or two: migration+mutators, then Inngest+UI). Do not start E1+ until E0 is merged — every email-settings executor depends on it.
+
+#### E1. Action contracts + executors (week 4)
+
+Author contracts in `packages/action-contracts/src/{customers,views,settings}.ts`. Add executors in `packages/action-executor/src/{customers,views,settings}.ts`. **Every write executor calls `ctx.runMutation(...)`** — none of them write SQL directly. Reads are workspace-scoped Drizzle.
+
+The action → mutator map for Phase E:
+
+| Action | Mutator (existing unless flagged) |
+|---|---|
+| `customers.update` | `customer.update` |
+| `customers.notes.create` / `.update` / `.delete` | `customerNote.create` / `.update` / `.delete` |
+| `customers.tags.add` / `.remove` | `tag.attachToCustomer` / `tag.detachFromCustomer` |
+| `views.create` / `.update` / `.delete` | `view.create` / `.update` / `.archive` |
+| `tickets.customField.set` (already in Phase D matrix but verify) | `customField.setValueOnTicket` / `clearValueOnTicket` |
+| `settings.tags.create` / `.update` / `.archive` | `tag.create` / `.update` / `.archive` |
+| `settings.tagGroups.*` | `tagGroup.create` / `.update` / `.archive` / `.restore` |
+| `settings.customFields.create` / `.update` / `.archive` | `customField.create` / `.update` / `.archive` |
+| `settings.email.domains.create` | `settings.email.domain.create` ← **new in E0** |
+| `settings.email.addresses.create` | `settings.email.address.create` ← **new in E0** |
+| `settings.email.routingRules.upsert` | `settings.email.routingRule.upsert` ← **new in E0** |
+
+**Reads (no mutator):** `customers.list` / `customers.get`, `views.list` / `views.get` / `views.tickets`, `settings.tags.list`, `settings.customFields.list`. Hand-rolled Drizzle, workspace-scoped, cursor-paginated where the list can grow.
+
+#### E2. Operations that stay services (NOT mutators)
+
+These don't fit the mutator model — document the reason in code so future phases don't accidentally promote them:
+
+| Operation | Why service, not mutator |
+|---|---|
+| `customers.events.ingest` (POST `/v1/customers/:id/events`) | High-volume external event ingest, not a domain mutation. Keep as a service with idempotency-key dedup. The web app doesn't optimistically render events it didn't trigger. |
+| `settings.apiTokens.create` / `.revoke` (Phase A endpoints, also exposed at `/v1` in Phase E) | Token plaintext is server-only (defense-in-depth against client-side leaks); Better Auth's plugin owns the row layout; the create response can never be optimistic because the hash is generated server-side. Keep the existing direct-insert + Drizzle-delete handlers; add `/v1` aliases. |
+| File presign / S3 GET (existing `/api/files/*`) | External AWS SDK calls. Already a service; expose at `/v1/files/*` if needed. |
+
+#### E3. Routes + ship checklist
+
+Mount the new routers under `/v1/customers/**`, `/v1/views/**`, `/v1/settings/**` — same `actionMiddlewares` shape as `ticketsRouter` (request-id → idempotency-key → bearer → scopes → input parse → idempotency wrap → executor). OpenAPI auto-includes them via `ALL_ACTIONS`.
+
+Ship checklist:
+- [ ] Migration 0013 applied, `provision_status` column live.
+- [ ] Three new email-settings mutators registered, server wrappers in place, `provisionDomain` Inngest function deployed.
+- [ ] Domain-add web UI flow shows `Provisioning…` → DKIM rows on completion.
+- [ ] All Phase E action contracts authored; `ALL_ACTIONS` length grows from ~18 to ~45.
+- [ ] All Phase E executors call mutators (not direct SQL); reads are hand-rolled Drizzle.
+- [ ] `/v1/openapi.json` regenerated, all new schemas show under `components.schemas`.
+- [ ] `/v1/**` E2E tested with a token carrying full scopes (`tickets:write`, `customers:write`, `views:write`, `settings:write`, `settings:email:write`).
+- [ ] Legacy `/api/settings/email/**` Hono handlers either thin-forward to mutators or are deleted (your call when removing).
+
+Ship: `/v1/**` is feature-complete for v1.
 
 ### Phase F — API client (week 5)
 
@@ -941,58 +1012,62 @@ Ship: agents can drive opendesk.
 
 `I` = idempotency required, `o` = optional, `–` = none (read or naturally idempotent).
 
-| Action ID | Method + Path | Scopes | Idem | Audit |
-|---|---|---|---|---|
-| `tickets.list` | GET /tickets | `tickets:read` | – | – |
-| `tickets.get` | GET /tickets/:id | `tickets:read` | – | – |
-| `tickets.create` | POST /tickets | `tickets:write` | I | `ticket.created` |
-| `tickets.update` | PATCH /tickets/:id | `tickets:write` | o | `ticket.updated` |
-| `tickets.assign` | POST /tickets/:id/assign | `tickets:write` | o | `ticket.assigned` |
-| `tickets.snooze` | POST /tickets/:id/snooze | `tickets:write` | o | `ticket.snoozed` |
-| `tickets.markInProgress` | POST /tickets/:id/in-progress | `tickets:write` | o | `ticket.status_changed` |
-| `tickets.resolve` | POST /tickets/:id/resolve | `tickets:write` | o | `ticket.status_changed` |
-| `tickets.close` | POST /tickets/:id/close | `tickets:write` | o | `ticket.status_changed` |
-| `tickets.reopen` | POST /tickets/:id/reopen | `tickets:write` | o | `ticket.status_changed` |
-| `tickets.reply` | POST /tickets/:id/replies | `tickets:write` | I | `message.sent` |
-| `tickets.note` | POST /tickets/:id/notes | `tickets:write` | I | `message.note_added` |
-| `tickets.message.update` | PATCH /tickets/:id/messages/:mid | `tickets:write` | o | `message.edited` |
-| `tickets.message.delete` | DELETE /tickets/:id/messages/:mid | `tickets:write` | o | `message.deleted` |
-| `tickets.tags.add` | POST /tickets/:id/tags | `tickets:write` | o | `ticket.tag_added` |
-| `tickets.tags.replace` | PUT /tickets/:id/tags | `tickets:write` | o | `ticket.tag_added`/`removed` |
-| `tickets.tags.remove` | DELETE /tickets/:id/tags/:tagId | `tickets:write` | o | `ticket.tag_removed` |
-| `tickets.customField.set` | PUT /tickets/:id/custom-fields/:fieldKey | `tickets:write` | o | `ticket.custom_field_changed` |
-| `customers.list` | GET /customers | `customers:read` | – | – |
-| `customers.get` | GET /customers/:id | `customers:read` | – | – |
-| `customers.update` | PATCH /customers/:id | `customers:write` | o | `customer.updated` |
-| `customers.notes.create` | POST /customers/:id/notes | `customers:write` | I | `customer.note_created` |
-| `customers.notes.update` | PATCH /customer-notes/:id | `customers:write` | o | `customer.note_updated` |
-| `customers.notes.delete` | DELETE /customer-notes/:id | `customers:write` | o | `customer.note_deleted` |
-| `customers.tags.add` | POST /customers/:id/tags | `customers:write` | o | `customer.tag_added` |
-| `customers.tags.remove` | DELETE /customers/:id/tags/:tagId | `customers:write` | o | `customer.tag_removed` |
-| `customers.events.ingest` | POST /customers/:id/events | `customers:write` | I | – |
-| `views.list` | GET /views | `views:read` | – | – |
-| `views.get` | GET /views/:id | `views:read` | – | – |
-| `views.create` | POST /views | `views:write` | I | – |
-| `views.update` | PATCH /views/:id | `views:write` | o | – |
-| `views.delete` | DELETE /views/:id | `views:write` | o | – |
-| `views.tickets` | GET /views/:id/tickets | `views:read`, `tickets:read` | – | – |
-| `settings.tags.list` | GET /settings/tags | `settings:read` | – | – |
-| `settings.tags.create` | POST /settings/tags | `settings:write` | I | – |
-| `settings.tags.update` | PATCH /settings/tags/:id | `settings:write` | o | – |
-| `settings.tags.archive` | DELETE /settings/tags/:id | `settings:write` | o | – |
-| `settings.tagGroups.*` | … | `settings:write` | … | – |
-| `settings.customFields.list` | GET /settings/custom-fields | `settings:read` | – | – |
-| `settings.customFields.create` | POST /settings/custom-fields | `settings:write` | I | – |
-| `settings.customFields.update` | PATCH /settings/custom-fields/:id | `settings:write` | o | – |
-| `settings.customFields.archive` | DELETE /settings/custom-fields/:id | `settings:write` | o | – |
-| `settings.email.domains.create` | POST /settings/email/domains | `settings:email:write` | I | – |
-| `settings.email.addresses.create` | POST /settings/email/domains/:id/addresses | `settings:email:write` | I | – |
-| `settings.email.routingRules.upsert` | POST /settings/email/channels/:id/routing-rules | `settings:email:write` | I | – |
-| `settings.apiTokens.list` | GET /settings/api-tokens | `settings:read` | – | – |
-| `settings.apiTokens.create` | POST /settings/api-tokens | `settings:write` | I | – |
-| `settings.apiTokens.revoke` | DELETE /settings/api-tokens/:id | `settings:write` | o | – |
+**Backed-by legend.** `mut: foo.bar` = the executor calls `ctx.runMutation('foo.bar', …)` against a Zero mutator. `read` = workspace-scoped Drizzle in the executor. `service` = a function in `apps/api/src/services/*` (no mutator, no Zero replication). The decision rule for which is which lives in §14 Phase E.
+
+| Action ID | Method + Path | Scopes | Idem | Audit | Backed by |
+|---|---|---|---|---|---|
+| `tickets.list` | GET /tickets | `tickets:read` | – | – | read |
+| `tickets.get` | GET /tickets/:id | `tickets:read` | – | – | read |
+| `tickets.create` | POST /tickets | `tickets:write` | I | `ticket.created` | mut: `ticket.create` |
+| `tickets.update` | PATCH /tickets/:id | `tickets:write` | o | `ticket.updated` | mut: `ticket.update` |
+| `tickets.assign` | POST /tickets/:id/assign | `tickets:write` | o | `ticket.assigned` | mut: `ticket.assign` |
+| `tickets.snooze` | POST /tickets/:id/snooze | `tickets:write` | o | `ticket.snoozed` | mut: `ticket.snooze` |
+| `tickets.markInProgress` | POST /tickets/:id/in-progress | `tickets:write` | o | `ticket.status_changed` | mut: `ticket.markInProgress` |
+| `tickets.resolve` | POST /tickets/:id/resolve | `tickets:write` | o | `ticket.status_changed` | mut: `ticket.resolve` |
+| `tickets.close` | POST /tickets/:id/close | `tickets:write` | o | `ticket.status_changed` | mut: `ticket.close` |
+| `tickets.reopen` | POST /tickets/:id/reopen | `tickets:write` | o | `ticket.status_changed` | mut: `ticket.reopen` |
+| `tickets.reply` | POST /tickets/:id/replies | `tickets:write` | I | `message.sent` | mut: `message.send` |
+| `tickets.note` | POST /tickets/:id/notes | `tickets:write` | I | `message.note_added` | mut: `message.send` (isInternal=true) |
+| `tickets.message.update` | PATCH /tickets/:id/messages/:mid | `tickets:write` | o | `message.edited` | mut: `message.update` |
+| `tickets.message.delete` | DELETE /tickets/:id/messages/:mid | `tickets:write` | o | `message.deleted` | mut: `message.delete` |
+| `tickets.tags.add` | POST /tickets/:id/tags | `tickets:write` | o | `ticket.tag_added` | mut: `tag.attachToTicket` (looped) |
+| `tickets.tags.replace` | PUT /tickets/:id/tags | `tickets:write` | o | `ticket.tag_added`/`removed` | mut: `tag.replaceOnTicket` |
+| `tickets.tags.remove` | DELETE /tickets/:id/tags/:tagId | `tickets:write` | o | `ticket.tag_removed` | mut: `tag.detachFromTicket` |
+| `tickets.customField.set` | PUT /tickets/:id/custom-fields/:fieldKey | `tickets:write` | o | `ticket.custom_field_changed` | mut: `customField.setValueOnTicket` / `clearValueOnTicket` |
+| `customers.list` | GET /customers | `customers:read` | – | – | read |
+| `customers.get` | GET /customers/:id | `customers:read` | – | – | read |
+| `customers.update` | PATCH /customers/:id | `customers:write` | o | `customer.updated` | mut: `customer.update` |
+| `customers.notes.create` | POST /customers/:id/notes | `customers:write` | I | `customer.note_created` | mut: `customerNote.create` |
+| `customers.notes.update` | PATCH /customer-notes/:id | `customers:write` | o | `customer.note_updated` | mut: `customerNote.update` |
+| `customers.notes.delete` | DELETE /customer-notes/:id | `customers:write` | o | `customer.note_deleted` | mut: `customerNote.delete` |
+| `customers.tags.add` | POST /customers/:id/tags | `customers:write` | o | `customer.tag_added` | mut: `tag.attachToCustomer` |
+| `customers.tags.remove` | DELETE /customers/:id/tags/:tagId | `customers:write` | o | `customer.tag_removed` | mut: `tag.detachFromCustomer` |
+| `customers.events.ingest` | POST /customers/:id/events | `customers:write` | I | – | **service** (high-volume external ingest; existing `/api/customers/:id/events` handler) |
+| `views.list` | GET /views | `views:read` | – | – | read |
+| `views.get` | GET /views/:id | `views:read` | – | – | read |
+| `views.create` | POST /views | `views:write` | I | – | mut: `view.create` |
+| `views.update` | PATCH /views/:id | `views:write` | o | – | mut: `view.update` |
+| `views.delete` | DELETE /views/:id | `views:write` | o | – | mut: `view.archive` |
+| `views.tickets` | GET /views/:id/tickets | `views:read`, `tickets:read` | – | – | read |
+| `settings.tags.list` | GET /settings/tags | `settings:read` | – | – | read |
+| `settings.tags.create` | POST /settings/tags | `settings:write` | I | – | mut: `tag.create` |
+| `settings.tags.update` | PATCH /settings/tags/:id | `settings:write` | o | – | mut: `tag.update` |
+| `settings.tags.archive` | DELETE /settings/tags/:id | `settings:write` | o | – | mut: `tag.archive` |
+| `settings.tagGroups.*` | … | `settings:write` | … | – | mut: `tagGroup.create` / `.update` / `.archive` / `.restore` |
+| `settings.customFields.list` | GET /settings/custom-fields | `settings:read` | – | – | read |
+| `settings.customFields.create` | POST /settings/custom-fields | `settings:write` | I | – | mut: `customField.create` |
+| `settings.customFields.update` | PATCH /settings/custom-fields/:id | `settings:write` | o | – | mut: `customField.update` |
+| `settings.customFields.archive` | DELETE /settings/custom-fields/:id | `settings:write` | o | – | mut: `customField.archive` |
+| `settings.email.domains.create` | POST /settings/email/domains | `settings:email:write` | I | – | **mut (NEW in E0):** `settings.email.domain.create` + Inngest postCommitTask |
+| `settings.email.addresses.create` | POST /settings/email/domains/:id/addresses | `settings:email:write` | I | – | **mut (NEW in E0):** `settings.email.address.create` |
+| `settings.email.routingRules.upsert` | POST /settings/email/channels/:id/routing-rules | `settings:email:write` | I | – | **mut (NEW in E0):** `settings.email.routingRule.upsert` |
+| `settings.apiTokens.list` | GET /settings/api-tokens | `settings:read` | – | – | read (Zero mirror via web app; v1 endpoint reads from `apikey` table) |
+| `settings.apiTokens.create` | POST /settings/api-tokens | `settings:write` | I | – | **service** (Better Auth + direct apikey insert; plaintext is server-only) |
+| `settings.apiTokens.revoke` | DELETE /settings/api-tokens/:id | `settings:write` | o | – | **service** (direct Drizzle delete; plaintext doesn't survive create) |
 
 ~45 actions. Realistic v1 surface. Bulk variants deliberately absent — see §9.1.
+
+**Mutator delta for v1:** the registry already has 35+ mutators. v1 needs only **3 new ones**, all in Phase E0 (settings/email). Everything else maps to mutators that exist today.
 
 ---
 
@@ -1121,4 +1196,4 @@ That's the model: contract declares the public shape, executor delegates to the 
 
 ---
 
-End of RFC. Phase A and Phase B are shipped (see §0a, §0b, §14). Phase C is the next pickup point — action-contract package scaffolding, then onward through D → H.
+End of RFC. Phases A–D are shipped (see §0a, §0b, §14). Phase E is the next pickup point — remaining domains and the E0 email-settings mutator prerequisites, then onward through F → H.

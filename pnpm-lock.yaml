@@ -38,6 +38,12 @@ importers:
       '@hono/node-server':
         specifier: 2.0.0
         version: 2.0.0(hono@4.12.15)
+      '@opendesk/action-contracts':
+        specifier: workspace:*
+        version: link:../../packages/action-contracts
+      '@opendesk/action-executor':
+        specifier: workspace:*
+        version: link:../../packages/action-executor
       '@opendesk/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -221,6 +227,31 @@ importers:
       '@rocicorp/zero':
         specifier: 1.3.0
         version: 1.3.0(@opentelemetry/core@2.7.1(@opentelemetry/api@1.9.1))
+
+  packages/action-contracts:
+    dependencies:
+      zod:
+        specifier: 4.4.1
+        version: 4.4.1
+
+  packages/action-executor:
+    dependencies:
+      '@opendesk/action-contracts':
+        specifier: workspace:*
+        version: link:../action-contracts
+      '@opendesk/db':
+        specifier: workspace:*
+        version: link:../db
+      drizzle-orm:
+        specifier: 0.45.2
+        version: 0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)(kysely@0.28.16)(postgres@3.4.9)
+      zod:
+        specifier: 4.4.1
+        version: 4.4.1
+    devDependencies:
+      '@types/node':
+        specifier: 25.6.0
+        version: 25.6.0
 
   packages/core: {}
 

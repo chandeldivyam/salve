@@ -1,23 +1,13 @@
-export const API_SCOPES = [
-  'tickets:read',
-  'tickets:write',
-  'customers:read',
-  'customers:write',
-  'views:read',
-  'views:write',
-  'settings:read',
-  'settings:write',
-  'settings:email:write',
-] as const;
+import { isScope as isActionScope, SCOPES, type Scope } from '@opendesk/action-contracts';
 
-export type ApiScope = (typeof API_SCOPES)[number];
+export const API_SCOPES = SCOPES;
+
+export type ApiScope = Scope;
 
 type PermissionStatements = Record<string, string[]>;
 
-const API_SCOPE_SET = new Set<string>(API_SCOPES);
-
 export function isApiScope(value: string): value is ApiScope {
-  return API_SCOPE_SET.has(value);
+  return isActionScope(value);
 }
 
 export function permissionStatementsFromScopes(scopes: readonly ApiScope[]): PermissionStatements {

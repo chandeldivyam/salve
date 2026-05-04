@@ -1,9 +1,10 @@
-// Phase A — temporary token-CRUD endpoints (PATs + service accounts).
-// JWT-cookie auth (you don't mint tokens with a token). Reads now go via
+// Phase A — token-CRUD endpoints (PATs + service accounts).
+// JWT-cookie auth (you don't mint tokens with a token). Reads go via
 // Zero (`queries.apiTokensForCurrentUser`, `queries.serviceAccounts`,
-// `queries.serviceAccountTokens`); these handlers stay only for the
-// server-only writes — plaintext is shown once at create time. Re-expressed
-// as `settings.apiTokens.*` actions in Phase D.
+// `queries.serviceAccountTokens`); only writes are REST because plaintext
+// is shown once at create time. Phase D shipped tickets actions; the
+// matching `settings.apiTokens.*` actions land alongside the rest of the
+// settings surface in Phase E.
 
 import { randomBytes, randomUUID } from 'node:crypto';
 import { defaultKeyHasher } from '@better-auth/api-key';

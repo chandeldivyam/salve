@@ -4,7 +4,6 @@ import { authSchema, getDb } from '@opendesk/db';
 import { type AuthData, queries, schema } from '@opendesk/zero-schema';
 import { mustGetMutator, mustGetQuery, type ReadonlyJSONValue } from '@rocicorp/zero';
 import { handleMutateRequest, handleQueryRequest } from '@rocicorp/zero/server';
-import { zeroPostgresJS } from '@rocicorp/zero/server/adapters/postgresjs';
 import { and, eq } from 'drizzle-orm';
 import { Hono, type MiddlewareHandler } from 'hono';
 import { cors } from 'hono/cors';
@@ -31,6 +30,8 @@ import {
   handleRevokePat,
 } from './public-api/api-tokens.js';
 import { requestIDMiddleware } from './public-api/middleware/idempotency.js';
+import { handleOpenApi } from './public-api/openapi.js';
+import { ticketsRouter } from './public-api/tickets.js';
 import { handleWhoami } from './public-api/whoami.js';
 import { handleSearch } from './routes/search.js';
 import { createServerMutators, type PostCommitTask } from './server-mutators.js';
@@ -41,6 +42,7 @@ import {
   handleEmailRoutingRuleUpsert,
 } from './settings/email-domains.js';
 import { handleSesWebhook } from './webhooks/ses.js';
+import { getZql } from './zero-upstream.js';
 
 const app = new Hono();
 
@@ -59,6 +61,17 @@ app.use(
     origin: (origin) => (origin && trustedOrigins.includes(origin) ? origin : undefined),
     credentials: true,
     allowHeaders: ['Content-Type', 'Authorization'],
+    allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    maxAge: 600,
+  }),
+);
+
+app.use(
+  '/v1/*',
+  cors({
+    origin: (origin) => (origin && trustedOrigins.includes(origin) ? origin : undefined),
+    credentials: false,
+    allowHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-Request-Id'],
     allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     maxAge: 600,
   }),
@@ -181,6 +194,8 @@ app.delete('/api/settings/service-accounts/:id', requireWorkspace, handleDeleteS
 // Phase A — /v1/_meta/whoami smoke route. Bearer-only; mounts request-ID
 // middleware so the response carries X-Request-Id.
 app.get('/v1/_meta/whoami', requestIDMiddleware, handleWhoami);
+app.get('/v1/openapi.json', requestIDMiddleware, handleOpenApi);
+app.route('/v1/tickets', ticketsRouter);
 
 app.post('/api/inbound/email/dev', handleDevInboundEmail);
 app.post('/api/inbound/email/ses', handleSesInboundEmail);
@@ -230,23 +245,6 @@ app.on(['GET', 'POST'], '/api/auth/*', (c) => auth.handler(c.req.raw));
 //
 // Pattern from `/tmp/zero-mono/apps/zbugs/api/index.ts:160-228` adapted to
 // Hono and the postgres.js adapter.
-
-const upstreamDB = process.env.DATABASE_URL ?? '';
-let _zql: ReturnType<typeof zeroPostgresJS<typeof schema>> | undefined;
-function getZql() {
-  if (!_zql) {
-    if (!upstreamDB) throw new Error('DATABASE_URL is not set; cannot init Zero server adapter');
-    // Independent postgres.js client so server-mutator transactions are
-    // isolated from the @opendesk/db drizzle pool (different transaction
-    // semantics expected by Zero's adapter). Pass the connection string
-    // directly so the postgres types come from Zero's pinned `postgres@3.4.7`
-    // (avoids the duplicated `Sql<{}>` vs `Sql<Record<string, unknown>>`
-    // mismatch that arises when api itself imports the slightly newer
-    // postgres@3.4.9).
-    _zql = zeroPostgresJS(schema, upstreamDB);
-  }
-  return _zql;
-}
 
 async function authDataFromRequest(c: { req: { raw: Request } }): Promise<AuthData | undefined> {
   const cookieHeader = c.req.raw.headers.get('cookie');
