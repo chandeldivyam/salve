@@ -8,7 +8,8 @@ export const ZERO_SCHEMA_NAME = 'opendesk' as const;
 // Tags, tag joins, custom field definitions, custom field values, and
 // customer-scoped audit events.
 // Phase 40: view, view_member, builtin_view_member tables and relationships.
-export const ZERO_SCHEMA_VERSION = 7 as const;
+// Phase A: apikey table (with principal_kind/principal_id), member.createdAt.
+export const ZERO_SCHEMA_VERSION = 8 as const;
 
 export {
   ALL_TICKET_MESSAGE_LIMIT,
@@ -60,6 +61,7 @@ export const PROVIDER_EVENT = {
 export type ProviderEventName = (typeof PROVIDER_EVENT)[keyof typeof PROVIDER_EVENT];
 
 export {
+  type ApiTokenRow,
   applyTicketRead,
   applyWorkspaceScope,
   type CustomFieldDefinitionRow,
@@ -75,6 +77,8 @@ export {
   type SendableEmailAddressRow,
   type SendingDomainDetailRow,
   type SendingDomainRow,
+  type ServiceAccountRow,
+  type ServiceAccountTokenRow,
   type SuppressionRow,
   type TagGroupRow,
   type TagRow,

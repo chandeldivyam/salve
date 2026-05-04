@@ -71,6 +71,20 @@
       "when": 1777803266833,
       "tag": "0009_tan_radioactive_man",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1777914652001,
+      "tag": "0010_eager_scalphunter",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1777917953737,
+      "tag": "0011_wandering_dark_beast",
+      "breakpoints": true
     }
   ]
 }

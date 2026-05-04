@@ -20,7 +20,12 @@ import {
   type Transaction,
 } from '@rocicorp/zero';
 import { z } from 'zod';
-import { assertCanModifyTicket, assertHasWorkspace, type WorkspaceAuthData } from './auth.js';
+import {
+  assertCanModifyTicket,
+  assertHasWorkspace,
+  auditActorKind,
+  type WorkspaceAuthData,
+} from './auth.js';
 import { customFieldMutators } from './custom-field-mutators.js';
 import { customerMutators, customerNoteMutators } from './customer-mutators.js';
 import { MutationError, MutationErrorCode } from './error.js';
@@ -140,6 +145,7 @@ async function emitAudit(
     workspaceID: authData.workspaceID,
     ticketID: args.ticketID,
     actorID: authData.sub,
+    actorKind: auditActorKind(authData),
     kind: args.kind,
     payload: args.payload,
     createdAt: ts,
@@ -470,6 +476,7 @@ export {
   assertCanReadTicket,
   assertHasWorkspace,
   assertIsLoggedIn,
+  auditActorKind,
   type WorkspaceAuthData,
 } from './auth.js';
 export {

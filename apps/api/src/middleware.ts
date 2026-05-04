@@ -15,6 +15,7 @@ import {
   JWT_COOKIE_NAME,
   type OpendeskJwtClaims,
 } from './jwt.js';
+import { type ApiScope, scopesFromPermissionStatements } from './public-api/scopes.js';
 
 const isProduction = process.env.NODE_ENV === 'production';
 const cookieAttrs: CookieAttrs = { isProduction };
@@ -26,6 +27,10 @@ export interface AuthContext {
   email: string;
   workspaceID: string | null;
   role: AppRole;
+  principalKind: 'user' | 'service_account';
+  memberID?: string;
+  scopes?: readonly ApiScope[];
+  apiKeyID?: string;
 }
 
 declare module 'hono' {
@@ -34,7 +39,7 @@ declare module 'hono' {
   }
 }
 
-function isOpendeskRole(role: string | null | undefined): AppRole {
+function toOpendeskRole(role: string | null | undefined): AppRole {
   if (role === 'owner' || role === 'admin' || role === 'agent') return role;
   // better-auth's default member role is 'member'; map to 'agent' for opendesk semantics.
   if (role === 'member') return 'agent';
@@ -52,7 +57,7 @@ async function resolveRole(userID: string, workspaceID: string): Promise<AppRole
     .limit(1);
   const row = rows[0];
   if (!row) return null;
-  return isOpendeskRole(row.role);
+  return toOpendeskRole(row.role);
 }
 
 async function buildAuthContextFromHeaders(headers: Headers): Promise<AuthContext | null> {
@@ -67,6 +72,111 @@ async function buildAuthContextFromHeaders(headers: Headers): Promise<AuthContex
     email: session.user.email,
     workspaceID: effectiveWorkspaceID,
     role,
+    principalKind: 'user',
+  };
+}
+
+function readBearerToken(headers: Headers): string | null {
+  const authorization = headers.get('authorization');
+  if (!authorization) return null;
+  const [scheme, token, ...rest] = authorization.trim().split(/\s+/);
+  if (scheme?.toLowerCase() !== 'bearer' || !token || rest.length > 0) return null;
+  return token;
+}
+
+function tokenLooksLikeOpendeskApiKey(token: string): boolean {
+  return token.startsWith('slv_pat_') || token.startsWith('slv_svc_');
+}
+
+function stringFromMetadata(metadata: unknown, key: string): string | null {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null;
+  const value = (metadata as Record<string, unknown>)[key];
+  return typeof value === 'string' && value.trim() ? value : null;
+}
+
+function principalKindFromTokenMetadata(
+  metadata: unknown,
+  token: string,
+): 'user' | 'service_account' | null {
+  const raw = stringFromMetadata(metadata, 'principalKind');
+  if (raw === 'user' || raw === 'service_account') return raw;
+  if (token.startsWith('slv_pat_')) return 'user';
+  if (token.startsWith('slv_svc_')) return 'service_account';
+  return null;
+}
+
+export async function buildAuthContextFromApiKey(token: string): Promise<AuthContext | null> {
+  if (!tokenLooksLikeOpendeskApiKey(token)) return null;
+
+  const verified = await auth.api.verifyApiKey({ body: { key: token } });
+  if (!verified.valid || !verified.key) return null;
+
+  const workspaceID = verified.key.referenceId;
+  const metadata = verified.key.metadata;
+  const metadataWorkspaceID = stringFromMetadata(metadata, 'workspaceID');
+  if (metadataWorkspaceID && metadataWorkspaceID !== workspaceID) return null;
+
+  const principalKind = principalKindFromTokenMetadata(metadata, token);
+  if (!principalKind) return null;
+
+  const db = getDb();
+  const baseSelect = {
+    memberID: authSchema.member.id,
+    userID: authSchema.member.userId,
+    role: authSchema.member.role,
+    kind: authSchema.member.kind,
+    email: authSchema.user.email,
+  };
+
+  const explicitMemberID = stringFromMetadata(metadata, 'memberID');
+  const principalID = stringFromMetadata(metadata, 'principalID');
+  const principalUserID =
+    principalKind === 'user' ? (principalID ?? stringFromMetadata(metadata, 'userID')) : null;
+  const memberID = explicitMemberID ?? (principalKind === 'service_account' ? principalID : null);
+
+  const rows =
+    memberID !== null
+      ? await db
+          .select(baseSelect)
+          .from(authSchema.member)
+          .innerJoin(authSchema.user, eq(authSchema.member.userId, authSchema.user.id))
+          .where(
+            and(
+              eq(authSchema.member.id, memberID),
+              eq(authSchema.member.organizationId, workspaceID),
+              eq(authSchema.member.kind, principalKind),
+            ),
+          )
+          .limit(1)
+      : principalKind === 'user' && principalUserID
+        ? await db
+            .select(baseSelect)
+            .from(authSchema.member)
+            .innerJoin(authSchema.user, eq(authSchema.member.userId, authSchema.user.id))
+            .where(
+              and(
+                eq(authSchema.member.userId, principalUserID),
+                eq(authSchema.member.organizationId, workspaceID),
+                eq(authSchema.member.kind, 'user'),
+              ),
+            )
+            .limit(1)
+        : [];
+
+  const row = rows[0];
+  if (!row) return null;
+  const role = toOpendeskRole(row.role);
+  if (!role) return null;
+
+  return {
+    userID: row.userID,
+    email: row.email,
+    workspaceID,
+    role,
+    principalKind,
+    memberID: row.memberID,
+    scopes: scopesFromPermissionStatements(verified.key.permissions),
+    apiKeyID: verified.key.id,
   };
 }
 
@@ -84,10 +194,15 @@ async function buildAuthContextFromHeaders(headers: Headers): Promise<AuthContex
  * (sign-up, sign-in) emit the opendesk JWT cookie alongside better-auth's own.
  */
 export const authMiddleware: MiddlewareHandler = async (c, next) => {
-  const initialCtx = await buildAuthContextFromHeaders(c.req.raw.headers);
+  const bearerToken = readBearerToken(c.req.raw.headers);
+  const initialCtx = bearerToken
+    ? await buildAuthContextFromApiKey(bearerToken)
+    : await buildAuthContextFromHeaders(c.req.raw.headers);
   c.set('auth', initialCtx);
 
   await next();
+
+  if (bearerToken) return;
 
   // Inspect the response: if better-auth (or any downstream) just emitted a
   // session cookie, derive a JWT from the now-current session and append it.

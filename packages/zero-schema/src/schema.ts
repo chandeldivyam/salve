@@ -39,6 +39,28 @@ const member = table('member')
     userId: string(),
     organizationId: string(),
     role: string(),
+    kind: enumeration<'user' | 'service_account'>(),
+    createdAt: number(),
+  })
+  .primaryKey('id');
+
+// Better Auth managed table. We expose the UI-safe columns only — the `key`
+// hash, raw permissions JSON, and metadata JSON stay server-side. The
+// `referenceId` column (set by the api-key plugin's `references: 'organization'`
+// config) is mapped here as `workspaceID` so it lines up with `applyWorkspaceScope`.
+const apiKey = table('apikey')
+  .columns({
+    id: string(),
+    workspaceID: string().from('referenceId'),
+    name: string().optional(),
+    prefix: string().optional(),
+    start: string().optional(),
+    enabled: boolean(),
+    expiresAt: number().from('expiresAt').optional(),
+    lastRequest: number().from('lastRequest').optional(),
+    createdAt: number().from('createdAt'),
+    principalKind: enumeration<'user' | 'service_account'>().from('principal_kind').optional(),
+    principalId: string().from('principal_id').optional(),
   })
   .primaryKey('id');
 
@@ -120,6 +142,7 @@ const auditEvent = table('auditEvent')
     ticketID: string().from('ticket_id').optional(),
     customerID: string().from('customer_id').optional(),
     actorID: string().from('actor_id').optional(),
+    actorKind: enumeration<'user' | 'service_account'>().from('actor_kind'),
     kind: string(),
     payload: json().optional(),
     createdAt: number().from('created_at'),
@@ -1137,6 +1160,19 @@ const builtinViewMemberRelationships = relationships(builtinViewMember, ({ one }
   }),
 }));
 
+const apiKeyRelationships = relationships(apiKey, ({ one }) => ({
+  // For service_account keys, principalId is the synthetic member's id; the
+  // member's user mirror carries the human-readable name. For PAT keys,
+  // principalId is the user's id, but the user join goes via member anyway
+  // (we don't expose the bare user-id mapping here — agents shouldn't see
+  // each other's tokens, and the route filters client-side regardless).
+  member: one({
+    sourceField: ['principalId'],
+    destField: ['id'],
+    destSchema: member,
+  }),
+}));
+
 // ---------- Schema
 
 export const schema = createSchema({
@@ -1144,6 +1180,7 @@ export const schema = createSchema({
     user,
     organization,
     member,
+    apiKey,
     customer,
     ticket,
     message,
@@ -1175,6 +1212,7 @@ export const schema = createSchema({
     userRelationships,
     organizationRelationships,
     memberRelationships,
+    apiKeyRelationships,
     customerRelationships,
     ticketRelationships,
     messageRelationships,
@@ -1212,6 +1250,7 @@ export type Schema = typeof schema;
 export type User = Row<typeof schema.tables.user>;
 export type Organization = Row<typeof schema.tables.organization>;
 export type Member = Row<typeof schema.tables.member>;
+export type ApiKey = Row<typeof schema.tables.apikey>;
 export type Customer = Row<typeof schema.tables.customer>;
 export type Ticket = Row<typeof schema.tables.ticket>;
 export type Message = Row<typeof schema.tables.message>;
@@ -1243,6 +1282,8 @@ export type AuthData = {
   sub: string;
   workspaceID: string | null;
   role: 'owner' | 'admin' | 'agent' | null;
+  principalKind?: 'user' | 'service_account';
+  scopes?: readonly string[];
 };
 
 declare module '@rocicorp/zero' {

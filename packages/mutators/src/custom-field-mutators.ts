@@ -5,6 +5,7 @@ import {
   assertCanModifyCustomer,
   assertCanModifyTicket,
   assertHasWorkspace,
+  auditActorKind,
   type WorkspaceAuthData,
 } from './auth.js';
 import { MutationError, MutationErrorCode } from './error.js';
@@ -325,6 +326,7 @@ async function emitAudit(
     ticketID: args.ticketID,
     customerID: args.customerID,
     actorID: authData.sub,
+    actorKind: auditActorKind(authData),
     kind: args.kind,
     payload: args.payload,
     createdAt: ts,

@@ -7,6 +7,7 @@
 
 import {
   Inbox,
+  Key,
   LayoutDashboard,
   ListChecks,
   Mail,
@@ -77,6 +78,10 @@ export function buildSettingsSidebarGroups({
         { to: '/app/settings/tags', label: 'Tags', icon: Tags },
         { to: '/app/settings/custom-fields', label: 'Custom fields', icon: Settings2 },
       ],
+    },
+    {
+      label: 'Developer',
+      items: [{ to: '/app/settings/api-tokens', label: 'API tokens', icon: Key }],
     },
   ].filter((group) => group.items.length > 0);
 }

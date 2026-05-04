@@ -8,7 +8,7 @@
 // - The `account` table holds OAuth provider linkages AND the bcrypt password column for
 //   email/password auth.
 
-import { boolean, index, pgTable, text, timestamp, unique } from 'drizzle-orm/pg-core';
+import { boolean, index, integer, pgTable, text, timestamp, unique } from 'drizzle-orm/pg-core';
 
 export const user = pgTable(
   'user',
@@ -113,6 +113,7 @@ export const member = pgTable('member', {
     .notNull()
     .references(() => user.id, { onDelete: 'cascade' }),
   role: text('role').notNull().default('member'),
+  kind: text('kind').notNull().default('user'),
   createdAt: timestamp('createdAt', { withTimezone: false }).notNull().defaultNow(),
 });
 
@@ -130,3 +131,39 @@ export const invitation = pgTable('invitation', {
     .notNull()
     .references(() => user.id, { onDelete: 'cascade' }),
 });
+
+export const apikey = pgTable(
+  'apikey',
+  {
+    id: text('id').primaryKey(),
+    configId: text('configId').notNull().default('default'),
+    name: text('name'),
+    start: text('start'),
+    referenceId: text('referenceId').notNull(),
+    prefix: text('prefix'),
+    key: text('key').notNull(),
+    refillInterval: integer('refillInterval'),
+    refillAmount: integer('refillAmount'),
+    lastRefillAt: timestamp('lastRefillAt', { withTimezone: false }),
+    enabled: boolean('enabled').notNull().default(true),
+    rateLimitEnabled: boolean('rateLimitEnabled').notNull().default(true),
+    rateLimitTimeWindow: integer('rateLimitTimeWindow'),
+    rateLimitMax: integer('rateLimitMax'),
+    requestCount: integer('requestCount').notNull().default(0),
+    remaining: integer('remaining'),
+    lastRequest: timestamp('lastRequest', { withTimezone: false }),
+    expiresAt: timestamp('expiresAt', { withTimezone: false }),
+    createdAt: timestamp('createdAt', { withTimezone: false }).notNull().defaultNow(),
+    updatedAt: timestamp('updatedAt', { withTimezone: false }).notNull().defaultNow(),
+    permissions: text('permissions'),
+    metadata: text('metadata'),
+    principalKind: text('principal_kind'),
+    principalId: text('principal_id'),
+  },
+  (t) => ({
+    configIdIdx: index('apikey_configId_idx').on(t.configId),
+    referenceIdIdx: index('apikey_referenceId_idx').on(t.referenceId),
+    keyIdx: index('apikey_key_idx').on(t.key),
+    principalIdx: index('apikey_principal_idx').on(t.principalKind, t.principalId),
+  }),
+);

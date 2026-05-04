@@ -24,6 +24,14 @@ import {
 } from './inngest/functions/index.js';
 import { buildJwtCookieHeader, issueOpendeskJwt, readJwtCookie, verifyOpendeskJwt } from './jwt.js';
 import { authMiddleware, authOf, requireUser, requireWorkspace } from './middleware.js';
+import {
+  handleCreatePat,
+  handleCreateServiceAccount,
+  handleDeleteServiceAccount,
+  handleRevokePat,
+} from './public-api/api-tokens.js';
+import { requestIDMiddleware } from './public-api/middleware/idempotency.js';
+import { handleWhoami } from './public-api/whoami.js';
 import { handleSearch } from './routes/search.js';
 import { createServerMutators, type PostCommitTask } from './server-mutators.js';
 import {
@@ -161,6 +169,19 @@ app.post(
   handleEmailDomainVerifyDev,
 );
 
+// Phase A — temporary token write endpoints. Reads go via Zero
+// (`queries.apiTokensForCurrentUser`, `queries.serviceAccounts`,
+// `queries.serviceAccountTokens`). Only writes are REST because plaintext
+// is shown once at create time. Re-expressed as actions in Phase D.
+app.post('/api/settings/api-tokens', requireWorkspace, handleCreatePat);
+app.delete('/api/settings/api-tokens/:id', requireWorkspace, handleRevokePat);
+app.post('/api/settings/service-accounts', requireWorkspace, handleCreateServiceAccount);
+app.delete('/api/settings/service-accounts/:id', requireWorkspace, handleDeleteServiceAccount);
+
+// Phase A — /v1/_meta/whoami smoke route. Bearer-only; mounts request-ID
+// middleware so the response carries X-Request-Id.
+app.get('/v1/_meta/whoami', requestIDMiddleware, handleWhoami);
+
 app.post('/api/inbound/email/dev', handleDevInboundEmail);
 app.post('/api/inbound/email/ses', handleSesInboundEmail);
 app.post('/api/webhooks/ses', handleSesWebhook);
@@ -237,6 +258,7 @@ async function authDataFromRequest(c: { req: { raw: Request } }): Promise<AuthDa
       sub: claims.sub,
       workspaceID: claims.workspaceID,
       role: claims.role,
+      principalKind: 'user',
     };
   } catch (e) {
     console.warn('[opendesk-api] zero endpoint: rejecting bad jwt', (e as Error).message);

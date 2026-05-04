@@ -205,6 +205,7 @@ export const auditEvent = pgTable(
     ticketId: uuid('ticket_id').references(() => ticket.id, { onDelete: 'cascade' }),
     customerId: uuid('customer_id').references(() => customer.id, { onDelete: 'cascade' }),
     actorId: text('actor_id').references(() => user.id, { onDelete: 'set null' }),
+    actorKind: text('actor_kind').notNull().default('user'),
     // Free-form text for forward-compat (don't promote to enum yet).
     kind: text('kind').notNull(),
     payload: jsonb('payload'),
