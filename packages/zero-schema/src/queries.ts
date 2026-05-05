@@ -35,7 +35,6 @@ import { builder } from './schema.js';
 import {
   applyFilterToQuery,
   resolveMeTokens,
-  type ViewQuery,
   type ViewSort,
   viewQueryZ,
   viewSortToOrderBy,
@@ -189,11 +188,9 @@ const relatedTicketsArg = z.object({
 // from `views.ts` don't carry an index signature, so we accept a loose
 // `z.any()` array here and cast inside the handler. `viewQueryZ` enforces the
 // strict shape at mutator write time.
-// biome-ignore lint/suspicious/noExplicitAny: Zero defineQuery requires JSON-compatible inferred type
 const ticketsForViewArg = z.object({
   viewID: z.string(),
   viewQuery: z.object({
-    // biome-ignore lint/suspicious/noExplicitAny: see comment above
     filters: z.array(z.any()).max(40),
     matchAll: z.boolean().optional(),
     search: z.string().optional(),

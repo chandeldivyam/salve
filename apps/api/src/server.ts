@@ -18,6 +18,7 @@ import {
   deliverMessage,
   deliverMessageRecovery,
   processProviderWebhook,
+  provisionDomain,
   routeInboundMessage,
   verifyDomain,
 } from './inngest/functions/index.js';
@@ -29,9 +30,12 @@ import {
   handleDeleteServiceAccount,
   handleRevokePat,
 } from './public-api/api-tokens.js';
+import { customerNotesRouter, customersRouter } from './public-api/customers.js';
 import { requestIDMiddleware } from './public-api/middleware/idempotency.js';
 import { handleOpenApi } from './public-api/openapi.js';
+import { settingsRouter } from './public-api/settings.js';
 import { ticketsRouter } from './public-api/tickets.js';
+import { viewsRouter } from './public-api/views.js';
 import { handleWhoami } from './public-api/whoami.js';
 import { handleSearch } from './routes/search.js';
 import { createServerMutators, type PostCommitTask } from './server-mutators.js';
@@ -48,7 +52,7 @@ const app = new Hono();
 
 // Trusted origins for cross-origin browser fetches. In dev the web app is
 // served same-origin via Vite's server.proxy, so CORS is essentially a no-op
-// there. In prod (web on app.salve.app, API on api.salve.app) this is what
+// there. In prod (web on app.usesalve.com, API on api.usesalve.com) this is what
 // allows the browser to send cookie-bearing requests.
 const trustedOrigins = (process.env.BETTER_AUTH_TRUSTED_ORIGINS ?? 'http://localhost:5173')
   .split(',')
@@ -196,6 +200,10 @@ app.delete('/api/settings/service-accounts/:id', requireWorkspace, handleDeleteS
 app.get('/v1/_meta/whoami', requestIDMiddleware, handleWhoami);
 app.get('/v1/openapi.json', requestIDMiddleware, handleOpenApi);
 app.route('/v1/tickets', ticketsRouter);
+app.route('/v1/customers', customersRouter);
+app.route('/v1/customer-notes', customerNotesRouter);
+app.route('/v1/views', viewsRouter);
+app.route('/v1/settings', settingsRouter);
 
 app.post('/api/inbound/email/dev', handleDevInboundEmail);
 app.post('/api/inbound/email/ses', handleSesInboundEmail);
@@ -217,6 +225,7 @@ app.use(
     client: inngest,
     functions: [
       deliverMessage,
+      provisionDomain,
       routeInboundMessage,
       verifyDomain,
       processProviderWebhook,

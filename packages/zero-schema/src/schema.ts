@@ -374,6 +374,9 @@ const sendingDomain = table('sendingDomain')
     mailFromSubdomain: string().from('mail_from_subdomain'),
     dnsStatus: enumeration<'pending' | 'verified' | 'failed' | 'suspended'>().from('dns_status'),
     dmarcStatus: enumeration<'pending' | 'present' | 'missing' | 'failing'>().from('dmarc_status'),
+    provisionStatus: enumeration<'pending' | 'provisioning' | 'provisioned' | 'failed'>().from(
+      'provision_status',
+    ),
     lastVerifiedAt: number().from('last_verified_at').optional(),
     suspendedAt: number().from('suspended_at').optional(),
     suspendedReason: string().from('suspended_reason').optional(),

@@ -47,6 +47,13 @@ export const sendingDomainDmarcStatus = pgEnum('sending_domain_dmarc_status', [
   'failing',
 ]);
 
+export const sendingDomainProvisionStatus = pgEnum('sending_domain_provision_status', [
+  'pending',
+  'provisioning',
+  'provisioned',
+  'failed',
+]);
+
 export const outboundMessageStatus = pgEnum('outbound_message_status', [
   'queued',
   'sending',
@@ -108,6 +115,9 @@ export const sendingDomain = pgTable(
     mailFromSubdomain: text('mail_from_subdomain').notNull().default('mail'),
     dnsStatus: sendingDomainDnsStatus('dns_status').notNull().default('pending'),
     dmarcStatus: sendingDomainDmarcStatus('dmarc_status').notNull().default('pending'),
+    provisionStatus: sendingDomainProvisionStatus('provision_status')
+      .notNull()
+      .default('provisioned'),
     lastVerifiedAt: timestamp('last_verified_at', { withTimezone: true }),
     suspendedAt: timestamp('suspended_at', { withTimezone: true }),
     suspendedReason: text('suspended_reason'),

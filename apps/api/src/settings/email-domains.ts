@@ -1,16 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import {
-  CreateEmailIdentityCommand,
-  PutEmailIdentityMailFromAttributesCommand,
-  SESv2Client,
-} from '@aws-sdk/client-sesv2';
 import { getClient } from '@opendesk/db';
 import type { Context } from 'hono';
 import type postgres from 'postgres';
 import { z } from 'zod';
-import { inngest } from '../inngest/client.js';
-import { DOMAIN_EVENT } from '../inngest/events.js';
 import { authOf } from '../middleware.js';
+import { runServerMutation } from '../public-api/mutator-runner.js';
 
 type Sql = postgres.Sql<Record<string, unknown>>;
 
@@ -58,54 +52,6 @@ const routingRuleBody = z.object({
   enabled: z.boolean().default(true),
 });
 
-let ses: SESv2Client | undefined;
-function getSes(): SESv2Client {
-  ses ??= new SESv2Client({
-    region: process.env.AWS_REGION ?? process.env.AWS_DEFAULT_REGION ?? 'us-east-1',
-  });
-  return ses;
-}
-
-function mailerBackend(): 'mailpit' | 'ses' {
-  const explicit = process.env.MAILER_BACKEND;
-  if (explicit === 'ses') return 'ses';
-  if (explicit === 'mailpit') return 'mailpit';
-  return process.env.NODE_ENV === 'production' ? 'ses' : 'mailpit';
-}
-
-function stubDkimTokens(domain: string): Array<{ name: string; value: string }> {
-  return [
-    { name: `s1._domainkey.${domain}`, value: 'dev-cname-1.dkim.amazonses.com' },
-    { name: `s2._domainkey.${domain}`, value: 'dev-cname-2.dkim.amazonses.com' },
-    { name: `s3._domainkey.${domain}`, value: 'dev-cname-3.dkim.amazonses.com' },
-  ];
-}
-
-async function provisionSesDomain(domain: string): Promise<Array<{ name: string; value: string }>> {
-  if (mailerBackend() !== 'ses') return stubDkimTokens(domain);
-
-  const created = await getSes().send(
-    new CreateEmailIdentityCommand({
-      EmailIdentity: domain,
-      DkimSigningAttributes: { NextSigningKeyLength: 'RSA_2048_BIT' },
-    }),
-  );
-
-  await getSes().send(
-    new PutEmailIdentityMailFromAttributesCommand({
-      EmailIdentity: domain,
-      MailFromDomain: `${process.env.MAIL_FROM_SUBDOMAIN ?? 'mail'}.${domain}`,
-      BehaviorOnMxFailure: 'USE_DEFAULT_VALUE',
-    }),
-  );
-
-  const tokens = created.DkimAttributes?.Tokens ?? [];
-  return tokens.map((token) => ({
-    name: `${token}._domainkey.${domain}`,
-    value: `${token}.dkim.amazonses.com`,
-  }));
-}
-
 export async function handleEmailDomainAdd(c: Context): Promise<Response> {
   const auth = authOf(c);
   if (!auth.workspaceID) return c.json({ error: 'no-workspace' }, 403);
@@ -118,110 +64,38 @@ export async function handleEmailDomainAdd(c: Context): Promise<Response> {
   }
 
   const domain = parsed.data.domain.toLowerCase();
-  // `localPart` from the request body is accepted for backwards compatibility
-  // but no longer used: domain-add no longer auto-creates a support@<domain>
-  // email_address row (see note below). Users now create addresses explicitly
-  // on the Addresses tab.
-  const sql = getClient();
-
-  const duplicate = await sql<Array<{ id: string }>>`
-    SELECT id
-    FROM sending_domain
-    WHERE workspace_id = ${auth.workspaceID}
-      AND domain = ${domain}
-    LIMIT 1
-  `;
-  if (duplicate[0]) {
-    return c.json({ error: 'already-added', id: duplicate[0].id }, 409);
-  }
-
-  const dkimTokens = await provisionSesDomain(domain);
   const sendingDomainID = randomUUID();
   const channelID = randomUUID();
 
-  // Note: we no longer auto-create a `support@<domain>` email_address row here.
-  // The setup checklist's "Create a support address" step needs to reflect
-  // explicit user intent — auto-creating an address would flip the step
-  // immediately on domain add and skip a checklist item visibly. Users now
-  // create addresses on the Addresses tab.
-
-  await sql.begin(async (tx) => {
-    await tx`
-      INSERT INTO sending_domain (
-        id,
-        workspace_id,
+  try {
+    await runServerMutation(
+      'settings.email.domain.create',
+      {
+        id: sendingDomainID,
+        channelID,
         domain,
-        dkim_tokens,
-        mail_from_subdomain,
-        dns_status,
-        dmarc_status,
-        created_at,
-        updated_at
-      )
-      VALUES (
-        ${sendingDomainID},
-        ${auth.workspaceID},
-        ${domain},
-        ${JSON.stringify(dkimTokens)}::jsonb,
-        ${process.env.MAIL_FROM_SUBDOMAIN ?? 'mail'},
-        'pending',
-        'pending',
-        now(),
-        now()
-      )
-    `;
-
-    await tx`
-      INSERT INTO channel (id, workspace_id, kind, name, is_default, config, created_at, updated_at)
-      VALUES (
-        ${channelID},
-        ${auth.workspaceID},
-        'email',
-        ${`${domain} email`},
-        true,
-        ${JSON.stringify(emailChannelConfig(sendingDomainID, workspaceID))}::jsonb,
-        now(),
-        now()
-      )
-    `;
-
-    await tx`
-      INSERT INTO email_channel (
-        channel_id,
-        sending_domain_id,
-        from_name,
-        signature,
-        created_at,
-        updated_at
-      )
-      VALUES (
-        ${channelID},
-        ${sendingDomainID},
-        ${parsed.data.fromName ?? null},
-        ${parsed.data.signature ?? null},
-        now(),
-        now()
-      )
-    `;
-  });
-
-  await inngest.send({
-    id: `dom-verify-req-${sendingDomainID}-${Date.now()}`,
-    name: DOMAIN_EVENT.VERIFICATION_REQUESTED,
-    data: {
-      workspaceID: auth.workspaceID,
-      sendingDomainID,
-    },
-  });
+        fromName: parsed.data.fromName,
+        signature: parsed.data.signature,
+        mailFromSubdomain: process.env.MAIL_FROM_SUBDOMAIN ?? 'mail',
+        channelConfig: emailChannelConfig(sendingDomainID, workspaceID),
+      },
+      authDataFromContext(auth),
+    );
+  } catch (error) {
+    const response = legacyMutationErrorResponse(c, error);
+    if (response) return response;
+    throw error;
+  }
 
   return c.json(
     {
       id: sendingDomainID,
       channelID,
       domain,
-      dkimTokens,
+      dkimTokens: [],
       mailFromDomain: `${process.env.MAIL_FROM_SUBDOMAIN ?? 'mail'}.${domain}`,
       status: 'pending',
+      provisionStatus: 'pending',
     },
     201,
   );
@@ -266,71 +140,27 @@ export async function handleEmailAddressAdd(c: Context): Promise<Response> {
   const fullAddress = `${parsed.data.localPart.toLowerCase()}@${domain.domain}`;
   const id = randomUUID();
 
-  await sql.begin(async (tx) => {
-    if (!parsed.data.channelID) {
-      await tx`
-        INSERT INTO channel (id, workspace_id, kind, name, is_default, config, created_at, updated_at)
-        VALUES (
-          ${channelID},
-          ${auth.workspaceID},
-          'email',
-          ${`${domain.domain} email`},
-          false,
-          ${JSON.stringify(emailChannelConfig(sendingDomainID, workspaceID))}::jsonb,
-          now(),
-          now()
-        )
-        ON CONFLICT (id) DO NOTHING
-      `;
-      await tx`
-        INSERT INTO email_channel (channel_id, sending_domain_id, created_at, updated_at)
-        VALUES (${channelID}, ${sendingDomainID}, now(), now())
-        ON CONFLICT (channel_id) DO NOTHING
-      `;
-    }
-
-    if (parsed.data.isDefault) {
-      await tx`
-        UPDATE email_address
-        SET is_default = false, updated_at = now()
-        WHERE channel_id = ${channelID}
-      `;
-    }
-
-    await tx`
-      INSERT INTO email_address (
+  try {
+    await runServerMutation(
+      'settings.email.address.create',
+      {
         id,
-        workspace_id,
-        channel_id,
-        sending_domain_id,
-        local_part,
-        full_address,
-        can_send,
-        can_receive,
-        is_default,
-        label,
-        created_at,
-        updated_at
-      )
-      VALUES (
-        ${id},
-        ${auth.workspaceID},
-        ${channelID},
-        ${sendingDomainID},
-        ${parsed.data.localPart.toLowerCase()},
-        ${fullAddress},
-        ${parsed.data.canSend},
-        ${parsed.data.canReceive},
-        ${parsed.data.isDefault},
-        ${parsed.data.label ?? null},
-        now(),
-        now()
-      )
-    `;
-  });
-
-  if (parsed.data.signature !== undefined) {
-    await setEmailAddressSignatureIfPresent(sql, id, parsed.data.signature);
+        sendingDomainID,
+        channelID,
+        localPart: parsed.data.localPart,
+        label: parsed.data.label,
+        canSend: parsed.data.canSend,
+        canReceive: parsed.data.canReceive,
+        isDefault: parsed.data.isDefault,
+        signature: parsed.data.signature,
+        channelConfig: emailChannelConfig(sendingDomainID, workspaceID),
+      },
+      authDataFromContext(auth),
+    );
+  } catch (error) {
+    const response = legacyMutationErrorResponse(c, error);
+    if (response) return response;
+    throw error;
   }
 
   return c.json({ id, channelID, sendingDomainID, fullAddress }, 201);
@@ -379,68 +209,39 @@ export async function handleEmailRoutingRuleUpsert(c: Context): Promise<Response
     if (!memberRows[0]) return c.json({ error: 'assign-agent-not-member' }, 400);
   }
 
-  const id = await sql.begin(async (tx) => {
-    const existing = await tx<Array<{ id: string }>>`
-      SELECT id
-      FROM inbound_routing_rule
-      WHERE workspace_id = ${auth.workspaceID}
-        AND channel_id = ${address.channel_id}
-        AND email_address_id = ${address.id}
-        AND sender_pattern IS NOT DISTINCT FROM ${parsed.data.senderPattern ?? null}
-        AND subject_pattern IS NOT DISTINCT FROM ${parsed.data.subjectPattern ?? null}
-      ORDER BY created_at ASC
-      LIMIT 1
-    `;
-    const existingID = existing[0]?.id;
-    if (existingID) {
-      await tx`
-        UPDATE inbound_routing_rule
-        SET assign_team_id = ${parsed.data.assignTeamID ?? null},
-            assign_agent_id = ${parsed.data.assignAgentID ?? null},
-            set_priority = ${parsed.data.setPriority},
-            priority = ${parsed.data.priority},
-            enabled = ${parsed.data.enabled},
-            updated_at = now()
-        WHERE id = ${existingID}
-      `;
-      return existingID;
-    }
+  const requestedID = randomUUID();
+  try {
+    await runServerMutation(
+      'settings.email.routingRule.upsert',
+      {
+        id: requestedID,
+        emailAddressID: address.id,
+        channelID: address.channel_id,
+        destinationAddress: parsed.data.destinationAddress,
+        senderPattern: parsed.data.senderPattern,
+        subjectPattern: parsed.data.subjectPattern,
+        assignTeamID: parsed.data.assignTeamID,
+        assignAgentID: parsed.data.assignAgentID,
+        setPriority: parsed.data.setPriority,
+        priority: parsed.data.priority,
+        enabled: parsed.data.enabled,
+      },
+      authDataFromContext(auth),
+    );
+  } catch (error) {
+    const response = legacyMutationErrorResponse(c, error);
+    if (response) return response;
+    throw error;
+  }
 
-    const ruleID = randomUUID();
-    await tx`
-      INSERT INTO inbound_routing_rule (
-        id,
-        workspace_id,
-        channel_id,
-        email_address_id,
-        sender_pattern,
-        subject_pattern,
-        assign_team_id,
-        assign_agent_id,
-        set_priority,
-        priority,
-        enabled,
-        created_at,
-        updated_at
-      )
-      VALUES (
-        ${ruleID},
-        ${auth.workspaceID},
-        ${address.channel_id},
-        ${address.id},
-        ${parsed.data.senderPattern ?? null},
-        ${parsed.data.subjectPattern ?? null},
-        ${parsed.data.assignTeamID ?? null},
-        ${parsed.data.assignAgentID ?? null},
-        ${parsed.data.setPriority},
-        ${parsed.data.priority},
-        ${parsed.data.enabled},
-        now(),
-        now()
-      )
-    `;
-    return ruleID;
-  });
+  const id =
+    (await findRoutingRule(sql, {
+      workspaceID: auth.workspaceID,
+      channelID: address.channel_id,
+      emailAddressID: address.id,
+      senderPattern: parsed.data.senderPattern,
+      subjectPattern: parsed.data.subjectPattern,
+    })) ?? requestedID;
 
   return c.json(
     {
@@ -524,24 +325,6 @@ export async function handleEmailDomainVerifyDev(c: Context): Promise<Response> 
   return c.json({ id, status: 'verified' });
 }
 
-async function setEmailAddressSignatureIfPresent(
-  sql: Sql,
-  emailAddressID: string,
-  signature: string | undefined,
-): Promise<void> {
-  try {
-    await sql`
-      UPDATE email_address
-      SET signature = ${signature ?? null},
-          updated_at = now()
-      WHERE id = ${emailAddressID}
-    `;
-  } catch (err) {
-    if ((err as { code?: string }).code === '42703') return;
-    throw err;
-  }
-}
-
 function emailChannelConfig(sendingDomainID: string, workspaceID: string): Record<string, string> {
   return {
     sendingDomainID,
@@ -552,4 +335,53 @@ function emailChannelConfig(sendingDomainID: string, workspaceID: string): Recor
 
 function inboundForwardingAddress(workspaceID: string): string {
   return `inbound+ws_${workspaceID}@${process.env.INBOUND_EMAIL_DOMAIN ?? 'in.usesalve.com'}`;
+}
+
+async function findRoutingRule(
+  sql: Sql,
+  args: {
+    workspaceID: string;
+    channelID: string;
+    emailAddressID: string;
+    senderPattern?: string;
+    subjectPattern?: string;
+  },
+): Promise<string | null> {
+  const rows = await sql<Array<{ id: string }>>`
+    SELECT id
+    FROM inbound_routing_rule
+    WHERE workspace_id = ${args.workspaceID}
+      AND channel_id = ${args.channelID}
+      AND email_address_id = ${args.emailAddressID}
+      AND sender_pattern IS NOT DISTINCT FROM ${args.senderPattern ?? null}
+      AND subject_pattern IS NOT DISTINCT FROM ${args.subjectPattern ?? null}
+    ORDER BY created_at ASC
+    LIMIT 1
+  `;
+  return rows[0]?.id ?? null;
+}
+
+function authDataFromContext(auth: ReturnType<typeof authOf>) {
+  return {
+    sub: auth.userID,
+    workspaceID: auth.workspaceID,
+    role: auth.role,
+    principalKind: auth.principalKind,
+  };
+}
+
+function legacyMutationErrorResponse(c: Context, error: unknown): Response | null {
+  if (typeof error !== 'object' || error === null) return null;
+  const details = (error as { details?: { code?: string; id?: string } }).details;
+  if (!details?.code) return null;
+  if (details.code === 'INVALID_INPUT') {
+    return c.json({ error: 'invalid', id: details.id }, 400);
+  }
+  if (details.code === 'NOT_FOUND' || details.code === 'CROSS_WORKSPACE') {
+    return c.json({ error: 'not-found' }, 404);
+  }
+  if (details.code === 'NO_WORKSPACE' || details.code === 'NOT_AUTHORIZED') {
+    return c.json({ error: 'forbidden' }, 403);
+  }
+  return null;
 }

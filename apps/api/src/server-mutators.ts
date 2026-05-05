@@ -11,6 +11,7 @@
 
 import { randomUUID } from 'node:crypto';
 import {
+  createEmailDomainArgsSchema,
   createTicketArgsSchema,
   mutators,
   sendMessageArgsSchema,
@@ -21,7 +22,7 @@ import { builder } from '@opendesk/zero-schema';
 import { defineMutator, defineMutators, type Transaction } from '@rocicorp/zero';
 import type postgres from 'postgres';
 import { inngest } from './inngest/client.js';
-import { DELIVERY_EVENT } from './inngest/events.js';
+import { DELIVERY_EVENT, DOMAIN_EVENT } from './inngest/events.js';
 
 type WrappedSql = postgres.TransactionSql<Record<string, unknown>>;
 export type PostCommitTask = () => Promise<void>;
@@ -125,6 +126,31 @@ export function createServerMutators(postCommitTasks: PostCommitTask[] = []) {
           await mutators.customField.setValueOnCustomer.fn({ tx, args, ctx: authData });
         },
       ),
+    },
+
+    settings: {
+      email: {
+        domain: {
+          create: defineMutator(
+            createEmailDomainArgsSchema,
+            async ({ tx, args, ctx: authData }) => {
+              await mutators.settings.email.domain.create.fn({ tx, args, ctx: authData });
+              if (!authData?.workspaceID) return;
+
+              postCommitTasks.push(async () => {
+                await inngest.send({
+                  id: `dom-provision-req-${args.id}`,
+                  name: DOMAIN_EVENT.PROVISION_REQUESTED,
+                  data: {
+                    workspaceID: authData.workspaceID,
+                    sendingDomainID: args.id,
+                  },
+                });
+              });
+            },
+          ),
+        },
+      },
     },
   });
 }

@@ -29,8 +29,18 @@ import {
 import { customFieldMutators } from './custom-field-mutators.js';
 import { customerMutators, customerNoteMutators } from './customer-mutators.js';
 import { MutationError, MutationErrorCode } from './error.js';
+import { emailSettingsMutators } from './settings-email-mutators.js';
 import { tagGroupMutators, tagMutators } from './tag-mutators.js';
 import { viewMutators } from './view-mutators.js';
+
+export {
+  type CreateEmailAddressArgs,
+  type CreateEmailDomainArgs,
+  createEmailAddressArgsSchema,
+  createEmailDomainArgsSchema,
+  type UpsertEmailRoutingRuleArgs,
+  upsertEmailRoutingRuleArgsSchema,
+} from './settings-email-mutators.js';
 
 // ---------- Argument schemas ----------
 
@@ -230,6 +240,9 @@ export const mutators = defineMutators({
   customField: customFieldMutators,
   customer: customerMutators,
   customerNote: customerNoteMutators,
+  settings: {
+    email: emailSettingsMutators,
+  },
   view: viewMutators,
 
   ticket: {

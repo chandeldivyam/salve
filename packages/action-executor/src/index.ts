@@ -8,6 +8,19 @@ export {
   type UntypedExecutor,
 } from './ctx.js';
 export {
+  addCustomerTagsExecutor,
+  createCustomerNoteExecutor,
+  customerExecutors,
+  deleteCustomerNoteExecutor,
+  getCustomerExecutor,
+  ingestCustomerEventExecutor,
+  listCustomersExecutor,
+  readCustomerByID,
+  removeCustomerTagExecutor,
+  updateCustomerExecutor,
+  updateCustomerNoteExecutor,
+} from './customers.js';
+export {
   ActionExecutorError,
   notFound,
   type PublicErrorType,
@@ -15,6 +28,27 @@ export {
 } from './errors.js';
 export { actionResourceID } from './ids.js';
 export { executors } from './registry.js';
+export {
+  archiveCustomFieldExecutor,
+  archiveTagExecutor,
+  archiveTagGroupExecutor,
+  createApiTokenExecutor,
+  createCustomFieldExecutor,
+  createEmailAddressExecutor,
+  createEmailDomainExecutor,
+  createTagExecutor,
+  createTagGroupExecutor,
+  listApiTokensExecutor,
+  listCustomFieldsExecutor,
+  listSettingsTagsExecutor,
+  restoreTagGroupExecutor,
+  revokeApiTokenExecutor,
+  settingsExecutors,
+  updateCustomFieldExecutor,
+  updateTagExecutor,
+  updateTagGroupExecutor,
+  upsertEmailRoutingRuleExecutor,
+} from './settings.js';
 export {
   addTicketTagsExecutor,
   assignTicketExecutor,
@@ -38,3 +72,12 @@ export {
   updateMessageExecutor,
   updateTicketExecutor,
 } from './tickets.js';
+export {
+  createViewExecutor,
+  deleteViewExecutor,
+  getViewExecutor,
+  listViewsExecutor,
+  updateViewExecutor,
+  viewExecutors,
+  viewTicketsExecutor,
+} from './views.js';

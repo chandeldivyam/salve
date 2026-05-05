@@ -85,4 +85,7 @@ export function builtinViewByID(id: string): BuiltinView | undefined {
   return BUILTIN_VIEWS.find((v) => v.id === id);
 }
 
-export const DEFAULT_VIEW_ID = BUILTIN_VIEWS[0]!.id;
+const defaultBuiltinView = BUILTIN_VIEWS[0];
+if (!defaultBuiltinView) throw new Error('BUILTIN_VIEWS must contain at least one view');
+
+export const DEFAULT_VIEW_ID = defaultBuiltinView.id;

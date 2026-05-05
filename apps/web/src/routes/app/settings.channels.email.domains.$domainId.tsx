@@ -7,7 +7,7 @@ import { queries, type SendingDomainDetailRow } from '@opendesk/zero-schema';
 import { useQuery } from '@rocicorp/zero/react';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { format } from 'date-fns';
-import { ArrowLeft, Check, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Check, Loader2, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
 import { domainStatusVariant, postEmpty } from '@/components/email-settings/types';
 import { RouteErrorFeedback, RoutePendingFeedback } from '@/components/route-feedback';
@@ -73,12 +73,14 @@ function DomainDetail() {
 
   const records = buildDnsRecords(d);
   const isVerified = d.dnsStatus === 'verified';
+  const isProvisioning = d.provisionStatus === 'pending' || d.provisionStatus === 'provisioning';
+  const provisionFailed = d.provisionStatus === 'failed';
 
   const verifyButton = isVerified ? (
     <Button size="sm" variant="outline" disabled>
       <Check className="h-3.5 w-3.5" /> Verified
     </Button>
-  ) : import.meta.env.DEV ? (
+  ) : import.meta.env.DEV && !isProvisioning && !provisionFailed ? (
     <Button size="sm" onClick={onVerifyDev} disabled={busy}>
       {busy ? 'Verifying…' : 'Verify DNS (dev)'}
     </Button>
@@ -104,6 +106,9 @@ function DomainDetail() {
         </Link>
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
+          <Badge variant={provisionFailed ? 'danger' : isProvisioning ? 'warning' : 'success'}>
+            Provisioning: {d.provisionStatus}
+          </Badge>
           <Badge variant={domainStatusVariant(d.dnsStatus)}>DNS: {d.dnsStatus}</Badge>
           <Badge variant={d.dmarcStatus === 'present' ? 'success' : 'warning'}>
             DMARC: {d.dmarcStatus}
@@ -115,7 +120,21 @@ function DomainDetail() {
           ) : null}
         </div>
 
-        {isVerified ? (
+        {isProvisioning ? (
+          <div className="mt-6 flex items-start gap-3 rounded-md bg-bg-elevated px-4 py-3">
+            <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-fg-tertiary" />
+            <div className="min-w-0">
+              <p className="text-[13px] font-medium text-fg-primary">Preparing DNS records</p>
+              <p className="mt-0.5 text-[12px] text-fg-tertiary">
+                DKIM records will appear here when domain provisioning completes.
+              </p>
+            </div>
+          </div>
+        ) : provisionFailed ? (
+          <div className="mt-6 rounded-md bg-red-50 px-4 py-3 text-[13px] text-red-700">
+            Domain provisioning failed. Try adding the domain again or check the API logs.
+          </div>
+        ) : isVerified ? (
           <div className="mt-6 flex flex-col gap-6">
             <div className="flex items-start gap-3 rounded-md bg-bg-elevated px-4 py-3">
               <ShieldCheck

@@ -4,7 +4,7 @@ Status: **draft v5 — Phases A–D shipped; Phase E is next (E0 mutators land f
 Date: 2026-05-04 (initial), 2026-05-04 (v2 revision), 2026-05-05 (v3 — Phase A landed), 2026-05-05 (v4 — Phase B landed), 2026-05-05 (v5 — Phase C/D landed; Phase E refined with E0 mutator prereqs and decision rule)
 Owner: TBD (implementation engineer)
 
-This document is the technical plan for opening opendesk to programmatic clients — a CLI, an MCP server for AI agents, and a public REST API — without compromising the Zero sync engine that powers the web client. It is the result of a deep audit of the current codebase plus a survey of how Vercel, Linear, GitHub `gh`, Stripe, Resend, and the official MCP servers structure equivalent layers.
+This document is the technical plan for opening Salve to programmatic clients — a CLI, an MCP server for AI agents, and a public REST API — without compromising the Zero sync engine that powers the web client. It is the result of a deep audit of the current codebase plus a survey of how Vercel, Linear, GitHub `gh`, Stripe, Resend, and the official MCP servers structure equivalent layers.
 
 Read this end-to-end before touching `apps/api`, `packages/mutators`, or starting on `apps/cli` / `apps/mcp`. The architecture decision in §3 is load-bearing — every subsequent section assumes it.
 
@@ -12,7 +12,7 @@ Read this end-to-end before touching `apps/api`, `packages/mutators`, or startin
 
 ## 0. Summary in one paragraph
 
-Build a **canonical action layer** (`packages/action-contracts` + `packages/action-executor`) that re-exposes every meaningful domain operation through a typed, scoped, idempotent contract. Wire `/api/v1/**` (Hono), an `opendesk` CLI, and an `opendesk-mcp` server as thin transport adapters over that layer. Every write action delegates to the existing `createServerMutators()` so outbound delivery, audit events, and permission checks stay correct. Public auth is **API keys + service accounts** via the Better Auth API Key plugin (with a hand-rolled fallback only if it doesn't meet our scope requirements during a 1-day spike), carrying coarse scopes (`tickets:write`, `settings:email:write`, …). Zero's `/api/zero/mutate` and `/api/zero/query` stay internal — they exist for `zero-cache` and the browser, not for external clients. Settings paths that today bypass mutators (notably email-domain provisioning in `apps/api/src/settings/email-domains.ts`) get folded into the same action layer with async SES via Inngest. We close a focused set of mutator gaps (`ticket.resolve`, `ticket.markInProgress`, `message.update`, `message.delete`) so the public surface ships complete. **Bulk operations are deliberately deferred to v2** — the hidden complexity (partial failure, per-row permissions, audit explosion, idempotency-across-rows) is not worth the surface area in v1.
+Build a **canonical action layer** (`packages/action-contracts` + `packages/action-executor`) that re-exposes every meaningful domain operation through a typed, scoped, idempotent contract. Wire `/api/v1/**` (Hono), an `salve` CLI, and an `salve-mcp` server as thin transport adapters over that layer. Every write action delegates to the existing `createServerMutators()` so outbound delivery, audit events, and permission checks stay correct. Public auth is **API keys + service accounts** via the Better Auth API Key plugin (with a hand-rolled fallback only if it doesn't meet our scope requirements during a 1-day spike), carrying coarse scopes (`tickets:write`, `settings:email:write`, …). Zero's `/api/zero/mutate` and `/api/zero/query` stay internal — they exist for `zero-cache` and the browser, not for external clients. Settings paths that today bypass mutators (notably email-domain provisioning in `apps/api/src/settings/email-domains.ts`) get folded into the same action layer with async SES via Inngest. We close a focused set of mutator gaps (`ticket.resolve`, `ticket.markInProgress`, `message.update`, `message.delete`) so the public surface ships complete. **Bulk operations are deliberately deferred to v2** — the hidden complexity (partial failure, per-row permissions, audit explosion, idempotency-across-rows) is not worth the surface area in v1.
 
 ---
 
@@ -223,7 +223,7 @@ export interface ActionContract<I extends z.ZodTypeAny, O extends z.ZodTypeAny> 
     examples?: readonly string[];
   };
   mcp?: {
-    toolName: string;            // e.g. 'opendesk.tickets.reply'
+    toolName: string;            // e.g. 'salve.tickets.reply'
     destructive?: boolean;       // surfaces a model-side warning hint
     composite?: boolean;         // not a 1:1 mutator wrap
   };
@@ -325,13 +325,13 @@ Add a path through `apps/api/src/middleware.ts` that recognises `Authorization: 
 
 1. User goes to `Settings → API tokens` in the web app, clicks `Create personal access token`, names it (e.g. "laptop-cli"), picks scopes, hits create.
 2. UI shows the full `slv_pat_…` token *once*, with a "copy" button.
-3. User runs `opendesk login`. CLI prompts: `Paste your token:` (input is masked).
-4. CLI writes `~/.config/opendesk/auth.json` (`{ token, workspaceId, apiBaseUrl }`).
-5. `opendesk whoami` confirms.
+3. User runs `salve login`. CLI prompts: `Paste your token:` (input is masked).
+4. CLI writes `~/.config/salve/auth.json` (`{ token, workspaceId, apiBaseUrl }`).
+5. `salve whoami` confirms.
 
 CI: `OPENDESK_TOKEN` env var takes precedence; no login step needed.
 
-**Future (v2 if needed): browser-handoff device flow.** `opendesk login` opens a browser to `/auth/cli/init?port=<local>`, the page POSTs a freshly-minted PAT back to `http://localhost:<port>/callback`. Standard Vercel/`gh` UX. We hold this back from v1 because it requires a `/auth/cli/init` page and a localhost-callback flow that's measurably more code; the paste flow is the same UX as Stripe and Resend's CLIs and works fine.
+**Future (v2 if needed): browser-handoff device flow.** `salve login` opens a browser to `/auth/cli/init?port=<local>`, the page POSTs a freshly-minted PAT back to `http://localhost:<port>/callback`. Standard Vercel/`gh` UX. We hold this back from v1 because it requires a `/auth/cli/init` page and a localhost-callback flow that's measurably more code; the paste flow is the same UX as Stripe and Resend's CLIs and works fine.
 
 ---
 
@@ -525,7 +525,15 @@ URL-versioned (`/v1`). Breaking changes ship `/v2`. Deprecation: `Sunset` header
 
 ### 8.6 Documentation
 
-OpenAPI 3.1 generated from the action registry at build time. `apps/api/src/public-api/openapi.ts` walks the registry. Hosted at `/v1/openapi.json`.
+OpenAPI 3.1 generated from the action registry at request time. `apps/api/src/public-api/openapi.ts` walks `ALL_ACTIONS`, `packages/action-contracts/src/openapi.ts` does the actual JSON-Schema rendering via Zod v4's `z.toJSONSchema()`. Hosted at `/v1/openapi.json`.
+
+**OpenAPI is the description, not the SDK.** It documents the wire shape (paths, params, body and response schemas, error envelope, `x-salve-*` extensions) so external consumers can:
+- render docs in Stoplight / Swagger UI / Mintlify;
+- import into Postman / Insomnia for interactive exploration;
+- generate clients in Python / Go / Ruby via `openapi-generator-cli`, Stainless, Speakeasy;
+- validate requests in third-party tools that read OpenAPI.
+
+What it does **not** give you is a `npm install` TypeScript SDK. That's what Phase F (`packages/api-client`) ships — built directly from the action contracts (not generated from the OpenAPI), so the Zod types flow end-to-end without a codegen step. See §14 Phase F for scope.
 
 ---
 
@@ -616,39 +624,39 @@ Pure DB writes today; trivial to lift into mutators with the existing `assert*` 
 ### 11.1 Command shape
 
 ```
-opendesk login                          # prompts: paste your slv_pat_… token
-opendesk logout                         # clears ~/.config/opendesk/auth.json
-opendesk whoami
-opendesk workspace list
-opendesk workspace use <slug>           # writes ~/.config/opendesk/config.json
+salve login                          # prompts: paste your slv_pat_… token
+salve logout                         # clears ~/.config/salve/auth.json
+salve whoami
+salve workspace list
+salve workspace use <slug>           # writes ~/.config/salve/config.json
 
-opendesk tickets list [--view <id>] [--status open] [--assignee me] [--json]
-opendesk tickets show <id>
-opendesk tickets create --customer <email> --title <t> [--body <b>] [--priority p2]
-opendesk tickets reply <id> --body-file reply.md [--internal]
-opendesk tickets note <id> --body "..."
-opendesk tickets assign <id> <userId|me|none>
-opendesk tickets close <id>
-opendesk tickets reopen <id>
-opendesk tickets snooze <id> --until 2026-05-10
-opendesk tickets tags add <id> <tag>...
-opendesk tickets tags replace <id> <tag>...
+salve tickets list [--view <id>] [--status open] [--assignee me] [--json]
+salve tickets show <id>
+salve tickets create --customer <email> --title <t> [--body <b>] [--priority p2]
+salve tickets reply <id> --body-file reply.md [--internal]
+salve tickets note <id> --body "..."
+salve tickets assign <id> <userId|me|none>
+salve tickets close <id>
+salve tickets reopen <id>
+salve tickets snooze <id> --until 2026-05-10
+salve tickets tags add <id> <tag>...
+salve tickets tags replace <id> <tag>...
 
-opendesk customers list [--search …]
-opendesk customers show <id>
-opendesk customers update <id> --name "…"
+salve customers list [--search …]
+salve customers show <id>
+salve customers update <id> --name "…"
 
-opendesk views list
-opendesk views show <id>
-opendesk views tickets <id>            # paged tickets in that view
+salve views list
+salve views show <id>
+salve views tickets <id>            # paged tickets in that view
 
-opendesk settings email domains list
-opendesk settings email domains add <domain>
-opendesk settings email addresses add <domain-id> <localPart>
-opendesk settings tags list
-opendesk settings custom-fields list
+salve settings email domains list
+salve settings email domains add <domain>
+salve settings email addresses add <domain-id> <localPart>
+salve settings tags list
+salve settings custom-fields list
 
-opendesk api <METHOD> <PATH> [--body @file.json]   # gh-style escape hatch
+salve api <METHOD> <PATH> [--body @file.json]   # gh-style escape hatch
 ```
 
 ### 11.2 Output
@@ -660,11 +668,11 @@ opendesk api <METHOD> <PATH> [--body @file.json]   # gh-style escape hatch
 
 ### 11.3 Project context (deferred)
 
-Like `gh`'s implicit repo, we could read `.opendesk/config.json` from cwd to set default workspace. Not needed for v1 — `opendesk workspace use` global default is enough.
+Like `gh`'s implicit repo, we could read `.salve/config.json` from cwd to set default workspace. Not needed for v1 — `salve workspace use` global default is enough.
 
 ### 11.4 Listen (deferred to post-v1)
 
-`opendesk listen --ticket <id>` streaming SSE on Postgres `LISTEN`/`NOTIFY`. Stripe-style. High-leverage CLI feature but needs an event taxonomy decision (which events, what shape) — RFC follow-up.
+`salve listen --ticket <id>` streaming SSE on Postgres `LISTEN`/`NOTIFY`. Stripe-style. High-leverage CLI feature but needs an event taxonomy decision (which events, what shape) — RFC follow-up.
 
 ---
 
@@ -677,34 +685,34 @@ Like `gh`'s implicit repo, we could read `.opendesk/config.json` from cwd to set
 Aim for ~20-25 intent-shaped tools, not one-per-mutator. Linear's MCP burns ~13k tokens at connect because of full-schema dump; we should not.
 
 ```
-opendesk.tickets.search          (query, filters, view)
-opendesk.tickets.get             (id) → full ticket + recent messages + customer
-opendesk.tickets.create
-opendesk.tickets.reply
-opendesk.tickets.add_note
-opendesk.tickets.assign
-opendesk.tickets.set_tags
-opendesk.tickets.close
-opendesk.tickets.snooze
+salve.tickets.search          (query, filters, view)
+salve.tickets.get             (id) → full ticket + recent messages + customer
+salve.tickets.create
+salve.tickets.reply
+salve.tickets.add_note
+salve.tickets.assign
+salve.tickets.set_tags
+salve.tickets.close
+salve.tickets.snooze
 
-opendesk.customers.search
-opendesk.customers.get
-opendesk.customers.update
+salve.customers.search
+salve.customers.get
+salve.customers.update
 
-opendesk.views.list
-opendesk.views.tickets
+salve.views.list
+salve.views.tickets
 
-opendesk.settings.tags.list
-opendesk.settings.custom_fields.list
-opendesk.settings.email_domain.create
+salve.settings.tags.list
+salve.settings.custom_fields.list
+salve.settings.email_domain.create
 ```
 
 ### 12.2 Composite tools
 
 Beyond per-mutator wrappers, expose composite intent-level tools:
 
-- `opendesk.tickets.triage(ticketId)` → returns suggested tags, suggested assignee, draft reply (LLM-side decision is the agent's; we just gather context).
-- `opendesk.tickets.summarize_thread(ticketId)` → returns the conversation history packaged for summarization.
+- `salve.tickets.triage(ticketId)` → returns suggested tags, suggested assignee, draft reply (LLM-side decision is the agent's; we just gather context).
+- `salve.tickets.summarize_thread(ticketId)` → returns the conversation history packaged for summarization.
 
 These are "view" composites — read-only assemblies. Write composites (e.g. "triage and act") are deliberately not provided in v1; we want the agent to make explicit individual write calls so audit attribution stays clear.
 
@@ -713,9 +721,9 @@ These are "view" composites — read-only assemblies. Write composites (e.g. "tr
 URI-addressable read-only data so agents can navigate without spending tool calls:
 
 ```
-opendesk://ticket/<id>
-opendesk://customer/<id>
-opendesk://view/<id>
+salve://ticket/<id>
+salve://customer/<id>
+salve://view/<id>
 ```
 
 The MCP host fetches these on demand; the agent references them by URI in conversation.
@@ -805,7 +813,7 @@ apps/
 
   cli/                                 NEW
     src/
-      bin/opendesk.ts                  entrypoint
+      bin/salve.ts                  entrypoint
       commands/
         tickets.ts
         customers.ts
@@ -814,7 +822,7 @@ apps/
         api.ts                         escape hatch
       auth/
         login.ts                       paste-token prompt
-        config.ts                      ~/.config/opendesk/auth.json
+        config.ts                      ~/.config/salve/auth.json
       output/
         format.ts                      tty table | json | jsonl
     package.json                       deps: api-client, citty, cli-table3
@@ -971,20 +979,103 @@ Ship: `/v1/**` is feature-complete for v1.
 
 ### Phase F — API client (week 5)
 
-19. `packages/api-client` typed wrapper.
-20. Auto-retry on 5xx + idempotency-key generation per write call.
-21. Generated TS types from contracts.
+The `/v1/openapi.json` from Phase E describes the wire surface for external tooling (Postman, Stoplight, codegen in other languages). Phase F ships the **first-party TypeScript SDK** — `@salve/api-client` — that the CLI (Phase G), the MCP server (Phase H), and external customers building on Salve actually `npm install` and import. **It is built from `@salve/action-contracts`, not generated from the OpenAPI**, because contracts give us native Zod types end-to-end without a codegen step.
 
-Ship: an importable SDK. Internal teams can write integrations.
+Why this matters: a generator round-trips through JSON Schema (lossy), produces verbose code (`apiInstance.ticketsResolve(ticketId)`), and drifts every time the spec regenerates. Walking `ALL_ACTIONS` programmatically gives perfect TS types, ergonomic call signatures (`client.tickets.resolve(id)`), and zero generated artifacts to maintain.
+
+#### F1. Package shape
+
+`packages/api-client/` (workspace name `@opendesk/api-client` internal; published as `@salve/api-client` when we cut a public release).
+
+```
+packages/api-client/src/
+  index.ts          public exports
+  client.ts         SalveClient class
+  errors.ts         SalveApiError typed exception
+  fetch.ts          low-level request + retry
+  pagination.ts     async-iterator helpers for cursor endpoints
+  types.ts          re-exports from @opendesk/action-contracts
+```
+
+#### F2. Constructor + per-namespace surface
+
+```ts
+const salve = new SalveClient({
+  token: process.env.SALVE_TOKEN,        // required; falls back to env
+  baseUrl: 'https://api.usesalve.com',   // optional; defaults to https://api.usesalve.com
+  workspaceId,                            // optional; pins X-Salve-Workspace
+  fetch: customFetch,                 // optional dependency injection for tests
+  timeoutMs: 30_000,                  // optional
+  retry: { maxAttempts: 3, baseDelayMs: 250 }, // optional
+});
+```
+
+Methods are generated programmatically by walking `ALL_ACTIONS`. The result reads natively:
+
+```ts
+const page = await salve.tickets.list({ status: 'open', limit: 50 });
+const ticket = await salve.tickets.get(id);
+await salve.tickets.resolve(id);
+await salve.tickets.reply(id, { bodyHtml, bodyText });
+const tag = await salve.settings.tags.create({ label: 'urgent', color: '#f00' });
+```
+
+Roughly ~30 lines of generation code, ~45 methods produced. Manual ergonomics layer per-namespace where positional path-params make method signatures cleaner than passing `{ ticketId, ... }`.
+
+#### F3. Built-in behaviours (the actual value)
+
+| Concern | Implementation |
+|---|---|
+| **Idempotency-Key** | UUID v4 auto-generated per call to any action where `idempotency: 'required' \| 'optional'`. Caller can override via second arg `{ idempotencyKey }`. |
+| **5xx retry** | Exponential backoff with full jitter, capped at `retry.maxAttempts` (default 3). Same idempotency-key on retry, so server replays correctly. |
+| **4xx errors** | Throw `SalveApiError` immediately. No retry. |
+| **Pagination** | `for await (const ticket of salve.tickets.listAll({...}))` walks cursors. `.list({...})` returns one page. |
+| **Workspace pinning** | `X-Salve-Workspace` header attached when `workspaceId` is in constructor. |
+| **Auth refresh** | Not in v1 — tokens are long-lived PATs/service tokens, no rotation. Hook reserved for Phase G's `salve login` device flow. |
+| **Telemetry hooks** | `client.on('request', fn)` / `'response'` / `'error'` for instrumenting external integrations. |
+| **TypeScript types** | Re-exported from `@opendesk/action-contracts`. `SalveClient` has full inference: `tickets.list({ status: 'open' })` knows `status` is the enum, `tickets.create({...})` enforces `title` required. |
+
+#### F4. `SalveApiError`
+
+```ts
+class SalveApiError extends Error {
+  readonly type: 'validation_error' | 'unauthorized' | 'forbidden' | 'not_found'
+                | 'conflict' | 'rate_limited' | 'internal_error';
+  readonly code: string;        // stable machine code, e.g. 'auth.scope_missing'
+  readonly status: number;      // HTTP status
+  readonly field?: string;      // for validation_error
+  readonly requestId: string;   // X-Request-Id for correlating with server logs
+}
+```
+
+Callers branch on `code`, never on `message`. Same envelope shape as `/v1` returns; the client just unwraps `error: { ... }` into the typed exception.
+
+#### F5. Used internally before publishing
+
+Phase G (`apps/cli`) and Phase H (`apps/mcp`) **both consume `@opendesk/api-client`** rather than hand-writing `fetch`. That's the dogfooding test — if the CLI feels good to write, external integrators will agree.
+
+#### F6. Ship checklist
+
+- [ ] `packages/api-client` package compiles, exports `SalveClient` + `SalveApiError` + types.
+- [ ] All 45 actions in `ALL_ACTIONS` have a working method on the client.
+- [ ] Idempotency-Key auto-generated for required/optional writes; override works.
+- [ ] 5xx retry with backoff; integration test simulates a transient 503.
+- [ ] Pagination iterator walks all pages until `hasMore: false`.
+- [ ] `SalveApiError` thrown with all fields populated; integration test asserts `code` and `requestId`.
+- [ ] CLI / MCP swap-in as the only client (no direct fetch in Phase G/H code).
+- [ ] Documented `README.md` in `packages/api-client` with the four-paragraph quickstart.
+- [ ] Published preview: `pnpm pack && tarball verifies install correctly`.
+
+Ship: `@salve/api-client` is the SDK developers `npm install` to drive Salve from TypeScript / Node / Bun / Deno.
 
 ### Phase G — CLI (week 5-6)
 
-22. `apps/cli` skeleton; login flow; `opendesk tickets list/show/create`.
+22. `apps/cli` skeleton; login flow; `salve tickets list/show/create`.
 23. Reply, note, assign, close, snooze, tags.
 24. Customers, views, settings.
-25. `opendesk api` escape hatch.
+25. `salve api` escape hatch.
 26. `--json`/`--jsonl`, TTY detection.
-27. Distribution: `npm publish opendesk`.
+27. Distribution: `npm publish @salve/cli`.
 
 Ship: public CLI.
 
@@ -995,13 +1086,13 @@ Ship: public CLI.
 30. Resources + prompts.
 31. Distribution: npm + `claude_desktop_config.json` instructions.
 
-Ship: agents can drive opendesk.
+Ship: agents can drive Salve.
 
 ### Post-v1
 
 32. **Bulk operations as a proper batch-job system** (not synchronous bulk endpoints) — `tickets.bulk.close`/`assign`/`tag` return a `jobId`; a `job_status` table tracks per-row progress; `GET /v1/jobs/:id` polls. Avoids every pitfall in §9.1.
 33. **Outbound webhooks** — new schema (`event_subscription` + delivery worker); HMAC-signed; retry with exponential backoff.
-34. **`opendesk listen` SSE stream** on Postgres `LISTEN`/`NOTIFY` once event taxonomy is decided.
+34. **`salve listen` SSE stream** on Postgres `LISTEN`/`NOTIFY` once event taxonomy is decided.
 35. **Browser-handoff CLI auth** if paste-token UX becomes painful.
 36. **Remote HTTP-SSE MCP** if hosted MCP becomes a product offering.
 37. **Fine-grained scopes** (`tickets.assign` vs. `tickets:write`) if coarse ones prove insufficient in practice.
@@ -1097,7 +1188,7 @@ These were never blockers; the listed default carries unless someone objects dur
 
 - **Bulk job system shape (v2).** Job table schema, max parallelism, retry policy, partial-success rollup, and CLI/MCP UX for "submit job and watch it" all need their own RFC.
 - **Outbound webhooks.** Schema, signing scheme, retry policy. Separate v2 RFC.
-- **Event taxonomy for `opendesk listen`.** Which events, what payloads, how filterable. Separate post-v1 RFC.
+- **Event taxonomy for `salve listen`.** Which events, what payloads, how filterable. Separate post-v1 RFC.
 - **Workspace admin actions over the API** (member invites, role changes, billing). v1 surfaces only support-domain operations; admin surface is its own design.
 
 ---
@@ -1118,7 +1209,7 @@ These were never blockers; the listed default carries unless someone objects dur
 
 ## 18. What this RFC does not cover
 
-- The `opendesk listen` event taxonomy (post-v1, separate RFC).
+- The `salve listen` event taxonomy (post-v1, separate RFC).
 - Outbound webhooks schema and delivery worker (post-v1, separate RFC).
 - Hosted MCP / multi-tenant remote MCP (v2).
 - Fine-grained scopes (v2 if needed).
@@ -1165,7 +1256,7 @@ export const ticketsReply = {
   auditEventKind: 'message.sent',
   rest: { method: 'POST', path: '/tickets/:ticketId/replies' },
   cli:  { command: ['tickets', 'reply'], positionals: ['ticketId'] },
-  mcp:  { toolName: 'opendesk.tickets.reply' },
+  mcp:  { toolName: 'salve.tickets.reply' },
 } satisfies ActionContract<any, any>;
 ```
 

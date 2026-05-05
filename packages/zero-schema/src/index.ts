@@ -9,7 +9,8 @@ export const ZERO_SCHEMA_NAME = 'opendesk' as const;
 // customer-scoped audit events.
 // Phase 40: view, view_member, builtin_view_member tables and relationships.
 // Phase A: apikey table (with principal_kind/principal_id), member.createdAt.
-export const ZERO_SCHEMA_VERSION = 9 as const;
+// Phase E0: sending_domain.provision_status.
+export const ZERO_SCHEMA_VERSION = 10 as const;
 
 export {
   ALL_TICKET_MESSAGE_LIMIT,

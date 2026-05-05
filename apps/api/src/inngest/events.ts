@@ -10,6 +10,7 @@ export const DELIVERY_EVENT = {
 } as const;
 
 export const DOMAIN_EVENT = {
+  PROVISION_REQUESTED: 'domain/provision.requested',
   VERIFICATION_REQUESTED: 'domain/verification.requested',
   VERIFICATION_COMPLETED: 'domain/verification.completed',
 } as const;
@@ -77,6 +78,11 @@ export const domainVerificationRequestedDataSchema = z.object({
   sendingDomainID: z.string().min(1),
 });
 
+export const domainProvisionRequestedDataSchema = z.object({
+  workspaceID: z.string().min(1),
+  sendingDomainID: z.string().min(1),
+});
+
 export const domainVerificationCompletedDataSchema = z.object({
   workspaceID: z.string().min(1),
   sendingDomainID: z.string().min(1),
@@ -102,6 +108,9 @@ export const inngestEventSchemas = {
   [DELIVERY_EVENT.MESSAGE_BOUNCED]: z.object({ data: deliveryMessageBouncedDataSchema }),
   [DELIVERY_EVENT.MESSAGE_COMPLAINED]: z.object({ data: deliveryMessageComplainedDataSchema }),
   [DELIVERY_EVENT.MESSAGE_FAILED]: z.object({ data: deliveryMessageFailedDataSchema }),
+  [DOMAIN_EVENT.PROVISION_REQUESTED]: z.object({
+    data: domainProvisionRequestedDataSchema,
+  }),
   [DOMAIN_EVENT.VERIFICATION_REQUESTED]: z.object({
     data: domainVerificationRequestedDataSchema,
   }),
