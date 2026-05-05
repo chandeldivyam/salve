@@ -4,8 +4,12 @@ import type { Scope } from './scopes.js';
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 export type IdempotencyPolicy = 'required' | 'optional' | 'none';
 
-export interface ActionContract<I extends z.ZodTypeAny, O extends z.ZodTypeAny> {
-  id: string;
+export interface ActionContract<
+  I extends z.ZodTypeAny,
+  O extends z.ZodTypeAny,
+  ID extends string = string,
+> {
+  id: ID;
   summary: string;
   inputSchema: I;
   outputSchema: O;
@@ -29,14 +33,18 @@ export interface ActionContract<I extends z.ZodTypeAny, O extends z.ZodTypeAny> 
   };
 }
 
-export type AnyActionContract = ActionContract<z.ZodTypeAny, z.ZodTypeAny>;
+export type AnyActionContract = ActionContract<z.ZodTypeAny, z.ZodTypeAny, string>;
 
-export type ActionInput<C> = C extends ActionContract<infer I, z.ZodTypeAny> ? z.infer<I> : never;
+export type ActionInput<C> =
+  C extends ActionContract<infer I, z.ZodTypeAny, string> ? z.infer<I> : never;
 
-export type ActionOutput<C> = C extends ActionContract<z.ZodTypeAny, infer O> ? z.infer<O> : never;
+export type ActionOutput<C> =
+  C extends ActionContract<z.ZodTypeAny, infer O, string> ? z.infer<O> : never;
 
-export function defineAction<I extends z.ZodTypeAny, O extends z.ZodTypeAny>(
-  contract: ActionContract<I, O>,
-): ActionContract<I, O> {
+export function defineAction<
+  const ID extends string,
+  I extends z.ZodTypeAny,
+  O extends z.ZodTypeAny,
+>(contract: ActionContract<I, O, ID>): ActionContract<I, O, ID> {
   return contract;
 }

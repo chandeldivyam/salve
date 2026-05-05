@@ -1,27 +1,30 @@
 {
-  "name": "@opendesk/action-contracts",
+  "name": "@opendesk/api-client",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "files": [
-    "src/**/*.ts"
+    "README.md",
+    "src/**/*.ts",
+    "!src/*.test.ts"
   ],
   "exports": {
     ".": "./src/index.ts",
-    "./customers": "./src/customers.ts",
-    "./openapi": "./src/openapi.ts",
-    "./settings": "./src/settings.ts",
-    "./tickets": "./src/tickets.ts",
-    "./views": "./src/views.ts"
+    "./types": "./src/types.ts"
   },
   "scripts": {
     "type-check": "tsc -p tsconfig.json --noEmit",
     "format": "biome format --write .",
-    "check": "biome check ."
+    "check": "biome check .",
+    "test": "tsx --test src/*.test.ts"
   },
   "dependencies": {
-    "zod": "4.4.1"
+    "@opendesk/action-contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "25.6.0",
+    "tsx": "4.21.0"
   }
 }
