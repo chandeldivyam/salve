@@ -9,5 +9,6 @@ export {
 } from './client.js';
 export { isSalveApiError, SalveApiError, type SalveApiErrorType } from './errors.js';
 export type { RetryOptions, SalveFetch, SalveRequestOptions } from './fetch.js';
+export { hintForErrorCode } from './hints.js';
 export type { CursorPage, PageItem } from './pagination.js';
 export type * from './types.js';

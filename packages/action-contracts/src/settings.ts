@@ -238,6 +238,7 @@ export const settingsActions = {
     scopes: ['settings:read'],
     idempotency: 'none',
     rest: { method: 'GET', path: '/settings/tags' },
+    mcp: { toolName: 'salve.settings.tags.list' },
   }),
   tagsCreate: defineAction({
     id: 'settings.tags.create',
@@ -314,6 +315,7 @@ export const settingsActions = {
     scopes: ['settings:read'],
     idempotency: 'none',
     rest: { method: 'GET', path: '/settings/custom-fields' },
+    mcp: { toolName: 'salve.settings.custom_fields.list' },
   }),
   customFieldsCreate: defineAction({
     id: 'settings.customFields.create',
@@ -358,6 +360,7 @@ export const settingsActions = {
     scopes: ['settings:email:write'],
     idempotency: 'required',
     rest: { method: 'POST', path: '/settings/email/domains' },
+    mcp: { toolName: 'salve.settings.email_domain.create' },
   }),
   emailAddressesCreate: defineAction({
     id: 'settings.email.addresses.create',

@@ -1,4 +1,4 @@
-import { SalveApiError } from '@opendesk/api-client';
+import { hintForErrorCode, SalveApiError } from '@opendesk/api-client';
 import { ZodError } from 'zod';
 
 export function formatError(error: unknown): { message: string; exitCode: number } {
@@ -9,7 +9,7 @@ export function formatError(error: unknown): { message: string; exitCode: number
     ];
     if (error.field) lines.push(`Field: ${error.field}`);
     if (error.requestId) lines.push(`Request: ${error.requestId}`);
-    const hint = hintFor(error.code);
+    const hint = hintForErrorCode(error.code);
     if (hint) lines.push('', hint);
     return {
       message: lines.join('\n'),
@@ -36,17 +36,4 @@ function formatZodError(error: ZodError): string {
   }
   lines.push('', 'The CLI rejected the request before sending. Fix the offending input and retry.');
   return lines.join('\n');
-}
-
-function hintFor(code: string): string | null {
-  if (code === 'auth.required' || code === 'auth.bearer_required') {
-    return 'Run `salve login` or set SALVE_TOKEN.';
-  }
-  if (code === 'auth.scope_missing') {
-    return 'Mint a token with the required scope at https://app.usesalve.com/app/settings/api-tokens.';
-  }
-  if (code === 'idempotency_key.reused_with_different_request') {
-    return 'Use a fresh --idempotency-key or omit the flag.';
-  }
-  return null;
 }

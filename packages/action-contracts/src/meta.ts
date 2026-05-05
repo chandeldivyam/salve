@@ -39,6 +39,7 @@ export const metaActions = {
     scopes: [],
     idempotency: 'none',
     rest: { method: 'GET', path: '/_meta/whoami' },
+    mcp: { toolName: 'salve.whoami' },
   }),
   workspacesList: defineAction({
     id: 'workspace.list',
@@ -48,6 +49,7 @@ export const metaActions = {
     scopes: [],
     idempotency: 'none',
     rest: { method: 'GET', path: '/_meta/workspaces' },
+    mcp: { toolName: 'salve.workspace.list' },
   }),
 } as const;
 

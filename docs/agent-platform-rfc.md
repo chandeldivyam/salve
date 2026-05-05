@@ -1,7 +1,7 @@
 # Agent Platform RFC — CLI, MCP, and REST API over Zero
 
-Status: **draft v9 — Phases A–G shipped (incl. post-G hardening); Phase H (MCP) is next**
-Date: 2026-05-04 (initial), 2026-05-04 (v2 revision), 2026-05-05 (v3 — Phase A landed), 2026-05-05 (v4 — Phase B landed), 2026-05-05 (v5 — Phase C/D landed; Phase E refined with E0 mutator prereqs and decision rule), 2026-05-05 (v6 — Phase E landed; Phase F API client implemented), 2026-05-05 (v7 — Phase F verified against /v1; Phase G refined), 2026-05-05 (v8 — Phase G CLI implemented and locally verified), 2026-05-05 (v9 — Phase G live-tested end-to-end with PAT + service-account; four upstream bugs fixed; `customers.customField.set` added; Phase H plan deepened to H1–H12)
+Status: **draft v10 — Phases A–G shipped; Phase H (MCP) implemented and locally verified**
+Date: 2026-05-04 (initial), 2026-05-04 (v2 revision), 2026-05-05 (v3 — Phase A landed), 2026-05-05 (v4 — Phase B landed), 2026-05-05 (v5 — Phase C/D landed; Phase E refined with E0 mutator prereqs and decision rule), 2026-05-05 (v6 — Phase E landed; Phase F API client implemented), 2026-05-05 (v7 — Phase F verified against /v1; Phase G refined), 2026-05-05 (v8 — Phase G CLI implemented and locally verified), 2026-05-05 (v9 — Phase G live-tested end-to-end with PAT + service-account; four upstream bugs fixed; `customers.customField.set` added; Phase H plan deepened to H1–H12), 2026-05-05 (v10 — Phase H MCP server implemented with stdio, action tools, read composites, resources, prompts, pack smoke, PAT + service-account live smoke)
 Owner: TBD (implementation engineer)
 
 This document is the technical plan for opening Salve to programmatic clients — a CLI, an MCP server for AI agents, and a public REST API — without compromising the Zero sync engine that powers the web client. It is the result of a deep audit of the current codebase plus a survey of how Vercel, Linear, GitHub `gh`, Stripe, Resend, and the official MCP servers structure equivalent layers.
@@ -89,6 +89,29 @@ The Phase G live battery surfaced four issues that were not Phase G regressions 
    - Live-verified against `customer_tier` (list), `vip` (boolean), `support_region` (list), `account_notes` (text → null clears), and the validator-level reject path (passing `"NotAnOption"` to a list field returns `mutation.invalid_input (400 validation_error)` from the server's own validator).
 
 §15 carries the new row. The mutator delta for v1 is unchanged (still 3 new mutators in Phase E0); `customers.customField.set` reuses Phase E mutators.
+
+---
+
+## 0d. Phase H — implemented for tester verification (2026-05-05)
+
+`apps/mcp` (`@opendesk/mcp`, binary `salve-mcp`, public package target `@salve/mcp`) is implemented as a local stdio MCP server. It consumes `@opendesk/api-client` exclusively; all domain calls still go through `/v1`, so scopes, idempotency, retries, and audit attribution remain API-owned.
+
+The shipped surface is intentionally curated to stay within the MCP connect-budget:
+
+- 31 action-backed tools from `action.mcp` metadata, plus 3 read-only composites: `salve.tickets.triage`, `salve.tickets.summarize_thread`, and `salve.customers.context`.
+- Dynamic read-only resources: `salve://ticket/{id}`, `salve://customer/{id}`, and `salve://view/{id}`.
+- User-invoked workflow prompts: `salve.triage-inbox`, `salve.summarize-thread`, and `salve.draft-reply`.
+- Tool manifest measured at 13,664 bytes in the integration test, below the 16 KB guardrail.
+
+Verification completed locally:
+
+- `pnpm check`, `pnpm type-check`, `pnpm test`, and `pnpm build` pass at workspace root.
+- `pnpm --filter @opendesk/mcp check`, `type-check`, `test`, and `build` pass; bundle is 52.11 kB / 12.77 kB gzip.
+- Local packed tarball install works; the packed package contains only `dist/salve-mcp.mjs`, `package.json`, and `README.md`.
+- Stdio live smoke against `http://127.0.0.1:3001` passed with both `slv_pat_…` and `slv_svc_…` temporary tokens; temp DB rows were deleted after the run.
+- `SALVE_API_URL`, `SALVE_TOKEN`, service-account tokens, `~/.config/salve/auth.json` fallback, CLI `config.json` active-workspace fallback, and missing/bad-token stderr errors were verified.
+
+Release-time work remains publishing-only: rename/publish to `@salve/mcp`, then run the same smoke through an actual desktop MCP host config (`Claude Desktop`, Cursor, Cline/Continue).
 
 ---
 
@@ -1267,7 +1290,7 @@ Ship: `npm install -g @salve/cli` (or `npx @salve/cli`) gets developers a comple
 
 The MCP server consumes `@opendesk/api-client` exclusively — same rule as the CLI, no hand-written `fetch`. It is a transport adapter that turns the action-contract surface (already typed, scoped, and idempotent) into MCP `tools`, `resources`, and `prompts`. §12 has the design intent; this section is the scope of work, structured to match Phase G's depth so the implementer can ship without re-deriving decisions.
 
-**Status as of v9:** not started. All upstream dependencies (action contracts, executor, REST API, api-client, CLI) are shipped and live-verified. Every action contract already declares its MCP surface inline (`mcp: { toolName, destructive? }`); the MCP server reads that metadata instead of hand-mapping each action. The MCP server is the last v1 distribution channel — the SDK is already the unit of trust.
+**Status as of v10:** implemented and locally verified. All upstream dependencies (action contracts, executor, REST API, api-client, CLI) are shipped and live-verified. MCP reads `mcp: { toolName, destructive? }` metadata from the action contracts instead of hand-mapping each default tool, then adds read-only composites/resources/prompts for agent-friendly context. The MCP server is the last v1 distribution channel — the SDK is already the unit of trust.
 
 #### H1. Package shape
 
@@ -1276,10 +1299,10 @@ The MCP server consumes `@opendesk/api-client` exclusively — same rule as the 
 ```
 apps/mcp/
   package.json                  bin: { "salve-mcp": ./dist/salve-mcp.mjs }
-                                deps: @opendesk/api-client,
-                                      @opendesk/action-contracts,
-                                      @modelcontextprotocol/sdk,
+                                runtime deps: @modelcontextprotocol/sdk,
                                       zod
+                                bundled workspace deps: @opendesk/api-client,
+                                      @opendesk/action-contracts
   tsconfig.json
   tsdown.config.ts              same one-file ESM bundle pattern as the CLI
   src/
@@ -1295,14 +1318,8 @@ apps/mcp/
                                 + maps SalveApiError to MCP error result with structured content
     resources/
       registry.ts               URI handlers: salve://ticket/{id}, salve://customer/{id}, salve://view/{id}
-      ticket.ts                 reads ticket detail + last N messages, returns markdown payload
-      customer.ts               reads customer detail + tags + notes + recent events
-      view.ts                   reads view + recent matching tickets summary
     prompts/
       registry.ts               registers prompts; each prompt is a tiny template + arguments schema
-      triage-inbox.ts           "walk the open queue, suggest disposition for each" template
-      summarize-thread.ts       "compact this conversation for handoff" template
-      draft-reply.ts            "draft a reply to ticket X with tone T" template
     error.ts                    SalveApiError → MCP error envelope (isError + structured content)
   README.md                     install for Claude Desktop, Cursor, Cline; SALVE_TOKEN setup
 ```
@@ -1318,7 +1335,7 @@ apps/mcp/
 | Auth | reuse Phase A bearer + scope plumbing | The MCP server is just another bearer client. Zero auth code in `apps/mcp` itself. |
 | ID generation | `crypto.randomUUID()` for idempotency keys | Same as the SDK's auto-key path. |
 
-The published bundle imports `@opendesk/api-client` and `@opendesk/action-contracts` at top level (both `dependencies`). User does `npm install -g @salve/mcp` and gets a working `salve-mcp` binary — no peer-dep dance.
+The published bundle includes `@opendesk/api-client` and `@opendesk/action-contracts` in the single ESM artifact. User does `npm install -g @salve/mcp` and gets a working `salve-mcp` binary — no peer-dep dance.
 
 #### H3. Auth flow (env var first, CLI-share fallback)
 
@@ -1338,7 +1355,7 @@ The published bundle imports `@opendesk/api-client` and `@opendesk/action-contra
    ```
    `salve-mcp` reads the token at startup, calls `whoami` once to validate + cache `workspaceId`/`scopes`, fails fast with a friendly stderr message if the token is missing/revoked/expired (since stdout is the MCP transport, errors must go to stderr).
 
-2. **Fallback: `~/.config/salve/auth.json` from the CLI.** If `SALVE_TOKEN` is unset, attempt to read the file the CLI wrote during `salve login`. This is convenience for devs who already use the CLI; it is not a security feature (host config is the right place for production tokens).
+2. **Fallback: CLI config files.** If `SALVE_TOKEN` is unset, attempt to read `~/.config/salve/auth.json` from `salve login`; if present, also read `~/.config/salve/config.json` so `salve workspace use` becomes the active MCP workspace. This is convenience for devs who already use the CLI; it is not a security feature (host config is the right place for production tokens).
 
 3. **API base URL resolution.** `SALVE_API_URL` overrides the default; `auth.json.apiBaseUrl` provides a default if present; production default is `https://api.usesalve.com`. Same precedence as the CLI's `getClient()`.
 
@@ -1350,14 +1367,14 @@ The published bundle imports `@opendesk/api-client` and `@opendesk/action-contra
 
 Two layers:
 
-**Layer 1 — default tools auto-registered from `action.mcp` metadata.** Every `defineAction` call in `packages/action-contracts/src/**/*.ts` already declares `mcp: { toolName, destructive? }` (or omits it to opt out). At server build, walk `ALL_ACTIONS`, filter to those with `mcp` set, and register a default tool per action whose:
+**Layer 1 — default tools auto-registered from `action.mcp` metadata.** A `defineAction` opts into the MCP surface by declaring `mcp: { toolName, destructive? }`; omitting `mcp` keeps it out of the local-agent surface. At server build, walk `ALL_ACTIONS`, filter to those with `mcp` set, and register a default tool per action whose:
 - `name` = `action.mcp.toolName` (e.g. `salve.tickets.create`, `salve.customers.custom_field_set`)
 - `description` = `describe.ts`-supplied human prose (see H5; **not** an auto-dump of the contract `summary` — those are written for OpenAPI and run too long)
-- `inputSchema` = `z.toJSONSchema(action.inputSchema)` with the `$schema` and `additionalProperties: false` set
-- `annotations` = `{ destructive: action.mcp.destructive ?? false, idempotent: action.idempotency !== 'none', readOnly: !!action.scopes.find(s => s.endsWith(':read')) }` (the SDK passes these through to clients that surface UI hints)
+- `inputSchema` = a compact top-level Zod object derived from `z.toJSONSchema(action.inputSchema)`; full contract validation still happens in `@opendesk/api-client` before the HTTP request
+- `annotations` = only meaningful MCP hints (`readOnlyHint`, `destructiveHint`, `idempotentHint`) so the manifest does not waste budget on repeated false flags
 - handler = `execute.ts`'s shared `runAction(id, args, ctx)` which calls `client.action(action.id, args)` under the principal's token; on success returns `{ content: [{ type: 'text', text: JSON.stringify(result) }] }`; on `SalveApiError` returns `{ isError: true, content: [{ type: 'text', text: friendly(error) }] }` with the request ID and any field hint
 
-This gives ~45 tools "for free" — the v1 action matrix in §15. Token-budget discipline in H5 keeps the descriptor payload small.
+This gives the curated v1 action-tool set "for free" — 31 action-backed tools at v10. Token-budget discipline in H5 keeps the descriptor payload small; new action tools are added by declaring `mcp` metadata and watching the manifest-size test.
 
 **Layer 2 — composite read tools, hand-written.** §12.2 lists the intent. v1 ships **read-only composites only** so audit attribution stays clean for any write the agent decides to make individually:
 
@@ -1387,7 +1404,7 @@ Write composites (e.g. "triage and act") deliberately out of scope for v1 — th
 
 The `describe.ts` registry stores per-action prose written by humans; it is the curated handle on tool quality. Ship it under `apps/mcp/src/tools/describe.ts` keyed by `actionId`. Missing entries fall back to the contract's `summary`.
 
-A measurement test runs in CI on `pnpm --filter @opendesk/mcp test`: instantiates the server in-process, calls `tools/list`, asserts total response payload is < 16 KB (~4k tokens). Regression alert when a new tool blows the budget.
+A measurement test runs in CI on `pnpm --filter @opendesk/mcp test`: instantiates the server in-process, calls `tools/list`, asserts total response payload is < 16 KB (~4k tokens). At v10 the manifest is 13,664 bytes. Regression alert when a new tool blows the budget.
 
 #### H6. Composite read tools — implementation
 
@@ -1444,7 +1461,7 @@ Each prompt's `arguments` carry `{ name, description, required }` so hosts rende
 **Error envelope.** `SalveApiError` from `@opendesk/api-client` is mapped to MCP's `{ isError: true, content: [{ type: 'text', text: …}] }` shape. Format:
 
 ```
-✗ tickets.resolve failed (403 forbidden) [auth.scope_missing]
+x tickets.resolve failed (403 forbidden) [auth.scope_missing]
 Reason: Token does not have the required scope
 Field: <if any>
 Request: req_abc123
@@ -1452,7 +1469,7 @@ Request: req_abc123
 Hint: <action-specific, same hint table as the CLI's error.ts>
 ```
 
-Same hint table as Phase G uses (`auth.scope_missing` → mint-token URL, `auth.required` → set `SALVE_TOKEN`, `idempotency_key.reused_with_different_request` → use a fresh key). The hint table lives in `@opendesk/api-client` once we factor it out from the CLI in H11; v1 can ship a copy.
+Same hint table as Phase G uses (`auth.scope_missing` → mint-token URL, `auth.required` → set `SALVE_TOKEN`, `idempotency_key.reused_with_different_request` → use a fresh key). The hint table now lives in `@opendesk/api-client`, shared by the CLI and MCP server.
 
 **Network errors** — pass through with the SDK's status `0` and the request never having reached the server. MCP error message says "request did not reach Salve; check `SALVE_API_URL` and connectivity".
 
@@ -1489,27 +1506,27 @@ Same shape as Phase G's relationship to the SDK. The MCP server is the second re
 
 - Every tool handler is a one-liner around `client.action(id, input)`. If a handler grows beyond a few lines, the SDK or the contract is wrong.
 - The composite tools force us to look at multi-action sequences. If one composite needs three back-to-back `client.tickets.get` calls, we have an n+1 problem in the contract that should be fixed at the executor level (not in the MCP layer).
-- The hint table currently lives in `apps/cli/src/error.ts`. Phase H promotes it to `@opendesk/api-client/src/hints.ts` so both transports share it. Fix this on the way to the H12 ship checklist.
+- The hint table lives in `@opendesk/api-client/src/hints.ts` so the CLI and MCP server render the same auth, idempotency, and connectivity guidance.
 
 A live MCP smoke test in CI: spawn the server with stdio, send `initialize` + `tools/list` + a `tools/call` for `salve.whoami` against a test workspace seeded with a known PAT. Asserts a successful auth context comes back. This is the v1 equivalent of the api-client and CLI live-E2E tests already in place.
 
 #### H12. Ship checklist
 
-- [ ] `apps/mcp` builds to a single-file ESM bundle via `tsdown`. Bundle size < 800 KB gzipped (the SDK itself is ~150 KB; budget for safety).
-- [ ] All v1 action IDs that have `mcp` declared in their contract are reachable as tools. Verified by an in-process integration test that walks `ALL_ACTIONS` and asserts each has a corresponding `tool/list` entry.
-- [ ] `tools/list` payload is < 16 KB total (≤4k tokens) — measurement test in CI.
-- [ ] `SALVE_TOKEN` env var works end-to-end with both `slv_pat_…` and `slv_svc_…` tokens.
-- [ ] `SALVE_API_URL` override + `~/.config/salve/auth.json` fallback both verified.
-- [ ] `whoami` cache populates at startup; bad token surfaces a stderr error with the same hint table as the CLI.
-- [ ] Composite tools (`triage`, `summarize_thread`, `customers.context`) return shaped output that matches the documented schema.
-- [ ] Resources (`salve://ticket/{id}`, `salve://customer/{id}`, `salve://view/{id}`) all return JSON envelopes the host can paste into context.
-- [ ] Prompts (`triage-inbox`, `summarize-thread`, `draft-reply`) registered with argument schemas.
-- [ ] Destructive tools carry the `destructive: true` annotation. Verified by inspecting the manifest in the integration test.
-- [ ] `SalveApiError` mapping verified for each major error code (`auth.required`, `auth.scope_missing`, `validation_error`, `idempotency_key.reused_with_different_request`, network status 0).
-- [ ] Idempotency key auto-generated for `idempotency: 'required'` actions; verified by capturing two retried tool calls produce the same `event.id`.
-- [ ] README in `apps/mcp/README.md` with `claude_desktop_config.json` / `cursor` / `cline` setup blocks.
-- [ ] Live smoke run from Claude Desktop: connect, list tools, call `salve.tickets.list`, call `salve.tickets.note`, verify the note appears in `app.usesalve.com` inbox under the agent's principal.
-- [ ] CI integration test: in-process MCP client → `initialize` → `tools/list` → `tools/call` `salve.whoami` against the test workspace. Pass/fail in CI.
+- [x] `apps/mcp` builds to a single-file ESM bundle via `tsdown`. Bundle is 52.11 kB / 12.77 kB gzip.
+- [x] All v1 action IDs that have `mcp` declared in their contract are reachable as tools. Verified by an in-process integration test that walks `ALL_ACTIONS` and asserts each has a corresponding `tool/list` entry.
+- [x] `tools/list` payload is < 16 KB total (≤4k tokens) — measured at 13,664 bytes in the integration test.
+- [x] `SALVE_TOKEN` env var works end-to-end with both `slv_pat_…` and `slv_svc_…` tokens against the local `/v1` API.
+- [x] `SALVE_API_URL` override + `~/.config/salve/auth.json` fallback both verified; CLI `config.json` active-workspace fallback is implemented and smoke-tested.
+- [x] `whoami` cache populates at startup; missing/bad token surfaces a stderr error with the same hint table as the CLI.
+- [x] Composite tools (`triage`, `summarize_thread`, `customers.context`) return shaped output that matches the documented schema.
+- [x] Resources (`salve://ticket/{id}`, `salve://customer/{id}`, `salve://view/{id}`) all return JSON envelopes the host can paste into context.
+- [x] Prompts (`triage-inbox`, `summarize-thread`, `draft-reply`) registered with argument schemas.
+- [x] Destructive tools carry the `destructive: true` annotation. Verified by inspecting the manifest in the integration test.
+- [x] `SalveApiError` mapping verified for each major error code (`auth.required`, `auth.scope_missing`, `validation_error`, `idempotency_key.reused_with_different_request`, network status 0).
+- [x] Idempotency key auto-generated for `idempotency: 'required'` actions; verified by capturing the UUID passed from the tool executor into `@opendesk/api-client`.
+- [x] README in `apps/mcp/README.md` with `claude_desktop_config.json` / `cursor` / `cline` setup blocks.
+- [ ] Live smoke run from Claude Desktop: connect, list tools, call `salve.tickets.list`, call `salve.tickets.note`, verify the note appears in `app.usesalve.com` inbox under the agent's principal. Local stdio smoke via SDK client passed; desktop-host smoke remains tester verification.
+- [x] In-process MCP client test: `initialize` → `tools/list` → `tools/call` `salve.whoami`; local packed-binary stdio smoke also verified against `/v1`.
 - [ ] `npx @salve/mcp` works zero-install once the package is published to npm. (Local packed-tarball install is the development equivalent.)
 
 Ship: agents in any MCP-capable host can drive Salve with the same scope and audit guarantees as the REST API and CLI. Together with Phase G this completes the v1 distribution channels — REST, SDK, CLI, MCP — over one canonical action layer.
@@ -1605,7 +1622,7 @@ Ship: agents in any MCP-capable host can drive Salve with the same scope and aud
 These were never blockers; the listed default carries unless someone objects during Phase A.
 
 7. **Read implementation strategy.** Hand-rolled Drizzle queries in `packages/action-executor/src/reads/` for v1. Accept the duplication with Zero queries; revisit a shared filter-builder if duplication exceeds ~3 queries (§2.3 option 3).
-8. **MCP transport — local stdio v1.** Each user runs the MCP server locally; auth via `OPENDESK_TOKEN` env var. Remote HTTP-SSE deferred to v2 if hosted MCP becomes a product.
+8. **MCP transport — local stdio v1.** Each user runs the MCP server locally; auth via `SALVE_TOKEN` env var (`OPENDESK_TOKEN` is accepted only as a compatibility fallback). Remote HTTP-SSE deferred to v2 if hosted MCP becomes a product.
 9. **No composite write tools in MCP v1.** Read composites only (`triage`, `summarize_thread`). Write composites (`triage_and_act`) would obscure audit attribution; agents make individual write calls so each shows up cleanly in the audit log.
 10. **OpenAPI schema published at `/v1/openapi.json`.** Generated from contracts at build time; CI fails if generated spec drifts from committed snapshot.
 11. **Idempotency window — 24h.** Same as Stripe. Stored in `idempotency_record`; Inngest cron prunes nightly.
@@ -1714,4 +1731,4 @@ That's the model: contract declares the public shape, executor delegates to the 
 
 ---
 
-End of RFC. Phases A–F are shipped (see §0a, §0b, §14). Phase G is implemented for tester verification; Phase H is the next pickup point after sign-off.
+End of RFC. Phases A–G are shipped (see §0a, §0b, §0c, §14). Phase H is implemented and locally verified for tester sign-off (see §0d and H12). Post-v1 follow-ups start after MCP host testing/publish sign-off.

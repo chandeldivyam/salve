@@ -5,6 +5,7 @@ export const ticketStatusSchema = z.enum(['open', 'in_progress', 'snoozed', 'res
 export const ticketPrioritySchema = z.enum(['low', 'normal', 'high', 'urgent']);
 
 const idSchema = z.string().min(1);
+const uuidSchema = z.string().uuid();
 const isoDateTimeSchema = z.string().datetime();
 const nullableDateTimeSchema = isoDateTimeSchema.nullable();
 const jsonValueSchema = z.unknown();
@@ -113,8 +114,8 @@ export const ticketsListInputSchema = z.object({
   limit: z.number().int().min(1).max(200).optional(),
   cursor: z.string().min(1).optional(),
   status: ticketStatusSchema.optional(),
-  assigneeId: z.string().min(1).optional(),
-  customerId: z.string().min(1).optional(),
+  assigneeId: uuidSchema.optional(),
+  customerId: uuidSchema.optional(),
 });
 
 export const ticketsListOutputSchema = z.object({
@@ -124,7 +125,7 @@ export const ticketsListOutputSchema = z.object({
 });
 
 export const ticketIdInputSchema = z.object({
-  ticketId: idSchema,
+  ticketId: uuidSchema,
 });
 
 export const ticketOutputSchema = z.object({
@@ -146,7 +147,7 @@ export const updateTicketInputSchema = ticketIdInputSchema.extend({
 });
 
 export const assignTicketInputSchema = ticketIdInputSchema.extend({
-  assigneeId: z.string().min(1).nullable(),
+  assigneeId: uuidSchema.nullable(),
 });
 
 export const snoozeTicketInputSchema = ticketIdInputSchema.extend({
@@ -156,18 +157,18 @@ export const snoozeTicketInputSchema = ticketIdInputSchema.extend({
 export const messageCreateInputSchema = ticketIdInputSchema.extend({
   bodyHtml: z.string().min(1).max(200_000),
   bodyText: z.string().min(1).max(100_000),
-  emailAddressId: z.string().min(1).nullable().optional(),
+  emailAddressId: uuidSchema.nullable().optional(),
   attachments: z.array(attachmentInputSchema).optional(),
 });
 
 export const messageUpdateInputSchema = ticketIdInputSchema.extend({
-  messageId: idSchema,
+  messageId: uuidSchema,
   bodyHtml: z.string().min(1).max(200_000),
   bodyText: z.string().min(1).max(100_000),
 });
 
 export const messageIdInputSchema = ticketIdInputSchema.extend({
-  messageId: idSchema,
+  messageId: uuidSchema,
 });
 
 export const messageOutputSchema = z.object({
@@ -175,11 +176,11 @@ export const messageOutputSchema = z.object({
 });
 
 export const ticketTagsInputSchema = ticketIdInputSchema.extend({
-  tagIds: z.array(idSchema).min(1).max(100),
+  tagIds: z.array(uuidSchema).min(1).max(100),
 });
 
 export const ticketTagRemoveInputSchema = ticketIdInputSchema.extend({
-  tagId: idSchema,
+  tagId: uuidSchema,
 });
 
 export const ticketTagsOutputSchema = z.object({
