@@ -7,6 +7,7 @@ import {
   ingestCustomerEventExecutor,
   listCustomersExecutor,
   removeCustomerTagExecutor,
+  setCustomerCustomFieldExecutor,
   updateCustomerExecutor,
   updateCustomerNoteExecutor,
 } from '@opendesk/action-executor';
@@ -104,6 +105,16 @@ customersRouter.post(
     }),
     201,
   ),
+);
+
+customersRouter.put(
+  '/:customerId/custom-fields/:fieldKey',
+  ...actionMiddlewares(customerActions.customFieldSet),
+  actionHandler(customerActions.customFieldSet, setCustomerCustomFieldExecutor, async (c) => ({
+    ...(await readJsonBody(c)),
+    customerId: c.req.param('customerId'),
+    fieldKey: c.req.param('fieldKey'),
+  })),
 );
 
 function numberQuery(value: string | undefined): number | undefined {

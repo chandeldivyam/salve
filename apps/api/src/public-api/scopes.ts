@@ -22,6 +22,14 @@ export function permissionStatementsFromScopes(scopes: readonly ApiScope[]): Per
 }
 
 export function scopesFromPermissionStatements(value: unknown): ApiScope[] {
+  if (typeof value === 'string') {
+    try {
+      return scopesFromPermissionStatements(JSON.parse(value));
+    } catch {
+      return [];
+    }
+  }
+
   if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
 
   const scopes: ApiScope[] = [];

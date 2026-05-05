@@ -36,7 +36,7 @@ import { handleOpenApi } from './public-api/openapi.js';
 import { settingsRouter } from './public-api/settings.js';
 import { ticketsRouter } from './public-api/tickets.js';
 import { viewsRouter } from './public-api/views.js';
-import { handleWhoami } from './public-api/whoami.js';
+import { handleWhoami, handleWorkspaceList } from './public-api/whoami.js';
 import { handleSearch } from './routes/search.js';
 import { createServerMutators, type PostCommitTask } from './server-mutators.js';
 import {
@@ -198,6 +198,7 @@ app.delete('/api/settings/service-accounts/:id', requireWorkspace, handleDeleteS
 // Phase A — /v1/_meta/whoami smoke route. Bearer-only; mounts request-ID
 // middleware so the response carries X-Request-Id.
 app.get('/v1/_meta/whoami', requestIDMiddleware, handleWhoami);
+app.get('/v1/_meta/workspaces', requestIDMiddleware, handleWorkspaceList);
 app.get('/v1/openapi.json', requestIDMiddleware, handleOpenApi);
 app.route('/v1/tickets', ticketsRouter);
 app.route('/v1/customers', customersRouter);

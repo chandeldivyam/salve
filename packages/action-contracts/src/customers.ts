@@ -126,6 +126,13 @@ export const customerTagsInputSchema = customerIdInputSchema.extend({
 });
 export const customerTagRemoveInputSchema = customerIdInputSchema.extend({ tagId: uuidSchema });
 
+export const customerCustomFieldSetInputSchema = customerIdInputSchema.extend({
+  fieldKey: z.string().trim().min(1).max(80),
+  value: jsonValueSchema,
+});
+
+export const customerCustomFieldSetOutputSchema = z.object({ customer: customerDetailSchema });
+
 export const customerEventIngestInputSchema = customerIdInputSchema.extend({
   id: uuidSchema.optional(),
   eventName: z.string().trim().min(1).max(200),
@@ -237,6 +244,25 @@ export const customerActions = {
     scopes: ['customers:write'],
     idempotency: 'required',
     rest: { method: 'POST', path: '/customers/:customerId/events', pathParams: ['customerId'] },
+  }),
+  customFieldSet: defineAction({
+    id: 'customers.customField.set',
+    summary: 'Set a customer custom field value by field key.',
+    inputSchema: customerCustomFieldSetInputSchema,
+    outputSchema: customerCustomFieldSetOutputSchema,
+    scopes: ['customers:write'],
+    idempotency: 'optional',
+    auditEventKind: 'customer.field_set',
+    rest: {
+      method: 'PUT',
+      path: '/customers/:customerId/custom-fields/:fieldKey',
+      pathParams: ['customerId', 'fieldKey'],
+    },
+    cli: {
+      command: ['customers', 'custom-fields', 'set'],
+      positionals: ['customerId', 'fieldKey'],
+    },
+    mcp: { toolName: 'salve.customers.custom_field_set' },
   }),
 } as const;
 

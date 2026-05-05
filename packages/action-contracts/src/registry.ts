@@ -1,10 +1,12 @@
 import { CUSTOMER_ACTIONS } from './customers.js';
+import { META_ACTIONS } from './meta.js';
 import { SETTINGS_ACTIONS } from './settings.js';
 import { TICKET_ACTIONS } from './tickets.js';
 import type { AnyActionContract } from './types.js';
 import { VIEW_ACTIONS } from './views.js';
 
 export const ALL_ACTIONS = [
+  ...META_ACTIONS,
   ...TICKET_ACTIONS,
   ...CUSTOMER_ACTIONS,
   ...VIEW_ACTIONS,

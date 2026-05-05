@@ -17,6 +17,7 @@ export {
   listCustomersExecutor,
   readCustomerByID,
   removeCustomerTagExecutor,
+  setCustomerCustomFieldExecutor,
   updateCustomerExecutor,
   updateCustomerNoteExecutor,
 } from './customers.js';

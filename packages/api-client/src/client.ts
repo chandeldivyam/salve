@@ -6,6 +6,7 @@ import {
   ALL_ACTIONS,
   type AnyActionContract,
   customerActions,
+  metaActions,
   settingsActions,
   ticketActions,
   viewActions,
@@ -13,6 +14,7 @@ import {
 import { SalveApiError } from './errors.js';
 import {
   buildActionRequest,
+  createIdempotencyKey,
   errorFromResponse,
   idempotencyKeyFor,
   isRetryableStatus,
@@ -72,6 +74,7 @@ export const ACTION_METHOD_PATHS = {
   'customers.tags.add': ['customers', 'tags', 'add'],
   'customers.tags.remove': ['customers', 'tags', 'remove'],
   'customers.events.ingest': ['customers', 'events', 'ingest'],
+  'customers.customField.set': ['customers', 'customField', 'set'],
   'views.list': ['views', 'list'],
   'views.get': ['views', 'get'],
   'views.create': ['views', 'create'],
@@ -96,6 +99,8 @@ export const ACTION_METHOD_PATHS = {
   'settings.apiTokens.list': ['settings', 'apiTokens', 'list'],
   'settings.apiTokens.create': ['settings', 'apiTokens', 'create'],
   'settings.apiTokens.revoke': ['settings', 'apiTokens', 'revoke'],
+  whoami: ['whoami'],
+  'workspace.list': ['workspace', 'list'],
 } as const satisfies Record<ActionID, readonly string[]>;
 
 export interface SalveClientOptions {
@@ -108,7 +113,7 @@ export interface SalveClientOptions {
 }
 
 export interface SalveRequestEvent {
-  actionId: ActionID;
+  actionId: ActionID | 'raw';
   method: string;
   url: string;
   attempt: number;
@@ -139,6 +144,7 @@ export class SalveClient {
   readonly customers;
   readonly views;
   readonly settings;
+  readonly workspace;
 
   #baseUrl: string;
   #pathPrefix: string;
@@ -181,6 +187,7 @@ export class SalveClient {
     this.customers = this.#buildCustomersNamespace();
     this.views = this.#buildViewsNamespace();
     this.settings = this.#buildSettingsNamespace();
+    this.workspace = this.#buildWorkspaceNamespace();
   }
 
   on<K extends SalveEventName>(
@@ -266,6 +273,78 @@ export class SalveClient {
             cause: error,
           });
         }
+      } catch (error) {
+        lastError = timeoutOrAbortError(error, abort.timedOut());
+        if (lastError instanceof SalveApiError) {
+          this.#emit('error', { ...eventBase, error: lastError });
+          throw lastError;
+        }
+        if (attempt < retry.maxAttempts) {
+          await sleep(retryDelayMs(attempt, retry));
+          continue;
+        }
+        const apiError = new SalveApiError({
+          type: 'internal_error',
+          code: 'request.failed',
+          message: 'Salve API request failed',
+          status: 0,
+          cause: lastError,
+        });
+        this.#emit('error', { ...eventBase, error: apiError });
+        throw apiError;
+      } finally {
+        abort.cleanup();
+      }
+    }
+
+    throw lastError;
+  }
+
+  async raw(
+    method: string,
+    path: string,
+    body?: unknown,
+    options?: SalveRequestOptions,
+  ): Promise<unknown> {
+    const normalizedMethod = method.toUpperCase();
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+    const url = new URL(`${this.#baseUrl}${this.#pathPrefix}${normalizedPath}`);
+    const requestBody =
+      body === undefined || normalizedMethod === 'GET' ? undefined : JSON.stringify(body);
+    const retry = normalizeRetryOptions(options?.retry ?? this.#retry);
+    const idempotencyKey =
+      options?.idempotencyKey ?? (normalizedMethod === 'GET' ? undefined : createIdempotencyKey());
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= retry.maxAttempts; attempt += 1) {
+      const eventBase = {
+        actionId: 'raw' as const,
+        method: normalizedMethod,
+        url: url.toString(),
+        attempt,
+        idempotencyKey,
+      };
+      this.#emit('request', eventBase);
+      const abort = mergeAbortSignals(options?.signal, options?.timeoutMs ?? this.#timeoutMs);
+      try {
+        const response = await this.#fetch(url, {
+          method: normalizedMethod,
+          headers: this.#headers(requestBody, idempotencyKey, options?.headers),
+          body: requestBody,
+          signal: abort.signal,
+        });
+        this.#emit('response', {
+          ...eventBase,
+          status: response.status,
+          requestId: response.headers.get('x-request-id') ?? '',
+        });
+        if (isRetryableStatus(response.status) && attempt < retry.maxAttempts) {
+          await sleep(retryDelayMs(attempt, retry));
+          continue;
+        }
+        const json = await readJsonResponse(response);
+        if (!response.ok) throw errorFromResponse(response, json);
+        return json;
       } catch (error) {
         lastError = timeoutOrAbortError(error, abort.timedOut());
         if (lastError instanceof SalveApiError) {
@@ -492,6 +571,15 @@ export class SalveClient {
         ): Promise<Output<typeof customerActions.eventsIngest>> =>
           this.request(customerActions.eventsIngest, { ...input, customerId }, options),
       },
+      customField: {
+        set: (
+          customerId: CustomerID,
+          fieldKey: Input<typeof customerActions.customFieldSet>['fieldKey'],
+          value: Input<typeof customerActions.customFieldSet>['value'],
+          options?: SalveRequestOptions,
+        ): Promise<Output<typeof customerActions.customFieldSet>> =>
+          this.request(customerActions.customFieldSet, { customerId, fieldKey, value }, options),
+      },
     };
   }
 
@@ -654,6 +742,17 @@ export class SalveClient {
           this.request(settingsActions.apiTokensRevoke, { tokenId }, options),
       },
     };
+  }
+
+  #buildWorkspaceNamespace() {
+    return {
+      list: (options?: SalveRequestOptions): Promise<Output<typeof metaActions.workspacesList>> =>
+        this.request(metaActions.workspacesList, {}, options),
+    };
+  }
+
+  whoami(options?: SalveRequestOptions): Promise<Output<typeof metaActions.whoami>> {
+    return this.request(metaActions.whoami, {}, options);
   }
 }
 

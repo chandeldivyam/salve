@@ -11,6 +11,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./customers": "./src/customers.ts",
+    "./meta": "./src/meta.ts",
     "./openapi": "./src/openapi.ts",
     "./settings": "./src/settings.ts",
     "./tickets": "./src/tickets.ts",

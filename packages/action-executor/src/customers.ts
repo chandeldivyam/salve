@@ -163,51 +163,82 @@ export const ingestCustomerEventExecutor: Executor<typeof customerActions.events
   }
 
   const occurredAt = parseOccurredAt(input.occurredAt);
+  const occurredAtIso = occurredAt.toISOString();
   const properties = asJsonRecord(input.properties);
   const eventID =
     input.id ?? actionResourceID(ctx, customerActions.eventsIngest.id, 'customer-event');
 
   try {
-    const inserted = await ctx.db
-      .insert(dbSchema.customEvent)
-      .values({
-        id: eventID,
-        workspaceId: ctx.auth.workspaceID,
-        customerId: input.customerId,
-        eventName: input.eventName,
-        properties,
-        source: input.source ?? 'api',
-        occurredAt,
-        idempotencyKey,
-      })
-      .returning();
+    const event = await ctx.db.transaction(async (tx) => {
+      const inserted = await tx
+        .insert(dbSchema.customEvent)
+        .values({
+          id: eventID,
+          workspaceId: ctx.auth.workspaceID,
+          customerId: input.customerId,
+          eventName: input.eventName,
+          properties,
+          source: input.source ?? 'api',
+          occurredAt,
+          idempotencyKey,
+        })
+        .returning();
 
-    await ctx.db
-      .update(dbSchema.customer)
-      .set({
-        firstSeenAt: sql`LEAST(COALESCE(${dbSchema.customer.firstSeenAt}, ${occurredAt}), ${occurredAt})`,
-        lastSeenAt: sql`GREATEST(COALESCE(${dbSchema.customer.lastSeenAt}, ${occurredAt}), ${occurredAt})`,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(dbSchema.customer.id, input.customerId),
-          eq(dbSchema.customer.workspaceId, ctx.auth.workspaceID),
-        ),
-      );
+      await tx
+        .update(dbSchema.customer)
+        .set({
+          firstSeenAt: sql`LEAST(COALESCE(${dbSchema.customer.firstSeenAt}, ${occurredAtIso}::timestamptz), ${occurredAtIso}::timestamptz)`,
+          lastSeenAt: sql`GREATEST(COALESCE(${dbSchema.customer.lastSeenAt}, ${occurredAtIso}::timestamptz), ${occurredAtIso}::timestamptz)`,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(dbSchema.customer.id, input.customerId),
+            eq(dbSchema.customer.workspaceId, ctx.auth.workspaceID),
+          ),
+        );
 
-    const event = inserted[0];
-    if (!event) {
-      throw validationError('customer_event.insert_failed', 'Customer event could not be saved');
-    }
+      const row = inserted[0];
+      if (!row) {
+        throw validationError('customer_event.insert_failed', 'Customer event could not be saved');
+      }
+      return row;
+    });
     return { event: mapCustomerEvent(event), deduplicated: false };
   } catch (error) {
-    if (idempotencyKey && isUniqueViolation(error)) {
-      const existing = await findEventByIdempotencyKey(ctx, idempotencyKey);
+    if (isUniqueViolation(error)) {
+      const existing =
+        (idempotencyKey ? await findEventByIdempotencyKey(ctx, idempotencyKey) : null) ??
+        (await findEventByID(ctx, eventID));
       if (existing) return { event: mapCustomerEvent(existing), deduplicated: true };
     }
     throw error;
   }
+};
+
+export const setCustomerCustomFieldExecutor: Executor<
+  typeof customerActions.customFieldSet
+> = async (ctx, input) => {
+  await assertCustomerExists(ctx, input.customerId);
+  const field = await findCustomerCustomFieldByKey(ctx, input.fieldKey);
+  if (input.value === null) {
+    await ctx.runMutation('customField.clearValueOnCustomer', {
+      fieldID: field.id,
+      customerID: input.customerId,
+    });
+  } else {
+    await ctx.runMutation('customField.setValueOnCustomer', {
+      id: actionResourceID(
+        ctx,
+        customerActions.customFieldSet.id,
+        `${input.customerId}:${field.id}`,
+      ),
+      fieldID: field.id,
+      customerID: input.customerId,
+      value: input.value,
+    });
+  }
+  return { customer: await readCustomerByID(ctx, input.customerId) };
 };
 
 export const customerExecutors: Record<CustomerActionID, UntypedExecutor> = {
@@ -220,6 +251,7 @@ export const customerExecutors: Record<CustomerActionID, UntypedExecutor> = {
   [customerActions.tagsAdd.id]: asUntypedExecutor(addCustomerTagsExecutor),
   [customerActions.tagsRemove.id]: asUntypedExecutor(removeCustomerTagExecutor),
   [customerActions.eventsIngest.id]: asUntypedExecutor(ingestCustomerEventExecutor),
+  [customerActions.customFieldSet.id]: asUntypedExecutor(setCustomerCustomFieldExecutor),
 };
 
 export async function readCustomerByID(
@@ -298,6 +330,23 @@ async function assertCustomerExists(ctx: ExecutorCtx, customerID: string): Promi
     )
     .limit(1);
   if (!rows[0]) throw notFound('customer.not_found', 'Customer not found');
+}
+
+async function findCustomerCustomFieldByKey(ctx: ExecutorCtx, key: string) {
+  const rows = await ctx.db
+    .select({ id: dbSchema.customField.id })
+    .from(dbSchema.customField)
+    .where(
+      and(
+        eq(dbSchema.customField.workspaceId, ctx.auth.workspaceID),
+        eq(dbSchema.customField.category, 'customer'),
+        eq(dbSchema.customField.key, key),
+      ),
+    )
+    .limit(1);
+  const row = rows[0];
+  if (!row) throw notFound('custom_field.not_found', 'Custom field not found');
+  return row;
 }
 
 async function readCustomerTags(ctx: ExecutorCtx, customerID: string) {
@@ -499,6 +548,20 @@ async function findEventByIdempotencyKey(ctx: ExecutorCtx, idempotencyKey: strin
       and(
         eq(dbSchema.customEvent.workspaceId, ctx.auth.workspaceID),
         eq(dbSchema.customEvent.idempotencyKey, idempotencyKey),
+      ),
+    )
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+async function findEventByID(ctx: ExecutorCtx, eventID: string) {
+  const rows = await ctx.db
+    .select()
+    .from(dbSchema.customEvent)
+    .where(
+      and(
+        eq(dbSchema.customEvent.workspaceId, ctx.auth.workspaceID),
+        eq(dbSchema.customEvent.id, eventID),
       ),
     )
     .limit(1);

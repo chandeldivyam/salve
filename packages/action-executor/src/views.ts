@@ -213,8 +213,9 @@ function sqlForFilter(filter: unknown): SQL | null {
     return sql`${column} = ${filter.value}`;
   if (filter.operator === 'neq' && isPrimitive(filter.value))
     return sql`${column} <> ${filter.value}`;
-  if (filter.operator === 'in' && Array.isArray(filter.values) && filter.values.length > 0) {
-    return sql`${column} = ANY(${filter.values.filter(isPrimitive)})`;
+  if (filter.operator === 'in' && Array.isArray(filter.values)) {
+    const values = filter.values.filter((v): v is string => typeof v === 'string');
+    return values.length > 0 ? inArray(column, values) : null;
   }
   if (filter.operator === 'empty') return sql`${column} IS NULL`;
   if (filter.operator === 'nempty') return sql`${column} IS NOT NULL`;

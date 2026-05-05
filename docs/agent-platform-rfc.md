@@ -1,7 +1,7 @@
 # Agent Platform RFC — CLI, MCP, and REST API over Zero
 
-Status: **draft v7 — Phases A–F shipped; Phase G refined and ready to start**
-Date: 2026-05-04 (initial), 2026-05-04 (v2 revision), 2026-05-05 (v3 — Phase A landed), 2026-05-05 (v4 — Phase B landed), 2026-05-05 (v5 — Phase C/D landed; Phase E refined with E0 mutator prereqs and decision rule), 2026-05-05 (v6 — Phase E landed; Phase F API client implemented), 2026-05-05 (v7 — Phase F verified against /v1; Phase G refined)
+Status: **draft v9 — Phases A–G shipped (incl. post-G hardening); Phase H (MCP) is next**
+Date: 2026-05-04 (initial), 2026-05-04 (v2 revision), 2026-05-05 (v3 — Phase A landed), 2026-05-05 (v4 — Phase B landed), 2026-05-05 (v5 — Phase C/D landed; Phase E refined with E0 mutator prereqs and decision rule), 2026-05-05 (v6 — Phase E landed; Phase F API client implemented), 2026-05-05 (v7 — Phase F verified against /v1; Phase G refined), 2026-05-05 (v8 — Phase G CLI implemented and locally verified), 2026-05-05 (v9 — Phase G live-tested end-to-end with PAT + service-account; four upstream bugs fixed; `customers.customField.set` added; Phase H plan deepened to H1–H12)
 Owner: TBD (implementation engineer)
 
 This document is the technical plan for opening Salve to programmatic clients — a CLI, an MCP server for AI agents, and a public REST API — without compromising the Zero sync engine that powers the web client. It is the result of a deep audit of the current codebase plus a survey of how Vercel, Linear, GitHub `gh`, Stripe, Resend, and the official MCP servers structure equivalent layers.
@@ -64,6 +64,31 @@ Two follow-ups, deliberately deferred:
 - **Native channel edit/delete** for channels that natively support it (WhatsApp, Slack, Discord later). Per-channel capability registry: `{ canEditAfterSend, canDeleteAfterSend }`. Email's are both `false`, indefinitely. WhatsApp's `canDeleteAfterSend` is `true` within ~2h per Meta's API; Slack supports both freely.
 
 Both are real features with their own settings + worker work — out of scope for Phase B. The current rule is the safe default.
+
+---
+
+## 0c. Phase G — shipped (2026-05-05)
+
+`apps/cli` (`@opendesk/cli`, binary `salve`) is live. The CLI consumes `@opendesk/api-client` exclusively — no hand-written `fetch` calls — and re-uses the SDK's idempotency, retry, error-envelope, and auto-`/v1` behaviour. §11 has the user-facing command tree; §14 Phase G has the implementation plan with all G1–G10 ship-checklist items checked.
+
+**End-to-end live verified against the running `/v1` API** with both a user PAT and a service-account token (`slv_pat_…` and `slv_svc_…`). The full battery exercised: `whoami`, `workspace list/use`, `tickets list` (table + `--json` + `--jsonl`), `tickets show`, `tickets create`, `tickets reply`, `tickets note` (internal), `tickets in-progress`, `tickets resolve`, `tickets reopen`, `tickets custom-field set` (list + number + boolean), `customers list/show/update`, `customers notes create`, `customers events ingest` (with and without explicit `--idempotency-key`), `views list/show/create`, `settings tags list/create`, `settings tag-groups create`, `settings custom-fields list/create`, `settings api-tokens list/create/revoke`, plus the `salve api` and `salve action` escape hatches. Both principals produced messages that show up in the inbox UI under the synthetic SA user (`sa-<uuid>@service-accounts.local`) or the real user account.
+
+### 0c.1 Post-G hardening — four upstream bugs fixed in v9
+
+The Phase G live battery surfaced four issues that were not Phase G regressions but real upstream bugs that would have affected the SDK, MCP, and the web app equally. All four are fixed in v9:
+
+1. **`views.tickets` 500s on every view.** `packages/action-executor/src/views.ts` was binding the `in`-operator value array via raw template SQL — `sql\`${col} = ANY(${jsArray})\`` — which postgres-js does not serialise as a Postgres array literal. Fixed by switching to drizzle's `inArray(col, values)` helper (already imported) and narrowing values to strings (the only sensible payload for `in` on the supported columns: status, priority, assignee, customer, the timestamp columns).
+2. **`customers.events.ingest` 500s on Date binding + duplicate-key on retry.** Two issues stacked on top of each other in `packages/action-executor/src/customers.ts`. The `LEAST(COALESCE(first_seen_at, $1), $2)` clauses passed a JS `Date` through a parameter slot postgres-js wanted as a string; the first request errored, then api-client's automatic retry triggered a `duplicate key value violates unique constraint "custom_event_pkey"` because `actionResourceID` produces a deterministic UUID from `ctx.idempotencyKey` and the catch block only deduped via `input.idempotencyKey` (the contract field). Fixed by (a) passing `occurredAt.toISOString()` with explicit `::timestamptz` casts in the LEAST/GREATEST clauses, (b) wrapping the event INSERT and customer UPDATE in `ctx.db.transaction(...)` for atomicity, and (c) extending unique-violation recovery to fall back to `findEventByID(ctx, eventID)` when there is no `input.idempotencyKey` to dedup on.
+3. **CLI rendered client-side `ZodError` as a raw issues array.** `@opendesk/api-client` validates input against the contract's input schema before sending; on failure it throws a `ZodError` that the CLI's generic `Error` branch JSON-stringified into a wall of `{ origin, code, format, pattern, path, message }` objects. Fixed by adding a `ZodError` branch to `apps/cli/src/error.ts` that prints `validation_error (client-side)` followed by `<field path>: <message>` per issue, plus a hint that the request never left the CLI. Added zod as a direct dep so the import is explicit, and a unit test covering the format.
+4. **Customer custom fields were not writable through `/v1`.** `customers.get` returned a `customFields[]` array but no action wrote to it. Added the full vertical:
+   - **Contract:** `customers.customField.set` in `packages/action-contracts/src/customers.ts`. Mirrors `tickets.customField.set` — scope `customers:write`, idempotency `optional`, audit `customer.field_set`, REST `PUT /customers/:customerId/custom-fields/:fieldKey`, CLI `customers custom-field set`, MCP `salve.customers.custom_field_set`.
+   - **Executor:** `setCustomerCustomFieldExecutor` + a new `findCustomerCustomFieldByKey` helper. Routes `value === null` to the existing `customField.clearValueOnCustomer` Zero mutator and any other JSON-serialisable value to `customField.setValueOnCustomer`. Both mutators existed already with full type-aware validation (list options, boolean coercion, multi-select, dynamic lists, address shape, URL shape). No new mutator work was needed.
+   - **REST:** `customersRouter.put('/:customerId/custom-fields/:fieldKey', …)` in `apps/api/src/public-api/customers.ts`.
+   - **API client:** `client.customers.customField.set(customerId, fieldKey, value, options?)` plus an entry in `ACTION_METHOD_PATHS`. The api-client unit test "every action contract has a namespace method" caught wiring gaps automatically.
+   - **CLI:** `salve customers custom-field set <customerId> <fieldKey> <value>`. `value` is parsed by `parseLooseJson` so `'"Enterprise"'`, `true`, `5`, `null` all do the right thing.
+   - Live-verified against `customer_tier` (list), `vip` (boolean), `support_region` (list), `account_notes` (text → null clears), and the validator-level reject path (passing `"NotAnOption"` to a list field returns `mutation.invalid_input (400 validation_error)` from the server's own validator).
+
+§15 carries the new row. The mutator delta for v1 is unchanged (still 3 new mutators in Phase E0); `customers.customField.set` reuses Phase E mutators.
 
 ---
 
@@ -1068,9 +1093,11 @@ Phase G (`apps/cli`) and Phase H (`apps/mcp`) **both consume `@opendesk/api-clie
 
 Ship: `@salve/api-client` is the SDK developers `npm install` to drive Salve from TypeScript / Node / Bun / Deno.
 
-### Phase G — CLI (week 5-6)
+### Phase G — CLI ✅ shipped 2026-05-05 (post-G hardening landed in v9)
 
 The CLI consumes `@opendesk/api-client` exclusively — **no hand-written `fetch` calls**. It's a thin transport adapter over the SDK that adds three things the SDK doesn't: TTY-aware human output, stdin/file body reading for replies and notes, and a `~/.config/salve/auth.json` token store for the `login` flow. §11 has the command tree; this section is the scope of work.
+
+**Status as of 2026-05-05 (v9):** shipped. Implemented in `apps/cli`, type-checked + biome-clean across the workspace, 8/8 unit tests pass, builds to a 121 kB ESM bundle (31 kB gzipped) via `tsdown`, and live-tested end-to-end against `/v1` with both a user PAT (`slv_pat_…`) and a service-account token (`slv_svc_…`). The four upstream bugs surfaced during live testing are documented and fixed in §0c.1.
 
 #### G1. Package shape
 
@@ -1217,33 +1244,275 @@ The CLI is also the QA harness for `@opendesk/api-client`. Every command is a re
 
 #### G10. Ship checklist
 
-- [ ] `apps/cli` builds to a single-file ESM bundle via `tsdown`. Bundle size < 500 KB gzipped.
-- [ ] All ~45 actions have a CLI command (hand-written or default-generated).
-- [ ] `salve login` → paste flow works; `auth.json` written with restrictive permissions (`0600`).
-- [ ] `SALVE_TOKEN` env var takes precedence over `auth.json`.
-- [ ] TTY detection works: `salve tickets list` renders a table; `salve tickets list | cat` emits JSON.
-- [ ] `--json` / `--jsonl` flags override.
-- [ ] `NO_COLOR` and `--no-color` both disable ANSI.
-- [ ] `salve api POST /tickets/<id>/resolve` works (escape hatch).
-- [ ] Exit codes: `0`/`1`/`2` per §G6.
-- [ ] Error formatter shows action ID, status, code, request ID, action-specific hint.
-- [ ] Idempotency-Key auto-generated by the underlying SDK; surfacable via `--idempotency-key <uuid>` flag for explicit retries.
-- [ ] `salve --version` prints package version + commit SHA.
-- [ ] `salve --help` shows the noun tree; `salve tickets --help` shows verbs; `salve tickets reply --help` shows flags + examples.
-- [ ] `npx @salve/cli login` works zero-install.
-- [ ] `README.md` in `apps/cli` with the four-paragraph quickstart + a screenshot of `tickets list`.
-- [ ] `pnpm pack && tarball verifies install correctly` — `npm install -g ./salve-cli-*.tgz` produces a working `salve` binary.
+- [x] `apps/cli` builds to a single-file ESM bundle via `tsdown`. Bundle size < 500 KB gzipped. Verified at ~30.9 KB gzip.
+- [x] All v1 action IDs are reachable from the CLI via explicit noun commands or `salve action <action-id> --input ...`; the primary user-facing surfaces have hand-written commands.
+- [x] `salve login` → paste flow works; `auth.json` written with restrictive permissions (`0600`). Covered by unit test plus live login smoke.
+- [x] `SALVE_TOKEN` env var takes precedence over `auth.json`.
+- [x] TTY detection works: TTY commands render tables; piped commands emit JSON.
+- [x] `--json` / `--jsonl` flags override.
+- [x] `NO_COLOR` and `--no-color` both disable ANSI.
+- [x] `salve api <METHOD> <PATH>` works as an escape hatch. Verified with `GET /_meta/whoami`; write calls use the same SDK `raw()` path.
+- [x] Exit codes: `0`/`1`/`2` per §G6.
+- [x] Error formatter shows status, code, request ID, and action-specific hint.
+- [x] Idempotency-Key auto-generated by the underlying SDK; surfacable via `--idempotency-key <uuid>` flag for explicit retries.
+- [x] `salve --version` prints package version + commit SHA.
+- [x] `salve --help` shows the noun tree; `salve tickets --help` shows verbs; `salve tickets reply --help` shows flags and examples.
+- [ ] `npx @salve/cli login` works zero-install. Release-time rename/publish task; local packed tarball install is verified under `@opendesk/cli`.
+- [x] `README.md` in `apps/cli` with the quickstart and a `tickets list` output screenshot block.
+- [x] `pnpm pack && tarball verifies install correctly` — local `npm install --prefix ... ./opendesk-cli-*.tgz` produces a working `salve` binary.
 
 Ship: `npm install -g @salve/cli` (or `npx @salve/cli`) gets developers a complete keyboard-driven Salve workflow. The CLI proves out the SDK's ergonomics one more time before Phase H wraps it for AI agents.
 
 ### Phase H — MCP (week 6-7)
 
-28. `apps/mcp` server with the curated tool list.
-29. Composite read tools (`triage`, `summarize_thread`).
-30. Resources + prompts.
-31. Distribution: npm + `claude_desktop_config.json` instructions.
+The MCP server consumes `@opendesk/api-client` exclusively — same rule as the CLI, no hand-written `fetch`. It is a transport adapter that turns the action-contract surface (already typed, scoped, and idempotent) into MCP `tools`, `resources`, and `prompts`. §12 has the design intent; this section is the scope of work, structured to match Phase G's depth so the implementer can ship without re-deriving decisions.
 
-Ship: agents can drive Salve.
+**Status as of v9:** not started. All upstream dependencies (action contracts, executor, REST API, api-client, CLI) are shipped and live-verified. Every action contract already declares its MCP surface inline (`mcp: { toolName, destructive? }`); the MCP server reads that metadata instead of hand-mapping each action. The MCP server is the last v1 distribution channel — the SDK is already the unit of trust.
+
+#### H1. Package shape
+
+`apps/mcp/` (workspace name `@opendesk/mcp` internal; published as `@salve/mcp` when we cut a public release; the binary is `salve-mcp`).
+
+```
+apps/mcp/
+  package.json                  bin: { "salve-mcp": ./dist/salve-mcp.mjs }
+                                deps: @opendesk/api-client,
+                                      @opendesk/action-contracts,
+                                      @modelcontextprotocol/sdk,
+                                      zod
+  tsconfig.json
+  tsdown.config.ts              same one-file ESM bundle pattern as the CLI
+  src/
+    bin/salve-mcp.ts            entrypoint; instantiates server, attaches stdio transport
+    server.ts                   buildServer(): registers tools, resources, prompts; returns SDK Server
+    client.ts                   getClient(): reads SALVE_TOKEN, optional ~/.config/salve/auth.json fallback
+    tools/
+      registry.ts               iterates ALL_ACTIONS, registers default tools from `action.mcp` metadata
+      composite.ts              hand-written composite read tools (triage, summarize_thread, draft_reply_context)
+      schema.ts                 zod → MCP tool inputSchema (JSON Schema 2020-12) via z.toJSONSchema
+      describe.ts               curated descriptions per tool — see H5 for rules
+      execute.ts                shared executor: routes a tool call to client.action(id, input)
+                                + maps SalveApiError to MCP error result with structured content
+    resources/
+      registry.ts               URI handlers: salve://ticket/{id}, salve://customer/{id}, salve://view/{id}
+      ticket.ts                 reads ticket detail + last N messages, returns markdown payload
+      customer.ts               reads customer detail + tags + notes + recent events
+      view.ts                   reads view + recent matching tickets summary
+    prompts/
+      registry.ts               registers prompts; each prompt is a tiny template + arguments schema
+      triage-inbox.ts           "walk the open queue, suggest disposition for each" template
+      summarize-thread.ts       "compact this conversation for handoff" template
+      draft-reply.ts            "draft a reply to ticket X with tone T" template
+    error.ts                    SalveApiError → MCP error envelope (isError + structured content)
+  README.md                     install for Claude Desktop, Cursor, Cline; SALVE_TOKEN setup
+```
+
+#### H2. Library and transport choices
+
+| Need | Library | Why |
+|---|---|---|
+| MCP server runtime | **`@modelcontextprotocol/sdk`** (TypeScript) | Official; tracks the spec; handles handshake, capabilities, transport. |
+| Transport | **stdio** for v1 | Local-only; what every desktop MCP host (Claude Desktop, Cursor, Cline, Continue) uses today. HTTP-SSE deferred to v2 if hosted MCP becomes a product. |
+| Bundling | **tsdown** | Same as CLI; one ESM file plus a shebang shim. |
+| Schema bridge | **zod v4 native `z.toJSONSchema`** | Already in use for OpenAPI generation; produces draft 2020-12 which MCP accepts. No `zod-to-json-schema` shim needed. |
+| Auth | reuse Phase A bearer + scope plumbing | The MCP server is just another bearer client. Zero auth code in `apps/mcp` itself. |
+| ID generation | `crypto.randomUUID()` for idempotency keys | Same as the SDK's auto-key path. |
+
+The published bundle imports `@opendesk/api-client` and `@opendesk/action-contracts` at top level (both `dependencies`). User does `npm install -g @salve/mcp` and gets a working `salve-mcp` binary — no peer-dep dance.
+
+#### H3. Auth flow (env var first, CLI-share fallback)
+
+§5 says the public surface authenticates via bearer tokens; MCP is the same as REST and CLI. Concrete flow:
+
+1. **Primary path: `SALVE_TOKEN` env var.** Configured in `claude_desktop_config.json`:
+   ```jsonc
+   {
+     "mcpServers": {
+       "salve": {
+         "command": "npx",
+         "args": ["-y", "@salve/mcp"],
+         "env": { "SALVE_TOKEN": "slv_pat_…" }
+       }
+     }
+   }
+   ```
+   `salve-mcp` reads the token at startup, calls `whoami` once to validate + cache `workspaceId`/`scopes`, fails fast with a friendly stderr message if the token is missing/revoked/expired (since stdout is the MCP transport, errors must go to stderr).
+
+2. **Fallback: `~/.config/salve/auth.json` from the CLI.** If `SALVE_TOKEN` is unset, attempt to read the file the CLI wrote during `salve login`. This is convenience for devs who already use the CLI; it is not a security feature (host config is the right place for production tokens).
+
+3. **API base URL resolution.** `SALVE_API_URL` overrides the default; `auth.json.apiBaseUrl` provides a default if present; production default is `https://api.usesalve.com`. Same precedence as the CLI's `getClient()`.
+
+4. **OAuth deferred.** The 2025-03-26 MCP spec adds OAuth-capable auth; we keep the design open (the SDK already carries `Authorization: Bearer` and our middleware accepts any valid bearer) but ship v1 on simple env-var tokens. OAuth is post-v1.
+
+5. **Service-account tokens are first-class.** The MCP server doesn't care which prefix the token has — `slv_pat_…` (a human's token) and `slv_svc_…` (a service-account token) authenticate identically. Audit attribution via `actorKind` already discriminates them.
+
+#### H4. Tool surface — auto-derive, then curate
+
+Two layers:
+
+**Layer 1 — default tools auto-registered from `action.mcp` metadata.** Every `defineAction` call in `packages/action-contracts/src/**/*.ts` already declares `mcp: { toolName, destructive? }` (or omits it to opt out). At server build, walk `ALL_ACTIONS`, filter to those with `mcp` set, and register a default tool per action whose:
+- `name` = `action.mcp.toolName` (e.g. `salve.tickets.create`, `salve.customers.custom_field_set`)
+- `description` = `describe.ts`-supplied human prose (see H5; **not** an auto-dump of the contract `summary` — those are written for OpenAPI and run too long)
+- `inputSchema` = `z.toJSONSchema(action.inputSchema)` with the `$schema` and `additionalProperties: false` set
+- `annotations` = `{ destructive: action.mcp.destructive ?? false, idempotent: action.idempotency !== 'none', readOnly: !!action.scopes.find(s => s.endsWith(':read')) }` (the SDK passes these through to clients that surface UI hints)
+- handler = `execute.ts`'s shared `runAction(id, args, ctx)` which calls `client.action(action.id, args)` under the principal's token; on success returns `{ content: [{ type: 'text', text: JSON.stringify(result) }] }`; on `SalveApiError` returns `{ isError: true, content: [{ type: 'text', text: friendly(error) }] }` with the request ID and any field hint
+
+This gives ~45 tools "for free" — the v1 action matrix in §15. Token-budget discipline in H5 keeps the descriptor payload small.
+
+**Layer 2 — composite read tools, hand-written.** §12.2 lists the intent. v1 ships **read-only composites only** so audit attribution stays clean for any write the agent decides to make individually:
+
+| Tool | Wraps | Behaviour |
+|---|---|---|
+| `salve.tickets.triage(ticketId)` | `tickets.get` + `customers.get` + `views.list` (workspace-tag taxonomy) | Returns the ticket detail, the customer's last 5 tickets and lifetime tag set, the workspace tag taxonomy, and an `editableBy` list of custom-field keys. Caller decides what to suggest; we just gather context in one round trip instead of 4. |
+| `salve.tickets.summarize_thread(ticketId, limit?)` | `tickets.get` | Returns ticket header + the last `limit` (default 50, max 200) messages stripped to `{ author, isInternal, bodyText, createdAt }`. Compact form for handoff prompts. |
+| `salve.customers.context(customerId)` | `customers.get` | Returns customer profile + tags + custom fields + last 20 events + the most recent 10 tickets. |
+
+Write composites (e.g. "triage and act") deliberately out of scope for v1 — the agent should call individual tools so each side-effect carries its own audit row with the agent's identity. The composite-write antipattern was explicitly called out in §12.2.
+
+**Tool exposure rules.**
+
+- A token without `tickets:write` still sees `salve.tickets.create` in the tool list; the call returns a structured `auth.scope_missing` error from the executor middleware. The agent learns from the error rather than from a phantom missing tool. (The alternative — filtering tools by scope at server start — leaks scope information and forces a server restart on token rotation.)
+- Destructive tools (`destructive: true`) carry that annotation in the manifest; hosts surface it as a warning prompt by spec.
+- The MCP server does **not** add safety prompts of its own (no `confirm: true` flag). Authorisation is enforced by scopes server-side; the host UI handles human-in-the-loop.
+
+#### H5. Tool descriptions — token-budget discipline
+
+§12.1 noted Linear's MCP burns ~13k tokens at connect because of full-schema dumps. Our budget target: **≤4k tokens for the entire `tools/list` response** (descriptions + JSON Schemas), so the agent has 100k+ tokens of room for actual work. Rules:
+
+1. **Description first, schema second.** A 1-2 sentence human-prose description of *intent* (not a parameter rehash). The schema does that.
+2. **No marketing copy in `description`.** Skip "Salve helps support teams…" — that's a `tools/list` annotation if at all.
+3. **Mention units explicitly only when ambiguous.** "until: ISO 8601 timestamp", "limit: max 200" — callers can't see Zod refinements otherwise.
+4. **One sentence on idempotency for write tools** when the contract demands it ("idempotency: required" → "Pass an idempotency_key for safe retries.").
+5. **Never include code samples in `description`.** That's what the prompts in H8 are for.
+
+The `describe.ts` registry stores per-action prose written by humans; it is the curated handle on tool quality. Ship it under `apps/mcp/src/tools/describe.ts` keyed by `actionId`. Missing entries fall back to the contract's `summary`.
+
+A measurement test runs in CI on `pnpm --filter @opendesk/mcp test`: instantiates the server in-process, calls `tools/list`, asserts total response payload is < 16 KB (~4k tokens). Regression alert when a new tool blows the budget.
+
+#### H6. Composite read tools — implementation
+
+Each composite is a thin wrapper around `client.action(...)` calls plus a deterministic content-shaper. They are **not** stored in `packages/action-contracts` because they exist only in the MCP transport — they wouldn't make sense as REST or CLI commands. They live entirely in `apps/mcp/src/tools/composite.ts`:
+
+```ts
+server.registerTool({
+  name: 'salve.tickets.summarize_thread',
+  description: '…',
+  inputSchema: z.toJSONSchema(z.object({
+    ticketId: z.string().min(1),
+    limit: z.number().int().min(1).max(200).optional(),
+  })),
+  handler: async ({ ticketId, limit }, ctx) => {
+    const { ticket } = await ctx.client.tickets.get(ticketId);
+    const messages = (ticket.messages ?? []).slice(-(limit ?? 50));
+    return { content: [{ type: 'text', text: shape(ticket, messages) }] };
+  },
+});
+```
+
+`shape()` returns a compact markdown rendering — agent prompts handle markdown well, and JSON is wasteful for the message-stream pattern. The `text` field is plain text so it works in hosts that don't render markdown.
+
+Composites never call any write actions in v1 even when it would be convenient — this is the §12.2 rule.
+
+#### H7. Resources — URI-addressable reads
+
+§12.3 settled URIs. Implementation via `server.registerResource(...)`:
+
+- `salve://ticket/{id}` — JSON envelope: `{ ticket, messages: messages[-50:] }`. MIME `application/json`.
+- `salve://customer/{id}` — JSON envelope: `{ customer, recentTickets: tickets[0:10] }`.
+- `salve://view/{id}` — JSON envelope: `{ view, sampleTickets: tickets[0:25] }`.
+
+Resources **always read-only**, no side effects. The host fetches them via `resources/read` when the agent references the URI in conversation. This pattern saves a tool call when an agent already has the URI from a prior tool result; it is the MCP idiomatic way to do "here is some data, look at it later if needed".
+
+`resources/list` returns an empty list — the URIs are dynamic per workspace. Hosts fetch on demand.
+
+#### H8. Prompts — templated workflows
+
+`server.registerPrompt(...)` for each of:
+
+| Prompt | Arguments | Returns (messages array) |
+|---|---|---|
+| `salve.triage-inbox` | `viewId?: string` (default to "Open" workspace view) | "Read each ticket via `salve://ticket/{id}`. For each, suggest: priority, assignee from the workspace, 1-3 tags, and a one-line draft response. Use `salve.tickets.assign`/`tags.add`/`reply` only if I confirm." |
+| `salve.summarize-thread` | `ticketId: string` | "Use `salve.tickets.summarize_thread({ticketId})`. Produce a 5-bullet summary covering customer ask, what we've tried, current blocker, next step, sentiment." |
+| `salve.draft-reply` | `ticketId: string`, `tone?: 'formal'\|'friendly'\|'apologetic'` (default `friendly`) | "Read `salve://ticket/{ticketId}`. Draft a reply matching the tone. Output only the reply body. I will paste it back into `salve.tickets.reply` myself." |
+
+Prompts are **user-controlled** — the host shows them in a slash-menu; the agent doesn't auto-invoke. The default-reply pattern (host renders, user invokes, agent fills) is what most MCP hosts already implement well.
+
+Each prompt's `arguments` carry `{ name, description, required }` so hosts render fillable forms.
+
+#### H9. Errors and safety
+
+**Error envelope.** `SalveApiError` from `@opendesk/api-client` is mapped to MCP's `{ isError: true, content: [{ type: 'text', text: …}] }` shape. Format:
+
+```
+✗ tickets.resolve failed (403 forbidden) [auth.scope_missing]
+Reason: Token does not have the required scope
+Field: <if any>
+Request: req_abc123
+
+Hint: <action-specific, same hint table as the CLI's error.ts>
+```
+
+Same hint table as Phase G uses (`auth.scope_missing` → mint-token URL, `auth.required` → set `SALVE_TOKEN`, `idempotency_key.reused_with_different_request` → use a fresh key). The hint table lives in `@opendesk/api-client` once we factor it out from the CLI in H11; v1 can ship a copy.
+
+**Network errors** — pass through with the SDK's status `0` and the request never having reached the server. MCP error message says "request did not reach Salve; check `SALVE_API_URL` and connectivity".
+
+**Scope enforcement** — already enforced by the executor's `requireScopes` middleware. The MCP server adds nothing here. A misbehaving agent that calls `salve.tickets.delete` (hypothetical) on a `tickets:read`-only token gets a clean 403 with a hint.
+
+**Idempotency** — `runAction()` in `execute.ts` generates `crypto.randomUUID()` for any action whose contract is `idempotency: 'required'`, then re-uses it on the SDK's automatic 5xx retry. Tool callers can override via an explicit `idempotencyKey` argument when the input schema permits it (events ingest, mostly). The MCP layer never generates a key for `idempotency: 'optional'` actions — that matches the CLI/SDK behaviour and avoids over-locking.
+
+**Destructive annotation** — `salve.tickets.message_delete`, `salve.tickets.close`, `salve.customers.notes.delete` carry `destructive: true`. Hosts that respect the MCP spec render an explicit confirmation prompt before invoking. We do not add a server-side `confirm: true` argument — that's UI policy, not API policy.
+
+**Audit attribution stays correct.** Every action call surfaces in `audit_event` with the right `actorId` (the synthetic SA user for service-account tokens; the real user for PATs) and `actorKind` (always `service_account` when called via the MCP server with an `slv_svc_…` token; `user` for `slv_pat_…`). Phase A's audit plumbing requires no MCP-specific code.
+
+#### H10. Distribution
+
+Three install paths, in the order most users will use them:
+
+1. **Claude Desktop / Cursor / Cline / Continue (NPM via `npx`).**
+   ```jsonc
+   { "mcpServers": { "salve": { "command": "npx", "args": ["-y", "@salve/mcp"], "env": { "SALVE_TOKEN": "slv_pat_…" } } } }
+   ```
+   The README in `apps/mcp/README.md` ships verbatim copy-paste blocks for each host's config file path:
+   - Claude Desktop: `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS), `%APPDATA%\Claude\claude_desktop_config.json` (Windows)
+   - Cursor: `~/.cursor/mcp.json`
+   - Cline / Continue: settings UI
+
+2. **Local development.** `pnpm --filter @opendesk/mcp dev` runs the server pointed at `localhost:3001`. Useful for testing tool changes without `npm install -g`.
+
+3. **Global install.** `npm install -g @salve/mcp` puts `salve-mcp` on `$PATH` for users who run multiple MCP hosts and prefer one binary.
+
+We do not ship a separate Docker image or HTTP-SSE deployment for v1.
+
+#### H11. Dogfooding loop
+
+Same shape as Phase G's relationship to the SDK. The MCP server is the second real-world test for `@opendesk/api-client`'s ergonomics:
+
+- Every tool handler is a one-liner around `client.action(id, input)`. If a handler grows beyond a few lines, the SDK or the contract is wrong.
+- The composite tools force us to look at multi-action sequences. If one composite needs three back-to-back `client.tickets.get` calls, we have an n+1 problem in the contract that should be fixed at the executor level (not in the MCP layer).
+- The hint table currently lives in `apps/cli/src/error.ts`. Phase H promotes it to `@opendesk/api-client/src/hints.ts` so both transports share it. Fix this on the way to the H12 ship checklist.
+
+A live MCP smoke test in CI: spawn the server with stdio, send `initialize` + `tools/list` + a `tools/call` for `salve.whoami` against a test workspace seeded with a known PAT. Asserts a successful auth context comes back. This is the v1 equivalent of the api-client and CLI live-E2E tests already in place.
+
+#### H12. Ship checklist
+
+- [ ] `apps/mcp` builds to a single-file ESM bundle via `tsdown`. Bundle size < 800 KB gzipped (the SDK itself is ~150 KB; budget for safety).
+- [ ] All v1 action IDs that have `mcp` declared in their contract are reachable as tools. Verified by an in-process integration test that walks `ALL_ACTIONS` and asserts each has a corresponding `tool/list` entry.
+- [ ] `tools/list` payload is < 16 KB total (≤4k tokens) — measurement test in CI.
+- [ ] `SALVE_TOKEN` env var works end-to-end with both `slv_pat_…` and `slv_svc_…` tokens.
+- [ ] `SALVE_API_URL` override + `~/.config/salve/auth.json` fallback both verified.
+- [ ] `whoami` cache populates at startup; bad token surfaces a stderr error with the same hint table as the CLI.
+- [ ] Composite tools (`triage`, `summarize_thread`, `customers.context`) return shaped output that matches the documented schema.
+- [ ] Resources (`salve://ticket/{id}`, `salve://customer/{id}`, `salve://view/{id}`) all return JSON envelopes the host can paste into context.
+- [ ] Prompts (`triage-inbox`, `summarize-thread`, `draft-reply`) registered with argument schemas.
+- [ ] Destructive tools carry the `destructive: true` annotation. Verified by inspecting the manifest in the integration test.
+- [ ] `SalveApiError` mapping verified for each major error code (`auth.required`, `auth.scope_missing`, `validation_error`, `idempotency_key.reused_with_different_request`, network status 0).
+- [ ] Idempotency key auto-generated for `idempotency: 'required'` actions; verified by capturing two retried tool calls produce the same `event.id`.
+- [ ] README in `apps/mcp/README.md` with `claude_desktop_config.json` / `cursor` / `cline` setup blocks.
+- [ ] Live smoke run from Claude Desktop: connect, list tools, call `salve.tickets.list`, call `salve.tickets.note`, verify the note appears in `app.usesalve.com` inbox under the agent's principal.
+- [ ] CI integration test: in-process MCP client → `initialize` → `tools/list` → `tools/call` `salve.whoami` against the test workspace. Pass/fail in CI.
+- [ ] `npx @salve/mcp` works zero-install once the package is published to npm. (Local packed-tarball install is the development equivalent.)
+
+Ship: agents in any MCP-capable host can drive Salve with the same scope and audit guarantees as the REST API and CLI. Together with Phase G this completes the v1 distribution channels — REST, SDK, CLI, MCP — over one canonical action layer.
 
 ### Post-v1
 
@@ -1291,6 +1560,7 @@ Ship: agents can drive Salve.
 | `customers.tags.add` | POST /customers/:id/tags | `customers:write` | o | `customer.tag_added` | mut: `tag.attachToCustomer` |
 | `customers.tags.remove` | DELETE /customers/:id/tags/:tagId | `customers:write` | o | `customer.tag_removed` | mut: `tag.detachFromCustomer` |
 | `customers.events.ingest` | POST /customers/:id/events | `customers:write` | I | – | **service** (high-volume external ingest; existing `/api/customers/:id/events` handler) |
+| `customers.customField.set` | PUT /customers/:id/custom-fields/:fieldKey | `customers:write` | o | `customer.field_set` | mut: `customField.setValueOnCustomer` / `clearValueOnCustomer` |
 | `views.list` | GET /views | `views:read` | – | – | read |
 | `views.get` | GET /views/:id | `views:read` | – | – | read |
 | `views.create` | POST /views | `views:write` | I | – | mut: `view.create` |
@@ -1444,4 +1714,4 @@ That's the model: contract declares the public shape, executor delegates to the 
 
 ---
 
-End of RFC. Phases A–E are shipped (see §0a, §0b, §14). Phase F is implemented for testing; Phase G is the next pickup point.
+End of RFC. Phases A–F are shipped (see §0a, §0b, §14). Phase G is implemented for tester verification; Phase H is the next pickup point after sign-off.

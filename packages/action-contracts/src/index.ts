@@ -23,6 +23,15 @@ export {
   updateCustomerInputSchema,
   updateCustomerNoteInputSchema,
 } from './customers.js';
+export {
+  META_ACTIONS,
+  type MetaAction,
+  type MetaActionID,
+  metaActions,
+  whoamiOutputSchema,
+  workspaceListOutputSchema,
+  workspaceSchema,
+} from './meta.js';
 export { buildOpenApiDocument, type OpenApiOptions } from './openapi.js';
 export { ACTION_BY_ID, type ActionID, ALL_ACTIONS } from './registry.js';
 export { isScope, SCOPES, type Scope, scopeImplies } from './scopes.js';
