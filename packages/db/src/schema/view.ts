@@ -2,7 +2,7 @@
 //
 // A `view` is a saved filter / sort / group config for the inbox surface.
 // `view_member` is the per-agent membership row that records personal
-// ordering and per-agent "hide for me" state — Atlas's saved-search pattern,
+// ordering and per-agent "hide for me" state — saved-search pattern,
 // trimmed to workspace-or-personal scope (no explicit user-list sharing).
 //
 // Built-in views (All / Unassigned / Mine / Resolved) are layered client-side

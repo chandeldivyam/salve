@@ -15,9 +15,9 @@ import { signReplyAddress } from './reply-token.js';
 // ---------- Subject prefix-list normalization (research §2) ----------
 
 // Multilingual reply/forward prefixes we strip when computing "is this the
-// same subject" *and* when prepending our own `Re:`. Atlas's list at
-// `email.py:78-83` plus the German/Polish/Greek extras called out in their
-// test suite. Comparing case-insensitively and trimming colons.
+// same subject" *and* when prepending our own `Re:`. Common Latin reply
+// prefixes plus German/Nordic/Turkish/Polish/Portuguese/Greek extras.
+// Comparing case-insensitively and trimming colons.
 const REPLY_PREFIXES = [
   'Re',
   'RE',
@@ -47,9 +47,8 @@ const ZENDESK_RE = /^\s*Request received:\s*/i;
 
 /**
  * Strip leading reply/forward prefixes (multi-pass; nested `Re: Re: [Acme]
- * Re: foo` becomes `foo`). Mirrors Atlas `email.py:727-735`. Used in two
- * places: (a) computing the canonical subject, and (b) deciding whether to
- * prepend our own `Re:` on outbound.
+ * Re: foo` becomes `foo`). Used in two places: (a) computing the canonical
+ * subject, and (b) deciding whether to prepend our own `Re:` on outbound.
  */
 export function stripSubjectPrefixes(subject: string): string {
   let s = subject ?? '';

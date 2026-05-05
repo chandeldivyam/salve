@@ -33,7 +33,6 @@ If you're adding code, decide which path you're on (see `guidelines/architecture
 | File | What it is |
 |---|---|
 | `~/.claude/plans/https-zero-rocicorp-dev-docs-introductio-buzzing-reddy.md` | The canonical plan. Architecture, schema, phase order, deployment topology. **Source of truth.** |
-| `tmp/research/atlas-email-deep-dive.md` | 7300-word recon of Atlas's email subsystem (Python/SendGrid). Threading, customer ID, loop detection, outbound rendering. Read before any email work. |
 | `tmp/research/inngest-multichannel-design.md` | 6900-word design doc for the polymorphic delivery layer. Inngest event-driven patterns, multi-channel schema, no-poller architecture. Read before any Phase 3+ work. |
 | `/tmp/zero-mono/apps/zbugs/shared/{schema,queries,mutators,auth}.ts` | Rocicorp's reference bug tracker (Zero 1.5). Idiomatic patterns for schema, query helpers, custom mutators, assertion-based auth. Mirror these. |
 | `/tmp/hello-zero-fresh/` | Latest Zero starter. Canonical `zero-cache-dev` wiring, SST deploy, Postgres logical-replication Docker setup. |
@@ -62,7 +61,7 @@ Read this exactly. Don't deviate without proposing first.
 
 - **Opus sub-agent (`general-purpose`)** for: scaffolding, schema, mutators, server logic, build phases, fix-cycles after design review. Always pass `model: "opus"`.
 - **Sonnet sub-agent (`general-purpose`, `model: "sonnet"`)** for: UI design review with `agent-browser`. Lighter-weight, design-focused.
-- **Explore agent** for: read-only research / reconnaissance of an unknown codebase (Atlas, Chatwoot, etc.). It can also do web research.
+- **Explore agent** for: read-only research / reconnaissance of an unknown codebase. It can also do web research.
 - **Plan agent** for: high-stakes architecture decisions where we want a second opinion before locking in.
 
 ### The agent-browser screenshot loop
@@ -124,7 +123,7 @@ agent-browser find role button 'Sign in' click
 - **No DB pollers.** Inngest is the durable queue. Server-mutator post-commit dispatches `inngest.send` with idempotency key on messageID. Recovery cron (30 min) is a no-op in healthy operation.
 - **Channels are polymorphic from day one** — email today; chat / WhatsApp / SMS / IG drop in without schema migration. Event names never reference "email"; e.g. `delivery/message.requested`, not `email.send`.
 - **Multiple sending + receiving addresses per tenant** — `support@`, `comms@`, `billing@` on one workspace, each with its own inbound routing. Don't bake a one-address-per-domain assumption anywhere.
-- HMAC-sign reply-plus tokens (Atlas didn't, it's the most-cited gap in their security review).
+- HMAC-sign reply-plus tokens — unsigned reply-plus localparts are the most-cited security gap in similar systems.
 - `List-Unsubscribe` + `List-Unsubscribe-Post: List-Unsubscribe=One-Click` (RFC 8058) for Gmail/Yahoo bulk-sender compliance.
 - 6-layer threading: `In-Reply-To` → `References` (30-day window) → HMAC `+t_` token → `To:`-domain routing → CSS-selector body markers → magic markers `::tid:<id>::`.
 - Auto-responder detection: not just `Auto-Submitted` — also `Precedence: bulk|junk|list`, `X-Autoreply`, mailer-daemon From-addresses.

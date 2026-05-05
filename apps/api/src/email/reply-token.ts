@@ -1,7 +1,7 @@
-// Phase 3a — HMAC-signed reply-routing token (research §8).
+// Phase 3a — HMAC-signed reply-routing token.
 //
-// Atlas's reply-plus localpart is unsigned: anyone who knows the format and
-// guesses two values can inject messages into a ticket. We fix that here.
+// An unsigned reply-plus localpart lets anyone who knows the format and
+// guesses two values inject messages into a ticket. HMAC-signing closes that.
 //
 // Shape:
 //   reply+t.<workspaceID>.<ticketID>.<expiry>.<sigPrefix>@reply.usesalve.com

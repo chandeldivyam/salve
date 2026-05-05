@@ -20,8 +20,8 @@ Shared domain types + pure utilities. Mostly a placeholder right now — fills u
 
 The plan slates these for `packages/core/src/email/`:
 
-- `strip-quoted.ts` — TS port of Atlas's quoted-text-stripping selector list (`webapp/web/mailer/utils.py:432-492`). Removes `On <date>, <name> wrote:` and similar quote markers from inbound message bodies. Used by the inbound email driver.
-- `forward-from-colleague.ts` — detects when an internal admin forwards a customer's email (B2B common case). Reattributes the message to the original sender. Atlas pattern from `webapp/web/conversation/services/client_interfaces/email_scenarios/forward_from_colleague.py`.
+- `strip-quoted.ts` — quoted-text-stripping selector list. Removes `On <date>, <name> wrote:` and similar quote markers from inbound message bodies. Used by the inbound email driver.
+- `forward-from-colleague.ts` — detects when an internal admin forwards a customer's email (B2B common case). Reattributes the message to the original sender.
 - `subject-normalize.ts` — strips `Re:` / `Fwd:` / `Aw:` / `[Prefix]` / `Zendesk's "Request received:"` etc. for threading subject revalidation.
 - `reply-token.ts` — HMAC-signed reply-plus token shared between Phase 3a (signing in mailer) and Phase 3b (verifying in inbound parser). Format: `reply+t_<base32(ticketID)>_<base32(hmac)>@reply.usesalve.com`.
 
@@ -42,5 +42,4 @@ src/
 
 ## Where to look
 
-- Reference for Phase 3 ports: `tmp/research/atlas-email-deep-dive.md` (Sections 2–6 cover the patterns coming here).
 - Reference for SLA math: zbugs doesn't have SLA, so we'll improvise; Plain.com's documented SLA model is the inspiration.

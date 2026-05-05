@@ -46,3 +46,6 @@ store/
 # Biome cache
 .biome
 tmp/
+
+# Local docs / research notes
+docs/
