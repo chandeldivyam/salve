@@ -238,6 +238,7 @@ export const settingsActions = {
     scopes: ['settings:read'],
     idempotency: 'none',
     rest: { method: 'GET', path: '/settings/tags' },
+    cli: { command: ['settings', 'tags', 'list'] },
     mcp: { toolName: 'salve.settings.tags.list' },
   }),
   tagsCreate: defineAction({
@@ -247,7 +248,8 @@ export const settingsActions = {
     outputSchema: tagOutputSchema,
     scopes: ['settings:write'],
     idempotency: 'required',
-    rest: { method: 'POST', path: '/settings/tags' },
+    rest: { method: 'POST', path: '/settings/tags', successStatus: 201 },
+    cli: { command: ['settings', 'tags', 'create'] },
   }),
   tagsUpdate: defineAction({
     id: 'settings.tags.update',
@@ -257,6 +259,7 @@ export const settingsActions = {
     scopes: ['settings:write'],
     idempotency: 'optional',
     rest: { method: 'PATCH', path: '/settings/tags/:tagId', pathParams: ['tagId'] },
+    cli: { command: ['settings', 'tags', 'update'], positionals: ['tagId'] },
   }),
   tagsArchive: defineAction({
     id: 'settings.tags.archive',
@@ -266,6 +269,7 @@ export const settingsActions = {
     scopes: ['settings:write'],
     idempotency: 'optional',
     rest: { method: 'DELETE', path: '/settings/tags/:tagId', pathParams: ['tagId'] },
+    cli: { command: ['settings', 'tags', 'archive'], positionals: ['tagId'] },
   }),
   tagGroupsCreate: defineAction({
     id: 'settings.tagGroups.create',
@@ -274,7 +278,8 @@ export const settingsActions = {
     outputSchema: tagGroupOutputSchema,
     scopes: ['settings:write'],
     idempotency: 'required',
-    rest: { method: 'POST', path: '/settings/tag-groups' },
+    rest: { method: 'POST', path: '/settings/tag-groups', successStatus: 201 },
+    cli: { command: ['settings', 'tag-groups', 'create'] },
   }),
   tagGroupsUpdate: defineAction({
     id: 'settings.tagGroups.update',
@@ -284,6 +289,7 @@ export const settingsActions = {
     scopes: ['settings:write'],
     idempotency: 'optional',
     rest: { method: 'PATCH', path: '/settings/tag-groups/:groupId', pathParams: ['groupId'] },
+    cli: { command: ['settings', 'tag-groups', 'update'], positionals: ['groupId'] },
   }),
   tagGroupsArchive: defineAction({
     id: 'settings.tagGroups.archive',
@@ -293,6 +299,7 @@ export const settingsActions = {
     scopes: ['settings:write'],
     idempotency: 'optional',
     rest: { method: 'DELETE', path: '/settings/tag-groups/:groupId', pathParams: ['groupId'] },
+    cli: { command: ['settings', 'tag-groups', 'archive'], positionals: ['groupId'] },
   }),
   tagGroupsRestore: defineAction({
     id: 'settings.tagGroups.restore',
@@ -306,6 +313,7 @@ export const settingsActions = {
       path: '/settings/tag-groups/:groupId/restore',
       pathParams: ['groupId'],
     },
+    cli: { command: ['settings', 'tag-groups', 'restore'], positionals: ['groupId'] },
   }),
   customFieldsList: defineAction({
     id: 'settings.customFields.list',
@@ -315,6 +323,7 @@ export const settingsActions = {
     scopes: ['settings:read'],
     idempotency: 'none',
     rest: { method: 'GET', path: '/settings/custom-fields' },
+    cli: { command: ['settings', 'custom-fields', 'list'] },
     mcp: { toolName: 'salve.settings.custom_fields.list' },
   }),
   customFieldsCreate: defineAction({
@@ -324,7 +333,8 @@ export const settingsActions = {
     outputSchema: customFieldOutputSchema,
     scopes: ['settings:write'],
     idempotency: 'required',
-    rest: { method: 'POST', path: '/settings/custom-fields' },
+    rest: { method: 'POST', path: '/settings/custom-fields', successStatus: 201 },
+    cli: { command: ['settings', 'custom-fields', 'create'] },
   }),
   customFieldsUpdate: defineAction({
     id: 'settings.customFields.update',
@@ -338,6 +348,7 @@ export const settingsActions = {
       path: '/settings/custom-fields/:customFieldId',
       pathParams: ['customFieldId'],
     },
+    cli: { command: ['settings', 'custom-fields', 'update'], positionals: ['customFieldId'] },
   }),
   customFieldsArchive: defineAction({
     id: 'settings.customFields.archive',
@@ -351,6 +362,7 @@ export const settingsActions = {
       path: '/settings/custom-fields/:customFieldId',
       pathParams: ['customFieldId'],
     },
+    cli: { command: ['settings', 'custom-fields', 'archive'], positionals: ['customFieldId'] },
   }),
   emailDomainsCreate: defineAction({
     id: 'settings.email.domains.create',
@@ -359,7 +371,8 @@ export const settingsActions = {
     outputSchema: emailDomainSchema,
     scopes: ['settings:email:write'],
     idempotency: 'required',
-    rest: { method: 'POST', path: '/settings/email/domains' },
+    rest: { method: 'POST', path: '/settings/email/domains', successStatus: 201 },
+    cli: { command: ['settings', 'email', 'domains', 'create'] },
     mcp: { toolName: 'salve.settings.email_domain.create' },
   }),
   emailAddressesCreate: defineAction({
@@ -373,6 +386,11 @@ export const settingsActions = {
       method: 'POST',
       path: '/settings/email/domains/:sendingDomainId/addresses',
       pathParams: ['sendingDomainId'],
+      successStatus: 201,
+    },
+    cli: {
+      command: ['settings', 'email', 'addresses', 'create'],
+      positionals: ['sendingDomainId'],
     },
   }),
   emailRoutingRulesUpsert: defineAction({
@@ -386,6 +404,11 @@ export const settingsActions = {
       method: 'POST',
       path: '/settings/email/channels/:channelId/routing-rules',
       pathParams: ['channelId'],
+      successStatus: 201,
+    },
+    cli: {
+      command: ['settings', 'email', 'routing-rules', 'upsert'],
+      positionals: ['channelId'],
     },
   }),
   apiTokensList: defineAction({
@@ -396,6 +419,7 @@ export const settingsActions = {
     scopes: ['settings:read'],
     idempotency: 'none',
     rest: { method: 'GET', path: '/settings/api-tokens' },
+    cli: { command: ['settings', 'api-tokens', 'list'] },
   }),
   apiTokensCreate: defineAction({
     id: 'settings.apiTokens.create',
@@ -404,7 +428,8 @@ export const settingsActions = {
     outputSchema: apiTokenCreateOutputSchema,
     scopes: ['settings:write'],
     idempotency: 'required',
-    rest: { method: 'POST', path: '/settings/api-tokens' },
+    rest: { method: 'POST', path: '/settings/api-tokens', successStatus: 201 },
+    cli: { command: ['settings', 'api-tokens', 'create'] },
   }),
   apiTokensRevoke: defineAction({
     id: 'settings.apiTokens.revoke',
@@ -414,6 +439,7 @@ export const settingsActions = {
     scopes: ['settings:write'],
     idempotency: 'optional',
     rest: { method: 'DELETE', path: '/settings/api-tokens/:tokenId', pathParams: ['tokenId'] },
+    cli: { command: ['settings', 'api-tokens', 'revoke'], positionals: ['tokenId'] },
   }),
 } as const;
 

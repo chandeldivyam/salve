@@ -54,3 +54,9 @@ export function hasScopes(
 ): boolean {
   return required.every((scope) => hasScope(scopes, scope));
 }
+
+export {
+  type RoleForScopes as AppRoleForScopes,
+  scopesExceeding,
+  scopesForRole,
+} from '@opendesk/action-contracts';

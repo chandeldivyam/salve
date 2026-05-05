@@ -30,9 +30,17 @@ function registerActionTool(
 }
 
 function toolAnnotations(action: AnyActionContract) {
+  // readOnlyHint must be true only when EVERY scope is :read. A mixed
+  // scope set (e.g. tickets:read + tickets:write) means the action can
+  // mutate; the host's permission UI shouldn't claim read-only.
+  // idempotentHint only when the api-client / host actually mints a key —
+  // the CLI/MCP both auto-mint for `'required'` only, so `'optional'` is
+  // not a contract guarantee.
+  const allReads =
+    action.scopes.length > 0 && action.scopes.every((scope) => scope.endsWith(':read'));
   return {
-    ...(action.scopes.some((scope) => scope.endsWith(':read')) ? { readOnlyHint: true } : {}),
+    ...(allReads ? { readOnlyHint: true } : {}),
     ...(action.mcp?.destructive ? { destructiveHint: true } : {}),
-    ...(action.idempotency !== 'none' ? { idempotentHint: true } : {}),
+    ...(action.idempotency === 'required' ? { idempotentHint: true } : {}),
   };
 }

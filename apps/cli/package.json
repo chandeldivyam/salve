@@ -25,6 +25,7 @@
     "zod": "4.4.1"
   },
   "devDependencies": {
+    "@opendesk/action-contracts": "workspace:*",
     "@opendesk/api-client": "workspace:*",
     "@types/node": "25.6.0",
     "tsdown": "0.21.10",

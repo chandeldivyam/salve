@@ -34,7 +34,15 @@ export {
 } from './meta.js';
 export { buildOpenApiDocument, type OpenApiOptions } from './openapi.js';
 export { ACTION_BY_ID, type ActionID, ALL_ACTIONS } from './registry.js';
-export { isScope, SCOPES, type Scope, scopeImplies } from './scopes.js';
+export {
+  isScope,
+  type RoleForScopes,
+  SCOPES,
+  type Scope,
+  scopeImplies,
+  scopesExceeding,
+  scopesForRole,
+} from './scopes.js';
 export {
   apiTokenCreateOutputSchema,
   apiTokenIdInputSchema,

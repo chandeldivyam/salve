@@ -163,7 +163,7 @@ When adding a new action, you don't need to touch `client.ts` unless you're addi
 
 ## 6. CLI (`apps/cli`)
 
-Auto-derived from action contracts where possible. Look at `apps/cli/src/main.ts` for the dispatcher; per-domain branches are short.
+A hand-written dispatcher in `apps/cli/src/main.ts` routes verbs to `@opendesk/api-client` calls. The `cli` metadata on each action contract is the *declarative source* for what should be wired up — `apps/cli/src/coverage.test.ts` asserts every shipped CLI verb has a matching contract entry, so drift is caught at CI. (Earlier docs called this "auto-derived" — it isn't; the metadata exists for the test, the help text, and to future-proof a generator if we ever build one.)
 
 Conventions:
 

@@ -380,7 +380,10 @@ export class SalveClient {
     const headers = new Headers(extraHeaders);
     headers.set('Accept', 'application/json');
     headers.set('Authorization', `Bearer ${this.#token}`);
-    if (this.#workspaceId) headers.set('X-Salve-Workspace', this.#workspaceId);
+    // Note: workspace switching via header is intentionally not supported.
+    // The token's referenceId is the source of truth for workspace; sending
+    // a header would be silently ignored by `/v1` (server doesn't read it),
+    // which is misleading. `salve workspace use` is informational only.
     if (idempotencyKey) headers.set('Idempotency-Key', idempotencyKey);
     if (body !== undefined && !headers.has('Content-Type')) {
       headers.set('Content-Type', 'application/json');

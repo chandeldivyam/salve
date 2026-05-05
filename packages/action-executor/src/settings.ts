@@ -3,6 +3,8 @@ import { defaultKeyHasher } from '@better-auth/api-key';
 import {
   type ActionOutput,
   type SettingsActionID,
+  scopesExceeding,
+  scopesForRole,
   settingsActions,
 } from '@opendesk/action-contracts';
 import { authSchema, schema as dbSchema } from '@opendesk/db';
@@ -197,14 +199,21 @@ export const createEmailDomainExecutor: Executor<
     mailFromSubdomain: process.env.MAIL_FROM_SUBDOMAIN ?? 'mail',
     channelConfig: emailChannelConfig(id, ctx.auth.workspaceID),
   });
+  // Read back the row the mutator just persisted so any DKIM tokens / status
+  // already populated synchronously appear in the response. The previous
+  // synthetic shape always reported `dkimTokens: []` and `provisionStatus:
+  // 'pending'`, which disagreed with state observable elsewhere via Zero.
+  const row = await readSendingDomainRow(ctx, id);
   return mapEmailDomain({
-    id,
+    id: row.id,
     channelID,
-    domain,
-    dkimTokens: [],
-    mailFromSubdomain: process.env.MAIL_FROM_SUBDOMAIN ?? 'mail',
-    provisionStatus: 'pending',
-    dnsStatus: 'pending',
+    domain: row.domain,
+    dkimTokens: Array.isArray(row.dkimTokens)
+      ? (row.dkimTokens as Array<{ name: string; value: string }>)
+      : [],
+    mailFromSubdomain: row.mailFromSubdomain,
+    provisionStatus: row.provisionStatus,
+    dnsStatus: row.dnsStatus,
   });
 };
 
@@ -273,10 +282,22 @@ export const upsertEmailRoutingRuleExecutor: Executor<
 export const listApiTokensExecutor: Executor<typeof settingsActions.apiTokensList> = async (
   ctx,
 ) => {
+  const isAdmin = ctx.auth.role === 'owner' || ctx.auth.role === 'admin';
+  // Non-admin callers see only their own tokens to avoid disclosing other
+  // principals' token names/prefixes/last-used metadata. Admins see the full
+  // workspace set so they can revoke service-account tokens they minted.
+  const baseFilter = eq(authSchema.apikey.referenceId, ctx.auth.workspaceID);
+  const filter = isAdmin
+    ? baseFilter
+    : and(
+        baseFilter,
+        eq(authSchema.apikey.principalKind, 'user'),
+        eq(authSchema.apikey.principalId, ctx.auth.sub),
+      );
   const rows = await ctx.db
     .select()
     .from(authSchema.apikey)
-    .where(eq(authSchema.apikey.referenceId, ctx.auth.workspaceID))
+    .where(filter)
     .orderBy(asc(authSchema.apikey.createdAt));
   return { data: rows.map(mapApiToken) };
 };
@@ -291,6 +312,21 @@ export const createApiTokenExecutor: Executor<typeof settingsActions.apiTokensCr
       type: 'forbidden',
       code: 'api_tokens.user_principal_required',
       message: 'Only user principals can create personal API tokens',
+    });
+  }
+  // Cap requested scopes to the caller's effective envelope. Bearer-auth
+  // callers (PAT minting another PAT) are bounded by their own scopes —
+  // never lets a `settings:write`-only token mint `tickets:write`. Cookie
+  // callers don't carry an explicit scope set; we cap to `scopesForRole`.
+  const grantedEnvelope = ctx.auth.scopes ?? scopesForRole(ctx.auth.role);
+  const exceeding = scopesExceeding(input.scopes, grantedEnvelope);
+  if (exceeding.length > 0) {
+    throw new ActionExecutorError({
+      status: 403,
+      type: 'forbidden',
+      code: 'api_tokens.scope_exceeds_caller',
+      message: `Requested scopes exceed caller's privilege: ${exceeding.join(', ')}`,
+      field: 'scopes',
     });
   }
   const keyId = actionResourceID(ctx, settingsActions.apiTokensCreate.id, 'api-token');

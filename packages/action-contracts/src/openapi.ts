@@ -198,7 +198,7 @@ function operationForAction(action: AnyActionContract, registry: SchemaRegistry)
     },
   };
 
-  if (METHODS_WITH_BODY.has(action.rest.method)) {
+  if (METHODS_WITH_BODY.has(action.rest.method) && actionHasBody(action)) {
     operation.requestBody = {
       required: true,
       content: {
@@ -210,6 +210,17 @@ function operationForAction(action: AnyActionContract, registry: SchemaRegistry)
   }
 
   return operation;
+}
+
+function actionHasBody(action: AnyActionContract): boolean {
+  // Prefer explicit metadata if set; otherwise treat any body-bearing method
+  // as carrying a JSON body unless the input schema has nothing left after
+  // path params are stripped (status routes like /tickets/:id/close).
+  if (action.rest.hasBody !== undefined) return action.rest.hasBody;
+  const stripped = bodySchemaForAction(action);
+  if (!(stripped instanceof z.ZodObject)) return true;
+  const shape = (stripped as z.ZodObject<z.ZodRawShape>).shape;
+  return Object.keys(shape).length > 0;
 }
 
 function collectParameters(
@@ -285,10 +296,10 @@ function bodySchemaForAction(action: AnyActionContract): z.ZodTypeAny {
 }
 
 function successStatus(action: AnyActionContract): string {
-  if (action.rest.method === 'POST' && !action.rest.path.includes(':')) return '201';
-  if (action.rest.method === 'POST' && action.rest.path.endsWith('/replies')) return '201';
-  if (action.rest.method === 'POST' && action.rest.path.endsWith('/notes')) return '201';
-  if (action.rest.method === 'DELETE' && !action.outputSchema) return '204';
+  // Single source of truth: the contract's `rest.successStatus`. Inferring
+  // from path/method is fragile and was producing the wrong code for routes
+  // like `/customers/:id/events` (201) and email-domain create (201).
+  if (action.rest.successStatus !== undefined) return String(action.rest.successStatus);
   return '200';
 }
 

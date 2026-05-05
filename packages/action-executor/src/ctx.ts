@@ -1,4 +1,9 @@
-import type { ActionInput, ActionOutput, AnyActionContract } from '@opendesk/action-contracts';
+import type {
+  ActionInput,
+  ActionOutput,
+  AnyActionContract,
+  Scope,
+} from '@opendesk/action-contracts';
 import type { Database } from '@opendesk/db';
 
 export type ExecutorRole = 'owner' | 'admin' | 'agent' | null;
@@ -9,6 +14,11 @@ export interface ExecutorAuth {
   workspaceID: string;
   role: ExecutorRole;
   principalKind: ExecutorPrincipalKind;
+  // Bearer-token scopes if the caller authenticated via PAT/service-account.
+  // Undefined for cookie-authenticated callers (the dashboard). Executors that
+  // need to bound a granted privilege should treat undefined as "use the role's
+  // default envelope" — see scopesForRole in apps/api/src/public-api/scopes.ts.
+  scopes?: readonly Scope[];
 }
 
 export interface ExecutorCtx {

@@ -55,6 +55,7 @@ export function actionHandler<C extends AnyActionContract>(
           workspaceID: auth.workspaceID,
           role: auth.role,
           principalKind: auth.principalKind,
+          scopes: auth.scopes,
         },
         idempotencyKey,
       });

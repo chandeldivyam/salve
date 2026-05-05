@@ -97,7 +97,8 @@ export const viewActions = {
     outputSchema: viewOutputSchema,
     scopes: ['views:write'],
     idempotency: 'required',
-    rest: { method: 'POST', path: '/views' },
+    rest: { method: 'POST', path: '/views', successStatus: 201 },
+    cli: { command: ['views', 'create'] },
   }),
   update: defineAction({
     id: 'views.update',
@@ -107,6 +108,7 @@ export const viewActions = {
     scopes: ['views:write'],
     idempotency: 'optional',
     rest: { method: 'PATCH', path: '/views/:viewId', pathParams: ['viewId'] },
+    cli: { command: ['views', 'update'], positionals: ['viewId'] },
   }),
   delete: defineAction({
     id: 'views.delete',
@@ -116,6 +118,7 @@ export const viewActions = {
     scopes: ['views:write'],
     idempotency: 'optional',
     rest: { method: 'DELETE', path: '/views/:viewId', pathParams: ['viewId'] },
+    cli: { command: ['views', 'delete'], positionals: ['viewId'] },
     mcp: { toolName: 'salve.views.delete', destructive: true },
   }),
   tickets: defineAction({

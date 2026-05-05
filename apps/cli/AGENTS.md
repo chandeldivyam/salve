@@ -1,6 +1,6 @@
 # apps/cli · AGENTS.md
 
-The `salve` CLI. Auto-derives commands from `@opendesk/action-contracts` `cli` metadata + a small dispatcher for custom rendering. Built with `tsdown`; ships as a single `dist/salve.mjs`. Read root `AGENTS.md` and `guidelines/agent-platform.md` first.
+The `salve` CLI. A hand-written dispatcher in `src/main.ts` that routes verbs to `@opendesk/api-client` calls. The `cli` metadata on each action contract is the **declarative source** for what verbs should exist (and is asserted by a coverage test) — it doesn't drive registration. Built with `tsdown`; ships as a single `dist/salve.mjs`. Read root `AGENTS.md` and `guidelines/agent-platform.md` first.
 
 ## Layout
 
@@ -22,7 +22,7 @@ src/
 
 ## Notable patterns
 
-- **Most commands are thin.** They read positionals + flags, call `client.<namespace>.<verb>(...)` (or `client.action(actionId, input)`), and hand the response to the right renderer. Adding a verb usually means adding metadata to the action contract and one branch to `main.ts` *only if* the response needs custom rendering (markdown, multi-table, etc.).
+- **Most commands are thin.** They read positionals + flags, call `client.<namespace>.<verb>(...)` (or `client.action(actionId, input)`), and hand the response to the right renderer. Adding a verb usually means adding metadata to the action contract *and* one branch to the dispatcher in `main.ts`. The metadata isn't auto-walked — the test (`apps/cli/src/coverage.test.ts`) asserts every CLI verb tree corresponds to an action contract that declares it, so drift is caught at CI.
 - **Output mode resolution** (in `output/mode.ts`): `--json` / `--jsonl` / `--pretty` / `--yaml` / `--table` flags win; otherwise `json` if stdout is not a TTY (pipe), `pretty` otherwise. `NO_COLOR=1` and `--no-color` disable ANSI.
 - **Input parsing**: positionals come first, then `--key value` flags, then `--bool` / `--no-bool`. Custom — we don't use `commander`/`yargs` because they don't support TanStack-style nested verb trees cleanly.
 - **JSON inputs to flags**: `--filter '{"status":"open"}'` is parsed as JSON loosely (single-quoted, double-quoted, or unquoted JSON-ish strings work). See `parseLooseJson` in `main.ts`.

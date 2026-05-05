@@ -19,6 +19,7 @@ import {
   deliverMessageRecovery,
   processProviderWebhook,
   provisionDomain,
+  pruneIdempotencyRecords,
   routeInboundMessage,
   verifyDomain,
 } from './inngest/functions/index.js';
@@ -232,6 +233,7 @@ app.use(
       processProviderWebhook,
       deliverMessageRecovery,
       bounceRateWatchdog,
+      pruneIdempotencyRecords,
     ],
     serveOrigin: process.env.INNGEST_SERVE_ORIGIN ?? 'http://host.docker.internal:3001',
   }) as MiddlewareHandler,

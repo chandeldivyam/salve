@@ -49,6 +49,7 @@ export const metaActions = {
     scopes: [],
     idempotency: 'none',
     rest: { method: 'GET', path: '/_meta/workspaces' },
+    cli: { command: ['workspace', 'list'] },
     mcp: { toolName: 'salve.workspace.list' },
   }),
 } as const;

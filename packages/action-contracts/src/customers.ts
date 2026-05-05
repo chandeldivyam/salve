@@ -189,7 +189,12 @@ export const customerActions = {
     scopes: ['customers:write'],
     idempotency: 'required',
     auditEventKind: 'customer.note_created',
-    rest: { method: 'POST', path: '/customers/:customerId/notes', pathParams: ['customerId'] },
+    rest: {
+      method: 'POST',
+      path: '/customers/:customerId/notes',
+      pathParams: ['customerId'],
+      successStatus: 201,
+    },
   }),
   notesUpdate: defineAction({
     id: 'customers.notes.update',
@@ -243,7 +248,12 @@ export const customerActions = {
     outputSchema: customerEventIngestOutputSchema,
     scopes: ['customers:write'],
     idempotency: 'required',
-    rest: { method: 'POST', path: '/customers/:customerId/events', pathParams: ['customerId'] },
+    rest: {
+      method: 'POST',
+      path: '/customers/:customerId/events',
+      pathParams: ['customerId'],
+      successStatus: 201,
+    },
   }),
   customFieldSet: defineAction({
     id: 'customers.customField.set',

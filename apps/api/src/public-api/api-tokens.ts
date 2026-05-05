@@ -13,7 +13,13 @@ import { and, eq } from 'drizzle-orm';
 import type { Context } from 'hono';
 import { z } from 'zod';
 import { authOf } from '../middleware.js';
-import { API_SCOPES, type ApiScope, permissionStatementsFromScopes } from './scopes.js';
+import {
+  API_SCOPES,
+  type ApiScope,
+  permissionStatementsFromScopes,
+  scopesExceeding,
+  scopesForRole,
+} from './scopes.js';
 
 const PAT_PREFIX = 'slv_pat_';
 const SVC_PREFIX = 'slv_svc_';
@@ -58,6 +64,21 @@ export async function handleCreatePat(c: Context): Promise<Response> {
   const parsed = createPatBody.safeParse(json);
   if (!parsed.success) {
     return c.json({ error: 'invalid', details: parsed.error.flatten() }, 400);
+  }
+
+  // Cap requested scopes to the role's envelope so an agent-role caller
+  // cannot mint a PAT carrying scopes their own role doesn't grant. Cookie
+  // callers don't carry an explicit scope set; we cap to scopesForRole.
+  const grantedEnvelope = ctx.scopes ?? scopesForRole(ctx.role);
+  const exceeding = scopesExceeding(parsed.data.scopes, grantedEnvelope);
+  if (exceeding.length > 0) {
+    return c.json(
+      {
+        error: 'scope_exceeds_caller',
+        details: { exceeding },
+      },
+      403,
+    );
   }
 
   // Direct apikey-row insert. Same storage shape Better Auth's plugin uses
@@ -166,6 +187,21 @@ export async function handleCreateServiceAccount(c: Context): Promise<Response> 
   const parsed = createServiceAccountBody.safeParse(json);
   if (!parsed.success) {
     return c.json({ error: 'invalid', details: parsed.error.flatten() }, 400);
+  }
+
+  // Service-account creation is admin-only (requireWorkspaceAdmin above), but
+  // we still cap the scopes to the role's envelope so the same code path is
+  // safe if the role gate ever loosens.
+  const grantedEnvelope = ctx.scopes ?? scopesForRole(ctx.role);
+  const exceeding = scopesExceeding(parsed.data.scopes, grantedEnvelope);
+  if (exceeding.length > 0) {
+    return c.json(
+      {
+        error: 'scope_exceeds_caller',
+        details: { exceeding },
+      },
+      403,
+    );
   }
 
   const db = getDb();

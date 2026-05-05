@@ -11,17 +11,25 @@
 //            stored response. Otherwise 409 — the agent reused the key for a
 //            different payload (almost certainly a bug).
 //          • If pending (status == null): another request is mid-flight on the
-//            same key. Return 409 "in_progress"; the client should retry shortly.
-//          • Stale pending (createdAt > 60s): treat as crashed; reclaim by
-//            updating the row's createdAt and run the executor.
+//            same key. If request_hash differs → 409 mismatch (don't take over
+//            an in-flight payload with a different one). Otherwise return 409
+//            "in_progress"; the client should retry shortly.
+//          • Stale pending (createdAt > STALE_PENDING_MS): treat as crashed.
+//            Reclaim only if request_hash matches AND the row's createdAt
+//            hasn't moved (CAS), otherwise 409 mismatch / in_progress.
 //
-// Pruning: not done here. A scheduled Inngest job will drop records older than
-// 24h (see RFC §6.5). We don't try to prune inline.
+// Pruning: not done here. The `idempotencyRecordPrune` Inngest cron in
+// `apps/api/src/inngest/functions/` drops records older than 24h. The
+// `idempotency_record_created_at_idx` index keeps that scan cheap.
 
 import { type Database, schema } from '@opendesk/db';
 import { and, sql as dsql, eq } from 'drizzle-orm';
 
-const STALE_PENDING_MS = 60_000;
+// Five minutes. Has to clear long executor tail latencies (multi-mutation
+// transactions, Inngest dispatch under load) without blocking the same key
+// indefinitely if a worker actually crashed. 60s was tight enough that a
+// retry could land mid-execution and double-dispatch side effects.
+const STALE_PENDING_MS = 5 * 60_000;
 
 export interface IdempotencyExecutorResult {
   status: number;
@@ -130,13 +138,20 @@ async function inspectExisting(
     };
   }
 
+  // Pending. Don't ever let a different request body take over an in-flight
+  // or crashed key — even after staleness. The agent reused the key for a
+  // different payload, which is a contract violation regardless of timing.
+  if (row.requestHash !== requestHash) return { kind: 'mismatch' };
+
   // Pending. Stale (crashed)?
   const ageMs = Date.now() - row.createdAt.getTime();
   if (ageMs >= STALE_PENDING_MS) {
+    // CAS on (responseStatus IS NULL, requestHash, createdAt). Two retries
+    // racing the same stale row: only one passes; the other's predicate
+    // fails because we just bumped createdAt and falls through to in_progress.
     const reclaimed = await db
       .update(schema.idempotencyRecord)
       .set({
-        requestHash,
         responseStatus: null,
         responseBody: null,
         createdAt: new Date(),
@@ -147,8 +162,9 @@ async function inspectExisting(
           eq(schema.idempotencyRecord.workspaceId, workspaceID),
           eq(schema.idempotencyRecord.actionId, actionID),
           eq(schema.idempotencyRecord.key, key),
-          // CAS: only reclaim if the row is still pending and still stale.
           dsql`${schema.idempotencyRecord.responseStatus} IS NULL`,
+          eq(schema.idempotencyRecord.requestHash, requestHash),
+          eq(schema.idempotencyRecord.createdAt, row.createdAt),
         ),
       )
       .returning({ key: schema.idempotencyRecord.key });

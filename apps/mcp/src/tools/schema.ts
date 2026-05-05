@@ -31,9 +31,29 @@ export function compactInputSchema(
 function compactField(schema: JsonSchema): z.ZodTypeAny {
   const variants = schema.anyOf ?? schema.oneOf;
   if (variants) {
+    // `priority: ticketPrioritySchema.optional()` round-trips as
+    // anyOf:[{enum:[…]}, {type:"null"}]. The previous code took length 1 as a
+    // signal to compact and otherwise demoted to z.unknown(), losing the enum
+    // for nullable+optional fields. Hosts then surfaced a free-form string in
+    // their UI even though the executor would reject anything not in the set.
+    // Strip the null variant and recurse on whatever's left, then re-apply
+    // nullable() if the original union admitted null.
     const nonNull = variants.filter((variant) => variant.type !== 'null');
     const hasNull = nonNull.length !== variants.length;
-    const field = nonNull.length === 1 ? compactField(nonNull[0] ?? {}) : z.unknown();
+    let field: z.ZodTypeAny;
+    if (nonNull.length === 1) {
+      field = compactField(nonNull[0] ?? {});
+    } else if (nonNull.length > 1) {
+      // Multiple non-null shapes (rare in practice). Take a union if all are
+      // representable; fall back to unknown only when nothing fits.
+      const compacted = nonNull.map((v) => compactField(v ?? {}));
+      field =
+        compacted.length >= 2
+          ? z.union(compacted as unknown as [z.ZodTypeAny, z.ZodTypeAny, ...z.ZodTypeAny[]])
+          : (compacted[0] ?? z.unknown());
+    } else {
+      field = z.unknown();
+    }
     return hasNull ? field.nullable() : field;
   }
 

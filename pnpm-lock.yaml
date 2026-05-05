@@ -115,6 +115,9 @@ importers:
         specifier: 4.4.1
         version: 4.4.1
     devDependencies:
+      '@opendesk/action-contracts':
+        specifier: workspace:*
+        version: link:../../packages/action-contracts
       '@opendesk/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client

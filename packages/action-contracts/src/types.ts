@@ -20,6 +20,14 @@ export interface ActionContract<
     method: HttpMethod;
     path: string;
     pathParams?: readonly string[];
+    // HTTP success status. Defaults to 200; set to 201 for creates that return
+    // a fresh resource, 204 for ops with empty bodies. Drives both the route
+    // handler's response code and the OpenAPI doc — keep them in lock-step.
+    successStatus?: 200 | 201 | 204;
+    // Whether the request carries a JSON body. Defaults to true for non-GET.
+    // Status routes (POST /tickets/:id/close) carry only path params and set
+    // this to false so OpenAPI does not declare a required body schema.
+    hasBody?: boolean;
   };
   cli?: {
     command: readonly string[];
