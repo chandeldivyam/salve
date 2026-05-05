@@ -1,6 +1,19 @@
 # apps/web · AGENTS.md
 
-The agent UI. React 19 + Vite 8 + TanStack Router (file-based) + Tailwind v4 + Zero. Read the root `AGENTS.md` first.
+The agent UI. React 19 + Vite 8 + TanStack Router (file-based) + Tailwind v4 + Zero. Read the root `AGENTS.md`, `guidelines/architecture.md`, `guidelines/conventions.md`, and `guidelines/frontend.md` first.
+
+## Boundary rule (non-negotiable)
+
+> **The web app never calls `/v1`.**
+
+- Reads come from Zero subscriptions: `useQuery(queries.<name>(args), CACHE_*)`. Queries live in `packages/zero-schema/src/queries.ts`.
+- Writes go through Zero mutators: `zero.mutate.<ns>.<action>(args)`. Mutators live in `packages/mutators/src/index.ts`.
+- Side effects (email send, webhook dispatch, etc.) are emitted by **server-mutator post-commit hooks** in `apps/api/src/server-mutators.ts`, which call `inngest.send(...)`. Never trigger Inngest directly from the React app.
+- If something needs to happen that doesn't fit the Zero mutator model (because it has a programmatic-only audience, or it's an LLM tool), it belongs on `/v1` (action contract) — and a CLI / integration consumer drives it. The web UI doesn't touch `/v1`.
+
+Why: `/v1` skips the local Zero replica, breaks optimistic UI, requires a bearer token (we have a JWT cookie), and produces split state. It's the wrong tool for the React app.
+
+For the full reasoning + a decision table, see `guidelines/architecture.md`.
 
 ## Notable patterns
 

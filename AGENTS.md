@@ -1,6 +1,12 @@
 # opendesk · AGENTS.md
 
-Read this before touching anything. It's how the project operates and what we've learned along the way. Per-area details live in `AGENTS.md` files inside each `apps/*` and `packages/*`.
+Read this before touching anything. It's how the project operates and what we've learned along the way. Per-area details live in `AGENTS.md` files inside each `apps/*` and `packages/*`. Cross-cutting practice lives in `guidelines/`:
+
+- `guidelines/architecture.md` — **read this first**. Which surface (Zero+Inngest vs. action contract → REST/CLI/MCP) is for which work. The boundary rule is non-negotiable.
+- `guidelines/agent-platform.md` — building actions: contracts, executors, REST/CLI/MCP wiring, post-mortems.
+- `guidelines/conventions.md` + `guidelines/frontend.md` — UI conventions for `apps/web`.
+- `guidelines/copy-guide.md` — voice, microcopy, empty states.
+- `docs/agent-platform-rfc.md` — the canonical narrative for Phases A–H of the public-API/CLI/MCP work.
 
 ---
 
@@ -8,9 +14,19 @@ Read this before touching anything. It's how the project operates and what we've
 
 - **Internal name (folder, npm scope, env vars, repo, code identifiers): `opendesk`** — `@opendesk/*` packages, `OPENDESK_*` env vars.
 - **Public brand: Salve** at `usesalve.com`. Tagline *"Healing the help-desk."* Used in customer-facing copy only — never in package names or code identifiers.
-- **What it is**: B2B multi-tenant help-desk SaaS. Open-source alternative to Intercom/Zendesk.
-- **Stack**: TypeScript + pnpm 10 + Turborepo + Vite 8 + React 19 + TanStack Router + Tailwind v4 + shadcn-derived UI + Hono + Drizzle + `@rocicorp/zero@1.3.0` + Inngest + Postgres + Biome 2.4. Hosting: AWS via SST v3 (Phase 6).
+- **What it is**: B2B multi-tenant help-desk SaaS. Open-source alternative to Intercom/Zendesk, with a public REST/CLI/MCP surface (`/v1`, `salve`, `salve-mcp`) for programmatic + agentic consumers.
+- **Stack**: TypeScript + pnpm 10 + Turborepo + Vite 8 + React 19 + TanStack Router + Tailwind v4 + shadcn-derived UI + Hono + Drizzle + `@rocicorp/zero@1.3.0` + Inngest + Postgres + Biome 2.4 + Zod 4 + `@modelcontextprotocol/sdk` 1.x. Hosting: AWS via SST v3 (Phase 6).
 - **Linter/formatter**: **Biome only.** Do not introduce ESLint or Prettier.
+
+## The two write paths (boundary rule)
+
+> **The web app never calls `/v1`. External consumers never call Zero.**
+
+- `apps/web` reads via Zero subscriptions (`useQuery` against `defineQueries`) and writes via Zero mutators (`zero.mutate.<ns>.<action>`).
+- `apps/cli`, `apps/mcp`, and any external integration go through `/v1` (the public REST API), powered by typed action contracts.
+- Both paths converge server-side — action executors call `ctx.runMutation('<ns>.<action>', args)`, which runs the same `defineMutators` code the web app does. Business logic lives in one place; surfaces are derived.
+
+If you're adding code, decide which path you're on (see `guidelines/architecture.md` table) before you start.
 
 ## Where to read first
 
@@ -113,34 +129,65 @@ agent-browser find role button 'Sign in' click
 - 6-layer threading: `In-Reply-To` → `References` (30-day window) → HMAC `+t_` token → `To:`-domain routing → CSS-selector body markers → magic markers `::tid:<id>::`.
 - Auto-responder detection: not just `Auto-Submitted` — also `Precedence: bulk|junk|list`, `X-Autoreply`, mailer-daemon From-addresses.
 
+### Agent platform (Phases A–H, shipped 2026-05-05)
+
+The public REST API at `/v1`, the `salve` CLI, and the `salve-mcp` MCP server share one pipeline. Adding code to any of them follows `guidelines/agent-platform.md`. The condensed learnings:
+
+- **Action contract is the single source of truth.** Zod input/output + `scopes` + `idempotency` + `rest` / `cli` / `mcp` metadata in `packages/action-contracts/src/<domain>.ts` drives every consumer. Adding an action is a metadata change; the REST route, the CLI verb, the MCP tool, and the OpenAPI doc are derived.
+- **Use `z.string().uuid()` for input ids, not `z.string().min(1)`.** A bare `min(1)` lets non-UUID strings reach postgres → `22P02` → `500 internal_error`. Mirror what `customers.ts` does in every new contract. (post-H hardening, 2026-05-05)
+- **Two layers of idempotency.** HTTP `Idempotency-Key` header is record-and-replay (idempotency-store). `actionResourceID(ctx, actionID, suffix)` is a deterministic UUID derived from the key, so the *generated row id* is also stable across retries. Both required for safe writes.
+- **Wrap multi-write executors in `ctx.db.transaction(...)`.** Atomicity matters; the events-ingest executor learned this in Phase E.
+- **Convert `Date` to ISO + `::timestamptz` cast** when binding through `sql\`…\``. postgres-js refuses raw Date instances.
+- **Use `inArray(col, values)` from drizzle-orm**, never `${col} = ANY(${jsArray})`. postgres-js doesn't auto-serialise JS arrays.
+- **MCP `tools/list` budget is 16 KB.** A unit test asserts this. Keep contract `summary` strings tight.
+- **Build a live PAT-driven harness for every phase.** Each shipped phase has caught bugs no unit test would have surfaced. The harness pattern: spawn the binary against `localhost:3001` with a real PAT, exercise every verb, check error paths.
+- **Hint table in `packages/api-client/src/hints.ts` is the single source of truth.** The CLI, MCP, and SDK all consume it. Don't inline hint strings in formatters; add to the table.
+
 ### Workflow
 
 - **Verify versions before pinning.** Run `npm view <pkg> version` and check `dist-tags`. Old local clones lie.
 - **Look at agents.md / llms.txt** on the project website before trusting docs — Zero publishes one specifically for AI agents. Saved us writing pre-1.0 patterns.
 - **Read the screenshots, don't trust the agent's summary.** Browser-driven design review caught CORS blockers that curl tests missed.
 - **Commit per phase, not per agent run** — but always commit a working state before dispatching the next phase. Six clean commits is better than one giant one.
+- **For agent-platform changes, run the live harness against localhost:3001 with a real PAT before declaring done.** Unit tests are necessary but never sufficient.
 
 ## Repo navigation map
 
 ```
 opendesk/
 ├── apps/
-│   ├── api/            # Hono server: auth, JWT, /api/zero/*, /api/files/*, server-mutators
+│   ├── api/            # Hono server: auth, JWT, /api/zero/*, /api/files/*, /v1/*, server-mutators
+│   ├── cli/            # `salve` CLI binary — auto-derived from action contracts (Phase G)
+│   ├── inngest/        # Placeholder for Inngest functions (functions still live in apps/api)
+│   ├── mcp/            # `salve-mcp` stdio MCP server (Phase H)
 │   ├── web/            # React + Vite + TanStack Router + Tailwind v4 (the agent UI)
 │   └── zero-cache/     # Thin runner; zero-cache-dev wired to packages/zero-schema
 ├── packages/
-│   ├── core/           # Shared domain types/utils (placeholder, fills up Phase 3+)
-│   ├── db/             # Drizzle schema + migrations + client (postgres driver)
-│   ├── mutators/       # Custom mutators (defineMutators) — runs on client + server
-│   ├── ui/             # shadcn-derived primitives, Tailwind v4 brand tokens
-│   └── zero-schema/    # Zero schema mirror + defineQueries (applyWorkspaceScope)
+│   ├── action-contracts/  # Zod schemas + REST/CLI/MCP metadata (single source of truth for /v1)
+│   ├── action-executor/   # Server-side executor functions (one per action)
+│   ├── api-client/        # Typed JS/TS SDK for /v1 — used by CLI, MCP, integrations
+│   ├── core/              # Shared domain types/utils (placeholder, fills up Phase 3+)
+│   ├── db/                # Drizzle schema + migrations + client (postgres driver)
+│   ├── mutators/          # Custom mutators (defineMutators) — runs on client + server
+│   ├── ui/                # shadcn-derived primitives, Tailwind v4 brand tokens
+│   └── zero-schema/       # Zero schema mirror + defineQueries (applyWorkspaceScope)
 ├── docker/
 │   └── docker-compose.yml  # postgres, redis, inngest, mailpit, minio, adminer
+├── docs/
+│   └── agent-platform-rfc.md  # Canonical narrative for the public-API/CLI/MCP work
+├── guidelines/
+│   ├── architecture.md     # Boundary rule + which-surface-for-what (read first)
+│   ├── agent-platform.md   # Building actions: contracts, executors, REST/CLI/MCP, post-mortems
+│   ├── conventions.md      # UI/web engineering conventions
+│   ├── frontend.md         # The full frontend playbook (Linear/zbugs-aligned)
+│   └── copy-guide.md       # Voice + microcopy + empty states
 ├── scripts/
-│   └── init-db.sql     # extensions: uuid-ossp, pg_trgm, unaccent, pgcrypto
-├── tmp/                # gitignored: research/, design-review/
+│   └── init-db.sql        # extensions: uuid-ossp, pg_trgm, unaccent, pgcrypto
+├── tmp/                   # gitignored: research/, design-review/
 └── biome.json, turbo.json, pnpm-workspace.yaml, tsconfig.base.json
 ```
 
 `pnpm dev` runs web (5173) + api (3001) + zero-cache (4848) in parallel via Turbo.
 `pnpm dev:docker:up` boots all backing services. `pnpm dev:clean` resets state.
+
+CLI dev: `SALVE_API_URL=http://localhost:3001 pnpm --filter @opendesk/cli dev <args>`. MCP dev: `pnpm --filter @opendesk/mcp build` then point your MCP host at `dist/salve-mcp.mjs`.

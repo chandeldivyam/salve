@@ -4,6 +4,17 @@ Living rules for `apps/web` and the Zero schema package. Rules here are
 enforced; deviations need a comment explaining why. Derived from the
 [2026-05-01 audit](./audit-2026-05-01.md), zbugs, and current Zero docs.
 
+> **Scope note.** This file covers the UI write path: Zero queries, Zero
+> mutators, the React app, settings pages, copy. Anything programmatic
+> (REST API, CLI, MCP, action contracts, executors) lives in
+> `guidelines/agent-platform.md`. The boundary between the two is in
+> `guidelines/architecture.md` — read that first if you're not sure
+> which side a piece of work falls on.
+>
+> The non-negotiable rule: **the web app never calls `/v1`. External
+> consumers never call Zero.** Both surfaces converge server-side
+> through `defineMutators`, so business logic stays in one place.
+
 ---
 
 ## 1. Queries (Zero)
