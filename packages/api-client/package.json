@@ -1,0 +1,30 @@
+{
+  "name": "@opendesk/api-client",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "files": [
+    "README.md",
+    "src/**/*.ts",
+    "!src/*.test.ts"
+  ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types.ts"
+  },
+  "scripts": {
+    "type-check": "tsc -p tsconfig.json --noEmit",
+    "format": "biome format --write .",
+    "check": "biome check .",
+    "test": "tsx --test src/*.test.ts"
+  },
+  "dependencies": {
+    "@opendesk/action-contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "25.6.0",
+    "tsx": "4.21.0"
+  }
+}

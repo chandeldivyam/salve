@@ -32,6 +32,7 @@ interface DeliveryContextRow {
   short_id: number;
   title: string;
   message_id: string;
+  message_deleted_at: Date | null;
   body_html: string;
   body_text: string;
   customer_id: string;
@@ -84,6 +85,16 @@ export const deliverMessage = inngest.createFunction(
         status: loaded.outbound_status,
       });
       return { ok: true, skipped: 'already-handled' as const };
+    }
+
+    if (loaded.message_deleted_at) {
+      await step.run('mark-deleted-before-delivery', async () =>
+        updateOutboundStatus(getClient(), loaded.outbound_message_id, {
+          status: 'suppressed',
+          error: 'message was deleted before delivery',
+        }),
+      );
+      return { ok: true, skipped: 'message-deleted' as const };
     }
 
     if (loaded.suspended_at) {
@@ -212,6 +223,7 @@ async function loadDeliveryContext(
       t.short_id,
       t.title,
       m.id AS message_id,
+      m.deleted_at AS message_deleted_at,
       m.body_html,
       m.body_text,
       cust.id AS customer_id,

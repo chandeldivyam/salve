@@ -1,0 +1,28 @@
+{
+  "name": "@opendesk/action-contracts",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "files": [
+    "src/**/*.ts"
+  ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./customers": "./src/customers.ts",
+    "./meta": "./src/meta.ts",
+    "./openapi": "./src/openapi.ts",
+    "./settings": "./src/settings.ts",
+    "./tickets": "./src/tickets.ts",
+    "./views": "./src/views.ts"
+  },
+  "scripts": {
+    "type-check": "tsc -p tsconfig.json --noEmit",
+    "format": "biome format --write .",
+    "check": "biome check ."
+  },
+  "dependencies": {
+    "zod": "4.4.1"
+  }
+}

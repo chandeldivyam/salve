@@ -22,6 +22,10 @@ export type WorkspaceAuthData = AuthData & {
   workspaceID: string;
 };
 
+export function auditActorKind(authData: WorkspaceAuthData): 'user' | 'service_account' {
+  return authData.principalKind === 'service_account' ? 'service_account' : 'user';
+}
+
 export function assertIsLoggedIn(
   authData: AuthData | undefined | null,
 ): asserts authData is AuthData {

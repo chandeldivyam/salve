@@ -3,6 +3,8 @@
 //   - auth.ts   : better-auth core + organization plugin tables
 //   - domain.ts : help-desk entities (Phase 2a — customer, ticket, message,
 //                 attachment, audit_event); all carry workspace_id.
+
+export * from './api.js';
 export * from './auth.js';
 export * from './custom-field.js';
 export * from './domain.js';

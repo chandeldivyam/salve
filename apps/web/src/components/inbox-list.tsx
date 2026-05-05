@@ -31,7 +31,7 @@ import { InboxViewStrip } from '@/components/inbox/inbox-view-strip';
 import { SaveViewModal } from '@/components/inbox/save-view-modal';
 import { useHoverTargetRoot, useHoverTargetStore } from '@/lib/commands/hover-target';
 import { useKeyBinding } from '@/lib/commands/use-key-binding';
-import { BUILTIN_VIEWS, builtinViewByID, DEFAULT_VIEW_ID } from '@/lib/inbox/builtin-views';
+import { builtinViewByID, DEFAULT_VIEW_ID } from '@/lib/inbox/builtin-views';
 import { clientFilterPredicate } from '@/lib/inbox/custom-field-filter';
 import { decodeFilters, encodeFilters, filtersEqual } from '@/lib/inbox/url-filters';
 import { useViewCommands } from '@/lib/inbox/use-view-commands';
@@ -116,9 +116,7 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
   // subscription on `viewByID`.
   const builtin = useMemo(() => builtinViewByID(activeViewID), [activeViewID]);
   const [customView, customViewStatus] = useQuery(
-    builtin
-      ? queries.viewByID({ id: BUILTIN_VIEWS[0]!.id })
-      : queries.viewByID({ id: activeViewID }),
+    builtin ? queries.viewByID({ id: DEFAULT_VIEW_ID }) : queries.viewByID({ id: activeViewID }),
     CACHE_FOREVER,
   ) as unknown as [ViewWithMembers | undefined, { type?: string } | undefined];
 

@@ -2,7 +2,7 @@
 //
 // In dev we rely on Vite's `server.proxy` so /api/** is same-origin — no CORS
 // preflight, cookies just work. `VITE_API_URL` defaults to '' so paths stay
-// relative; in prod set it to e.g. 'https://api.salve.app'.
+// relative; in prod set it to e.g. 'https://api.usesalve.com'.
 
 import { magicLinkClient, organizationClient } from 'better-auth/client/plugins';
 import { createAuthClient } from 'better-auth/react';

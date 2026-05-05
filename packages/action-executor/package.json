@@ -1,0 +1,30 @@
+{
+  "name": "@opendesk/action-executor",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./customers": "./src/customers.ts",
+    "./settings": "./src/settings.ts",
+    "./tickets": "./src/tickets.ts",
+    "./views": "./src/views.ts"
+  },
+  "scripts": {
+    "type-check": "tsc -p tsconfig.json --noEmit",
+    "format": "biome format --write .",
+    "check": "biome check ."
+  },
+  "dependencies": {
+    "@opendesk/action-contracts": "workspace:*",
+    "@opendesk/db": "workspace:*",
+    "@better-auth/api-key": "1.6.9",
+    "drizzle-orm": "0.45.2",
+    "zod": "4.4.1"
+  },
+  "devDependencies": {
+    "@types/node": "25.6.0"
+  }
+}

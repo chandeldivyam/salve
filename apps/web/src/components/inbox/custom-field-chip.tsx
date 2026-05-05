@@ -153,17 +153,10 @@ function Editor({
     );
   }
   if (type === 'agent') {
-    return (
-      <AgentEditor
-        field={fieldKey}
-        filter={filter}
-        onChange={onChange}
-        currentUserID={currentUserID}
-      />
-    );
+    return <AgentEditor field={fieldKey} onChange={onChange} currentUserID={currentUserID} />;
   }
   if (type === 'customer') {
-    return <CustomerEditor field={fieldKey} filter={filter} onChange={onChange} />;
+    return <CustomerEditor field={fieldKey} onChange={onChange} />;
   }
   if (type === 'dynamic_list' || type === 'dynamic_multi_select') {
     // Dynamic options aren't statically known on the client; the most
@@ -447,12 +440,10 @@ function ListEditor({
 
 function AgentEditor({
   field,
-  filter,
   onChange,
   currentUserID,
 }: {
   field: `customField:${string}`;
-  filter: Filter;
   onChange: (next: Filter) => void;
   currentUserID: string;
 }) {
@@ -507,11 +498,9 @@ function AgentEditor({
 
 function CustomerEditor({
   field,
-  filter,
   onChange,
 }: {
   field: `customField:${string}`;
-  filter: Filter;
   onChange: (next: Filter) => void;
 }) {
   const [search, setSearch] = useState('');

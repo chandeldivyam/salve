@@ -4,7 +4,6 @@ import { authSchema, getDb } from '@opendesk/db';
 import { type AuthData, queries, schema } from '@opendesk/zero-schema';
 import { mustGetMutator, mustGetQuery, type ReadonlyJSONValue } from '@rocicorp/zero';
 import { handleMutateRequest, handleQueryRequest } from '@rocicorp/zero/server';
-import { zeroPostgresJS } from '@rocicorp/zero/server/adapters/postgresjs';
 import { and, eq } from 'drizzle-orm';
 import { Hono, type MiddlewareHandler } from 'hono';
 import { cors } from 'hono/cors';
@@ -19,11 +18,26 @@ import {
   deliverMessage,
   deliverMessageRecovery,
   processProviderWebhook,
+  provisionDomain,
+  pruneIdempotencyRecords,
   routeInboundMessage,
   verifyDomain,
 } from './inngest/functions/index.js';
 import { buildJwtCookieHeader, issueOpendeskJwt, readJwtCookie, verifyOpendeskJwt } from './jwt.js';
 import { authMiddleware, authOf, requireUser, requireWorkspace } from './middleware.js';
+import {
+  handleCreatePat,
+  handleCreateServiceAccount,
+  handleDeleteServiceAccount,
+  handleRevokePat,
+} from './public-api/api-tokens.js';
+import { customerNotesRouter, customersRouter } from './public-api/customers.js';
+import { requestIDMiddleware } from './public-api/middleware/idempotency.js';
+import { handleOpenApi } from './public-api/openapi.js';
+import { settingsRouter } from './public-api/settings.js';
+import { ticketsRouter } from './public-api/tickets.js';
+import { viewsRouter } from './public-api/views.js';
+import { handleWhoami, handleWorkspaceList } from './public-api/whoami.js';
 import { handleSearch } from './routes/search.js';
 import { createServerMutators, type PostCommitTask } from './server-mutators.js';
 import {
@@ -33,12 +47,13 @@ import {
   handleEmailRoutingRuleUpsert,
 } from './settings/email-domains.js';
 import { handleSesWebhook } from './webhooks/ses.js';
+import { getZql } from './zero-upstream.js';
 
 const app = new Hono();
 
 // Trusted origins for cross-origin browser fetches. In dev the web app is
 // served same-origin via Vite's server.proxy, so CORS is essentially a no-op
-// there. In prod (web on app.salve.app, API on api.salve.app) this is what
+// there. In prod (web on app.usesalve.com, API on api.usesalve.com) this is what
 // allows the browser to send cookie-bearing requests.
 const trustedOrigins = (process.env.BETTER_AUTH_TRUSTED_ORIGINS ?? 'http://localhost:5173')
   .split(',')
@@ -51,6 +66,17 @@ app.use(
     origin: (origin) => (origin && trustedOrigins.includes(origin) ? origin : undefined),
     credentials: true,
     allowHeaders: ['Content-Type', 'Authorization'],
+    allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    maxAge: 600,
+  }),
+);
+
+app.use(
+  '/v1/*',
+  cors({
+    origin: (origin) => (origin && trustedOrigins.includes(origin) ? origin : undefined),
+    credentials: false,
+    allowHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-Request-Id'],
     allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     maxAge: 600,
   }),
@@ -161,6 +187,26 @@ app.post(
   handleEmailDomainVerifyDev,
 );
 
+// Phase A — temporary token write endpoints. Reads go via Zero
+// (`queries.apiTokensForCurrentUser`, `queries.serviceAccounts`,
+// `queries.serviceAccountTokens`). Only writes are REST because plaintext
+// is shown once at create time. Re-expressed as actions in Phase D.
+app.post('/api/settings/api-tokens', requireWorkspace, handleCreatePat);
+app.delete('/api/settings/api-tokens/:id', requireWorkspace, handleRevokePat);
+app.post('/api/settings/service-accounts', requireWorkspace, handleCreateServiceAccount);
+app.delete('/api/settings/service-accounts/:id', requireWorkspace, handleDeleteServiceAccount);
+
+// Phase A — /v1/_meta/whoami smoke route. Bearer-only; mounts request-ID
+// middleware so the response carries X-Request-Id.
+app.get('/v1/_meta/whoami', requestIDMiddleware, handleWhoami);
+app.get('/v1/_meta/workspaces', requestIDMiddleware, handleWorkspaceList);
+app.get('/v1/openapi.json', requestIDMiddleware, handleOpenApi);
+app.route('/v1/tickets', ticketsRouter);
+app.route('/v1/customers', customersRouter);
+app.route('/v1/customer-notes', customerNotesRouter);
+app.route('/v1/views', viewsRouter);
+app.route('/v1/settings', settingsRouter);
+
 app.post('/api/inbound/email/dev', handleDevInboundEmail);
 app.post('/api/inbound/email/ses', handleSesInboundEmail);
 app.post('/api/webhooks/ses', handleSesWebhook);
@@ -181,11 +227,13 @@ app.use(
     client: inngest,
     functions: [
       deliverMessage,
+      provisionDomain,
       routeInboundMessage,
       verifyDomain,
       processProviderWebhook,
       deliverMessageRecovery,
       bounceRateWatchdog,
+      pruneIdempotencyRecords,
     ],
     serveOrigin: process.env.INNGEST_SERVE_ORIGIN ?? 'http://host.docker.internal:3001',
   }) as MiddlewareHandler,
@@ -210,23 +258,6 @@ app.on(['GET', 'POST'], '/api/auth/*', (c) => auth.handler(c.req.raw));
 // Pattern from `/tmp/zero-mono/apps/zbugs/api/index.ts:160-228` adapted to
 // Hono and the postgres.js adapter.
 
-const upstreamDB = process.env.DATABASE_URL ?? '';
-let _zql: ReturnType<typeof zeroPostgresJS<typeof schema>> | undefined;
-function getZql() {
-  if (!_zql) {
-    if (!upstreamDB) throw new Error('DATABASE_URL is not set; cannot init Zero server adapter');
-    // Independent postgres.js client so server-mutator transactions are
-    // isolated from the @opendesk/db drizzle pool (different transaction
-    // semantics expected by Zero's adapter). Pass the connection string
-    // directly so the postgres types come from Zero's pinned `postgres@3.4.7`
-    // (avoids the duplicated `Sql<{}>` vs `Sql<Record<string, unknown>>`
-    // mismatch that arises when api itself imports the slightly newer
-    // postgres@3.4.9).
-    _zql = zeroPostgresJS(schema, upstreamDB);
-  }
-  return _zql;
-}
-
 async function authDataFromRequest(c: { req: { raw: Request } }): Promise<AuthData | undefined> {
   const cookieHeader = c.req.raw.headers.get('cookie');
   const token = readJwtCookie(cookieHeader);
@@ -237,6 +268,7 @@ async function authDataFromRequest(c: { req: { raw: Request } }): Promise<AuthDa
       sub: claims.sub,
       workspaceID: claims.workspaceID,
       role: claims.role,
+      principalKind: 'user',
     };
   } catch (e) {
     console.warn('[opendesk-api] zero endpoint: rejecting bad jwt', (e as Error).message);

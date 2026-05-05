@@ -91,6 +91,11 @@ function DomainsTab() {
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
+                      {d.provisionStatus === 'provisioned' ? null : (
+                        <Badge variant={d.provisionStatus === 'failed' ? 'danger' : 'warning'}>
+                          {d.provisionStatus}
+                        </Badge>
+                      )}
                       <Badge variant={domainStatusVariant(d.dnsStatus)}>{d.dnsStatus}</Badge>
                       <ChevronRight className="h-4 w-4 text-fg-tertiary" />
                     </div>

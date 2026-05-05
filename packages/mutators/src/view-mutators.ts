@@ -32,11 +32,8 @@ const scopeArg = z.enum(['workspace', 'personal']);
 // Wire-shape coercion. Strict `viewQueryZ` doesn't carry an index signature so
 // it doesn't satisfy `ReadonlyJSONValue`. Same trick as `ticketsForViewArg`:
 // accept `z.any()` here, validate strictly inside the mutator body.
-// biome-ignore lint/suspicious/noExplicitAny: see comment
 const looseQuery = z.any();
-// biome-ignore lint/suspicious/noExplicitAny: see comment
 const looseSort = z.any();
-// biome-ignore lint/suspicious/noExplicitAny: see comment
 const looseDisplayProps = z.any();
 const looseGroupBy = z.union([z.string(), z.null()]).optional();
 

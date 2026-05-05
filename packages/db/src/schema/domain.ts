@@ -123,6 +123,7 @@ export const ticket = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     firstResponseAt: timestamp('first_response_at', { withTimezone: true }),
     resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+    resolvedById: text('resolved_by_id').references(() => user.id, { onDelete: 'set null' }),
     // Phase 3a: closed_at is read in Phase 3b's "closed-ticket reopen window"
     // logic (research §1). Stamped by `ticket.close` mutator on transition to
     // closed (resolved doesn't fill it).
@@ -167,7 +168,10 @@ export const message = pgTable(
     bodyHtml: text('body_html').notNull(),
     bodyText: text('body_text').notNull(),
     isInternal: boolean('is_internal').notNull().default(false),
+    editedAt: timestamp('edited_at', { withTimezone: true }),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
     ticketCreatedIdx: index('message_ticket_created_idx').on(t.ticketId, t.createdAt),
@@ -205,6 +209,7 @@ export const auditEvent = pgTable(
     ticketId: uuid('ticket_id').references(() => ticket.id, { onDelete: 'cascade' }),
     customerId: uuid('customer_id').references(() => customer.id, { onDelete: 'cascade' }),
     actorId: text('actor_id').references(() => user.id, { onDelete: 'set null' }),
+    actorKind: text('actor_kind').notNull().default('user'),
     // Free-form text for forward-compat (don't promote to enum yet).
     kind: text('kind').notNull(),
     payload: jsonb('payload'),

@@ -35,7 +35,6 @@ import { builder } from './schema.js';
 import {
   applyFilterToQuery,
   resolveMeTokens,
-  type ViewQuery,
   type ViewSort,
   viewQueryZ,
   viewSortToOrderBy,
@@ -59,7 +58,8 @@ type WorkspaceScopedTable =
   | 'inboundRoutingRule'
   | 'view'
   | 'viewMember'
-  | 'builtinViewMember';
+  | 'builtinViewMember'
+  | 'apikey';
 
 // `Query<table, schema, any>` mirrors zbugs's `IssueQuery` — `any` is required
 // in the helper's TReturn so the `.one()`/list cases unify.
@@ -188,11 +188,9 @@ const relatedTicketsArg = z.object({
 // from `views.ts` don't carry an index signature, so we accept a loose
 // `z.any()` array here and cast inside the handler. `viewQueryZ` enforces the
 // strict shape at mutator write time.
-// biome-ignore lint/suspicious/noExplicitAny: Zero defineQuery requires JSON-compatible inferred type
 const ticketsForViewArg = z.object({
   viewID: z.string(),
   viewQuery: z.object({
-    // biome-ignore lint/suspicious/noExplicitAny: see comment above
     filters: z.array(z.any()).max(40),
     matchAll: z.boolean().optional(),
     search: z.string().optional(),
@@ -218,6 +216,7 @@ export const queries = defineQueries({
       .related('customer')
       .related('assignee')
       .related('createdBy')
+      .related('resolvedBy')
       .related('closedBy')
       .related('tags', (tt) =>
         tt
@@ -314,6 +313,7 @@ export const queries = defineQueries({
       .related('customer')
       .related('assignee')
       .related('createdBy')
+      .related('resolvedBy')
       .related('closedBy')
       .related('tags', (tt) =>
         tt
@@ -633,6 +633,53 @@ export const queries = defineQueries({
       return alwaysFalse(base).related('user');
     }
     return base.where('organizationId', '=', auth.workspaceID).related('user');
+  }),
+
+  /**
+   * Personal access tokens belonging to the caller. Returns only the user's
+   * own tokens — `principalKind='user' AND principalId=auth.sub` — so an
+   * agent never sees another agent's tokens, even though all keys live in
+   * the same workspace-scoped table.
+   */
+  apiTokensForCurrentUser: defineQuery(emptyArg, ({ ctx: auth }) => {
+    const base = builder.apikey;
+    if (!auth?.workspaceID || !auth?.sub) return alwaysFalse(base);
+    return applyWorkspaceScope(base, auth)
+      .where('principalKind', '=', 'user')
+      .where('principalId', '=', auth.sub)
+      .orderBy('createdAt', 'desc')
+      .orderBy('id', 'desc');
+  }),
+
+  /**
+   * Service-account members in the workspace, with the joined `user` mirror
+   * (carries the human-readable name) and the apikey row attached. Visible
+   * to anyone in the workspace; the route gates create/delete affordances
+   * on `auth.role`.
+   */
+  serviceAccounts: defineQuery(emptyArg, ({ ctx: auth }) => {
+    const base = builder.member;
+    if (!auth?.workspaceID) return alwaysFalse(base).related('user');
+    return base
+      .where('organizationId', '=', auth.workspaceID)
+      .where('kind', '=', 'service_account')
+      .related('user')
+      .orderBy('createdAt', 'desc')
+      .orderBy('id', 'desc');
+  }),
+
+  /**
+   * Apikey rows for service accounts in the workspace. Joined client-side
+   * with `serviceAccounts` via `principalId === member.id`. Same scoping as
+   * `apiTokensForCurrentUser` minus the user filter.
+   */
+  serviceAccountTokens: defineQuery(emptyArg, ({ ctx: auth }) => {
+    const base = builder.apikey;
+    if (!auth?.workspaceID) return alwaysFalse(base);
+    return applyWorkspaceScope(base, auth)
+      .where('principalKind', '=', 'service_account')
+      .orderBy('createdAt', 'desc')
+      .orderBy('id', 'desc');
   }),
 
   /**
@@ -967,6 +1014,15 @@ export type CustomFieldSettingsRow = QueryResultType<
 
 /** Workspace member row, with the joined `user` mirror. */
 export type WorkspaceMemberRow = QueryResultType<typeof queries.workspaceMembers>[number];
+
+/** Apikey row visible to the current user (their own PATs). */
+export type ApiTokenRow = QueryResultType<typeof queries.apiTokensForCurrentUser>[number];
+
+/** Service-account member row with joined user mirror. */
+export type ServiceAccountRow = QueryResultType<typeof queries.serviceAccounts>[number];
+
+/** Apikey row for a service account. */
+export type ServiceAccountTokenRow = QueryResultType<typeof queries.serviceAccountTokens>[number];
 
 /** Sending domain row, ordered by created-at. */
 export type SendingDomainRow = QueryResultType<typeof queries.sendingDomains>[number];

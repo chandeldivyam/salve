@@ -459,8 +459,25 @@ export function applyFilterToQuery<TQuery extends { where: any }>(
  * `apps/web/src/lib/inbox/tag-filter.ts`) to narrow client-side. The
  * `tags` relation is already loaded on every inbox row.
  */
-// biome-ignore lint/suspicious/noExplicitAny: ZQL builder
-function applyTagFilter<TQuery extends { where: any }>(q: TQuery, filter: Filter): TQuery {
+type DynamicRelationQuery = {
+  where: (...args: unknown[]) => unknown;
+  whereExists: (...args: unknown[]) => unknown;
+};
+type DynamicExists = (
+  relation: string,
+  callback?: (query: DynamicRelationQuery) => unknown,
+) => unknown;
+type DynamicLogical = (...conditions: unknown[]) => unknown;
+type DynamicWhereHelpers = {
+  exists: DynamicExists;
+  and: DynamicLogical;
+  or: DynamicLogical;
+};
+type DynamicWhereQuery = {
+  where: (callback: (helpers: DynamicWhereHelpers) => unknown) => unknown;
+};
+
+function applyTagFilter<TQuery extends DynamicWhereQuery>(q: TQuery, filter: Filter): TQuery {
   // "any" — a chip that hasn't picked any tag is a no-op, not a never-match.
   if (
     'values' in filter &&
@@ -470,16 +487,14 @@ function applyTagFilter<TQuery extends { where: any }>(q: TQuery, filter: Filter
     return q;
   }
 
-  // biome-ignore lint/suspicious/noExplicitAny: dynamic helpers
   const includesAny = (values: ReadonlyArray<string | number>) =>
-    q.where(({ exists, or }: any) =>
-      or(...values.map((tagID) => exists('tags', (t: any) => t.where('tagID', '=', tagID)))),
+    q.where(({ exists, or }) =>
+      or(...values.map((tagID) => exists('tags', (t) => t.where('tagID', '=', tagID)))),
     ) as TQuery;
 
-  // biome-ignore lint/suspicious/noExplicitAny: dynamic helpers
   const includesAll = (values: ReadonlyArray<string | number>) =>
-    q.where(({ exists, and }: any) =>
-      and(...values.map((tagID) => exists('tags', (t: any) => t.where('tagID', '=', tagID)))),
+    q.where(({ exists, and }) =>
+      and(...values.map((tagID) => exists('tags', (t) => t.where('tagID', '=', tagID)))),
     ) as TQuery;
 
   if (filter.operator === 'includesAny' || filter.operator === 'in') {
@@ -487,15 +502,13 @@ function applyTagFilter<TQuery extends { where: any }>(q: TQuery, filter: Filter
   }
   if (filter.operator === 'includesAll') return includesAll(filter.values);
   if (filter.operator === 'nempty') {
-    // biome-ignore lint/suspicious/noExplicitAny: dynamic helpers
-    return q.where(({ exists }: any) => exists('tags')) as TQuery;
+    return q.where(({ exists }) => exists('tags')) as TQuery;
   }
   // includesNone / nin / empty → client-side post-filter.
   return q;
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: ZQL builder
-function applyCustomFieldExistence<TQuery extends { where: any }>(
+function applyCustomFieldExistence<TQuery extends DynamicWhereQuery>(
   q: TQuery,
   filter: Filter,
 ): TQuery {
@@ -519,12 +532,10 @@ function applyCustomFieldExistence<TQuery extends { where: any }>(
   // have *some* value for this field key. The exact operator + value
   // comparison happens client-side in `customFieldPredicate` because
   // value shapes (arrays, objects) can't be uniformly expressed in ZQL.
-  return q.where(
-    // biome-ignore lint/suspicious/noExplicitAny: dynamic helpers
-    ({ exists }: any) =>
-      exists('customFieldValues', (v: any) =>
-        v.whereExists('field', (f: any) => f.where('key', '=', fieldKey)),
-      ),
+  return q.where(({ exists }) =>
+    exists('customFieldValues', (v) =>
+      v.whereExists('field', (f: DynamicRelationQuery) => f.where('key', '=', fieldKey)),
+    ),
   ) as TQuery;
 }
 

@@ -5,6 +5,7 @@
 //   (gated on env so dev runs without third-party config).
 // - Organization plugin enabled so workspace = better-auth `organization`.
 
+import { apiKey } from '@better-auth/api-key';
 import { authSchema, getDb } from '@opendesk/db';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
@@ -52,6 +53,28 @@ export const auth = betterAuth({
       membershipLimit: 1000,
       // Members default to 'member'; admins/owners promoted explicitly.
       creatorRole: 'owner',
+    }),
+    apiKey({
+      references: 'organization',
+      defaultPrefix: 'slv_pat_',
+      requireName: true,
+      maximumNameLength: 80,
+      maximumPrefixLength: 16,
+      enableMetadata: true,
+      startingCharactersConfig: {
+        shouldStore: true,
+        charactersLength: 12,
+      },
+      rateLimit: {
+        enabled: true,
+        timeWindow: 60_000,
+        maxRequests: 60,
+      },
+      keyExpiration: {
+        defaultExpiresIn: null,
+        minExpiresIn: 1,
+        maxExpiresIn: 365,
+      },
     }),
     magicLink({
       // Placeholder transport — Phase 1 doesn't wire mail yet.

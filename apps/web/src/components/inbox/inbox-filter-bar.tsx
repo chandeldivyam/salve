@@ -15,7 +15,6 @@
 import {
   Avatar,
   AvatarFallback,
-  Button,
   cn,
   DropdownMenu,
   DropdownMenuCheckboxItem,

@@ -46,6 +46,7 @@ import {
   BUILTIN_VIEWS,
   type BuiltinKey,
   builtinViewByID,
+  DEFAULT_VIEW_ID,
   isBuiltinViewID,
 } from '@/lib/inbox/builtin-views';
 import { useWorkbenchStore } from '@/lib/workbench';
@@ -173,7 +174,7 @@ export function InboxViewStrip({
     if (isBuiltinViewID(activeViewID) && !builtinViewByID(activeViewID)) {
       navigate({
         to: '/app/inbox',
-        search: { view: BUILTIN_VIEWS[0]!.id },
+        search: { view: DEFAULT_VIEW_ID },
         replace: true,
       });
     }
