@@ -24,7 +24,7 @@
 // similarity threshold and a separate trigram-only WHERE — keep it
 // behind a feature flag and re-measure before shipping.
 
-import { getClient } from '@opendesk/db';
+import { getClient } from '@salve/db';
 import type { Context } from 'hono';
 import { authOf } from '../middleware.js';
 

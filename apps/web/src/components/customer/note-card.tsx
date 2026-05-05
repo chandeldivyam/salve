@@ -1,4 +1,4 @@
-import { mutators } from '@opendesk/mutators';
+import { mutators } from '@salve/mutators';
 import {
   Button,
   cn,
@@ -13,7 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@opendesk/ui';
+} from '@salve/ui';
 import { MoreHorizontal, Pencil, Pin, PinOff, StickyNote, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { relativeTime } from '@/components/timeline/timeline-format';

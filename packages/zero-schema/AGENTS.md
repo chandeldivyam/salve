@@ -15,7 +15,7 @@ src/
 
 - **Schema mirrors Drizzle.** Domain tables (`customer`, `ticket`, `message`, `attachment`, `audit_event`) plus minimal auth read-views (`user`, `organization`, `member` — id/name/email/image only, never password hashes). Drizzle is the source of truth for DDL; Zero schema is hand-written to match.
 - `createSchema({ tables, relationships, enableLegacyMutators: false, enableLegacyQueries: false })` — both legacy flags must be `false` once `defineMutators` and `defineQueries` are wired, or `z.query` becomes the wrong type.
-- **No `definePermissions`.** Zero 1.3 deprecates it for custom-mutator setups. Permissions live inline in queries (this file) and mutators (`@opendesk/mutators`). The plan committed to assertion-based perms; we ship without the DSL.
+- **No `definePermissions`.** Zero 1.3 deprecates it for custom-mutator setups. Permissions live inline in queries (this file) and mutators (`@salve/mutators`). The plan committed to assertion-based perms; we ship without the DSL.
 - **Timestamps map transparently.** Zero's `pg-data-type.ts` converts Postgres `timestamptz` → JS number (epoch ms). Declare columns as `number().from('created_at')` and the conversion happens both ways. No mirror columns, no triggers, no ISO strings.
 - **`createBuilder(schema)` is exported** so mutators and queries share the same type-safe builder.
 - **`DefaultTypes` augmentation** declares the `context` type as `AuthData | undefined` so `<ZeroProvider context={...}>` is type-checked end-to-end.

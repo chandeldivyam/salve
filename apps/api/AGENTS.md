@@ -50,7 +50,7 @@ The `/v1` routers are mounted in `src/server.ts` (`app.route('/v1/<domain>', <do
 - **Scope enforcement** via `requireApiScopes(contract.scopes)` middleware. The action contract declares scopes (`tickets:write`, etc.); the middleware checks against the token's granted scopes. Scope vocabulary lives in `packages/action-contracts/src/scopes.ts`.
 - **Idempotency** is two-layered:
   - HTTP `Idempotency-Key` header → `idempotencyKeyMiddleware` extracts → `withIdempotency(...)` in `src/public-api/middleware/idempotency-store.ts` records the request hash and replays the response on retry. Mismatched body returns `409 idempotency_key.reused_with_different_request`. In-progress retries return `409 idempotency_key.in_progress`. Replays carry `Idempotency-Replayed: true`.
-  - Resource-id derivation via `actionResourceID(ctx, actionID, suffix)` in `@opendesk/action-executor` produces a deterministic UUID so even unique-constraint collisions are recoverable.
+  - Resource-id derivation via `actionResourceID(ctx, actionID, suffix)` in `@salve/action-executor` produces a deterministic UUID so even unique-constraint collisions are recoverable.
 - **`actionMiddlewares(contract)`** (in `src/public-api/action-route.ts`) returns the standard chain: `requestIDMiddleware` → `requireBearerAuth` → `requireApiScopes(contract.scopes)` → `idempotencyKeyMiddleware(contract.idempotency)`.
 - **`actionHandler(contract, executor, extractInput, successStatus?)`** parses the body with `contract.inputSchema.safeParse`, routes to the executor, wraps in the idempotency store if applicable, and serializes the response. One-line per route.
 - **Error mapping** in `src/public-api/errors.ts`: `PublicApiError`, `ActionExecutorError`, `MutationError`, `ZodError` each get a typed mapping; everything else falls to `500 internal_error` with the requestId logged. *Don't* swallow errors at the executor level — let them propagate; the handler maps cleanly.
@@ -73,7 +73,7 @@ For the full action-pipeline narrative see `docs/agent-platform-rfc.md`. For the
 
 ```
 PORT=3001
-DATABASE_URL=postgresql://opendesk:opendesk@localhost:5432/opendesk
+DATABASE_URL=postgresql://salve:salve@localhost:5432/salve
 AUTH_SECRET=<32-byte hex>
 ZERO_AUTH_SECRET=$AUTH_SECRET                     # same value
 BETTER_AUTH_URL=http://localhost:3001
@@ -93,7 +93,7 @@ Phase 3a adds `MAILER_BACKEND={mailpit|ses}`, SES region/webhook vars, and same-
 | `src/auth.ts` | better-auth config (Drizzle adapter, email+password, magic-link, organization plugin, Google gated on env). |
 | `src/jwt.ts` | HS256 issue/verify helpers + cookie builders. |
 | `src/middleware.ts` | The two-pass auth middleware + `requireUser` / `requireWorkspace` guards. |
-| `src/server-mutators.ts` | Server-side wrapping of `@opendesk/mutators`. |
+| `src/server-mutators.ts` | Server-side wrapping of `@salve/mutators`. |
 | `src/files.ts` | S3/MinIO presign endpoints. |
 | `src/inngest/events.ts` | Channel-agnostic Inngest event names and payload schemas. |
 | `src/inngest/functions/` | Delivery, domain verification, webhook processing, and recovery functions. |

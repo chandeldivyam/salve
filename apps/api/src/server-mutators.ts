@@ -10,6 +10,7 @@
 // `tx.dbTransaction.wrappedTransaction` when `tx.location === 'server'`.
 
 import { randomUUID } from 'node:crypto';
+import { defineMutator, defineMutators, type Transaction } from '@rocicorp/zero';
 import {
   createEmailDomainArgsSchema,
   createTicketArgsSchema,
@@ -17,9 +18,8 @@ import {
   sendMessageArgsSchema,
   setCustomFieldValueOnCustomerArgsSchema,
   setCustomFieldValueOnTicketArgsSchema,
-} from '@opendesk/mutators';
-import { builder } from '@opendesk/zero-schema';
-import { defineMutator, defineMutators, type Transaction } from '@rocicorp/zero';
+} from '@salve/mutators';
+import { builder } from '@salve/zero-schema';
 import type postgres from 'postgres';
 import { inngest } from './inngest/client.js';
 import { DELIVERY_EVENT, DOMAIN_EVENT } from './inngest/events.js';

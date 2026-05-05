@@ -1,5 +1,5 @@
 {
-  "name": "@opendesk/action-executor",
+  "name": "@salve/action-executor",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -18,8 +18,8 @@
     "check": "biome check ."
   },
   "dependencies": {
-    "@opendesk/action-contracts": "workspace:*",
-    "@opendesk/db": "workspace:*",
+    "@salve/action-contracts": "workspace:*",
+    "@salve/db": "workspace:*",
     "@better-auth/api-key": "1.6.9",
     "drizzle-orm": "0.45.2",
     "zod": "4.4.1"

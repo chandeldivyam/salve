@@ -1,6 +1,6 @@
 # Phase 40 — Custom Inbox Views
 
-> Replanned 2026-05-03 against four sources: the current opendesk codebase
+> Replanned 2026-05-03 against four sources: the current salve codebase
 > (Phase 30 just shipped), Atlas's `saved_search` implementation, Rocicorp's
 > own zbugs reference app (the canonical "Zero at scale" demo), and Linear's
 > custom-views UX. The original plan predated the workbench, the command
@@ -335,7 +335,7 @@ for the exact compromise; the cleanest approach is a separate
 
 Shared types in `packages/zero-schema/src/views.ts` (next to existing
 schema/query files) — the original plan put these in `packages/core` but
-opendesk has no `packages/core` yet, and `zero-schema` is the natural
+salve has no `packages/core` yet, and `zero-schema` is the natural
 home because the `applyFilterToQuery` helper consumes Zero builders.
 
 ```ts

@@ -1,5 +1,5 @@
 // Side-anchored Dialog — tier-B creation/edit affordance. 480px wide,
-// right-anchored, full height. Composes the @opendesk/ui Sheet primitive
+// right-anchored, full height. Composes the @salve/ui Sheet primitive
 // with our settings page styling.
 
 import {
@@ -10,7 +10,7 @@ import {
   SheetFooter,
   SheetHeader,
   SheetTitle,
-} from '@opendesk/ui';
+} from '@salve/ui';
 import type { ReactNode } from 'react';
 
 export function SettingsSheet({

@@ -8,7 +8,7 @@
 // Keep this module dependency-free apart from `Filter` so the encoder can
 // move into a Worker if we ever need it.
 
-import type { Filter } from '@opendesk/zero-schema';
+import type { Filter } from '@salve/zero-schema';
 
 const VERSION = 1 as const;
 

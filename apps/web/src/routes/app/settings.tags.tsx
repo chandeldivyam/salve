@@ -2,6 +2,7 @@
 // Group + tag creation use a side sheet (tier B). Renames auto-save on blur.
 // Color and group changes happen via the row's menu → edit sheet.
 
+import { useQuery } from '@rocicorp/zero/react';
 import {
   Badge,
   Button,
@@ -12,8 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   Input,
-} from '@opendesk/ui';
-import { useQuery } from '@rocicorp/zero/react';
+} from '@salve/ui';
 import { createFileRoute } from '@tanstack/react-router';
 import { Archive, ChevronDown, MoreHorizontal, Plus, RotateCcw, Tags } from 'lucide-react';
 import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react';

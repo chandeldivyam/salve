@@ -1,5 +1,5 @@
-import { ActionExecutorError } from '@opendesk/action-executor';
-import { MutationError, MutationErrorCode } from '@opendesk/mutators';
+import { ActionExecutorError } from '@salve/action-executor';
+import { MutationError, MutationErrorCode } from '@salve/mutators';
 import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { ZodError } from 'zod';
@@ -94,7 +94,7 @@ export function handlePublicApiError(c: Context, error: unknown): Response {
     });
   }
 
-  console.error('[opendesk-api] public api error', error);
+  console.error('[salve-api] public api error', error);
   return publicErrorResponse(c, {
     status: 500,
     type: 'internal_error',

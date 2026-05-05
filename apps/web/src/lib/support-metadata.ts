@@ -1,5 +1,5 @@
-import { mutators } from '@opendesk/mutators';
-import { queries } from '@opendesk/zero-schema';
+import { mutators } from '@salve/mutators';
+import { queries } from '@salve/zero-schema';
 
 // Pick any cheap workspace-scoped list query — this is a structural
 // alias used only to coerce `queries` into a flexible map shape; it

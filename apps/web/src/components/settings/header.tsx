@@ -2,7 +2,7 @@
 // trailing actions (CTA + secondary buttons). Every settings sub-page should
 // render exactly one of these.
 
-import { cn } from '@opendesk/ui';
+import { cn } from '@salve/ui';
 import type { ReactNode } from 'react';
 
 export function SettingsHeader({

@@ -23,7 +23,7 @@ interface ComposerDraftsState {
   clearDraft: (workspaceID: string | null, ticketID: string) => void;
 }
 
-const STORAGE_PREFIX = 'opendesk.composer-drafts.v1';
+const STORAGE_PREFIX = 'salve.composer-drafts.v1';
 
 const draftSchema = z.object({
   bodyHTML: z.string().default(''),

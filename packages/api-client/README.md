@@ -1,9 +1,9 @@
-# @opendesk/api-client
+# @salve/api-client
 
-Internal workspace package for Salve's first-party TypeScript SDK. It is published later as `@salve/api-client`, but inside this monorepo it stays under the `@opendesk/*` scope and is built directly from `@opendesk/action-contracts`.
+Internal workspace package for Salve's first-party TypeScript SDK. It is published later as `@salve/api-client`, but inside this monorepo it stays under the `@salve/*` scope and is built directly from `@salve/action-contracts`.
 
 ```ts
-import { SalveClient } from '@opendesk/api-client';
+import { SalveClient } from '@salve/api-client';
 
 const salve = new SalveClient({
   token: process.env.SALVE_TOKEN,

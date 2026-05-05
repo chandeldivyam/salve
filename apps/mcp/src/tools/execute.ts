@@ -5,7 +5,7 @@ import type {
   ActionInput,
   ActionOutput,
   AnyActionContract,
-} from '@opendesk/action-contracts';
+} from '@salve/action-contracts';
 import { mcpErrorResult } from '../error.js';
 import type { SalveMcpContext } from '../types.js';
 

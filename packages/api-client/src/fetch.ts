@@ -1,4 +1,4 @@
-import type { ActionInput, AnyActionContract } from '@opendesk/action-contracts';
+import type { ActionInput, AnyActionContract } from '@salve/action-contracts';
 import { SalveApiError, type SalveApiErrorType } from './errors.js';
 
 export type SalveFetch = typeof fetch;

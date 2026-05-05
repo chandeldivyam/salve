@@ -1,5 +1,5 @@
-import type { AuthData } from '@opendesk/zero-schema';
 import { mustGetMutator, type ReadonlyJSONValue } from '@rocicorp/zero';
+import type { AuthData } from '@salve/zero-schema';
 import { createServerMutators, type PostCommitTask } from '../server-mutators.js';
 import { getZql } from '../zero-upstream.js';
 

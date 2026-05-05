@@ -8,7 +8,7 @@ export default defineConfig({
   clean: true,
   minify: true,
   deps: {
-    alwaysBundle: [/^@opendesk\//],
+    alwaysBundle: [/^@salve\//],
     onlyBundle: false,
   },
 });

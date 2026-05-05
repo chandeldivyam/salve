@@ -3,8 +3,8 @@
 // pattern in `theme.ts` so the dismiss flag stays in sync across the header
 // pill, the sidebar, and the inbox empty state without prop drilling.
 
-import { queries } from '@opendesk/zero-schema';
 import { useQuery } from '@rocicorp/zero/react';
+import { queries } from '@salve/zero-schema';
 import { useSyncExternalStore } from 'react';
 import { CACHE_FOREVER } from './zero-cache';
 

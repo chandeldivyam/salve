@@ -2,9 +2,9 @@
 // Read-only list; entries are added by the bounce/complaint webhook in
 // the API. Variant C: flat rows with hairline separators, no card.
 
-import { Badge } from '@opendesk/ui';
-import { queries } from '@opendesk/zero-schema';
 import { useQuery } from '@rocicorp/zero/react';
+import { Badge } from '@salve/ui';
+import { queries } from '@salve/zero-schema';
 import { createFileRoute } from '@tanstack/react-router';
 import { ShieldOff } from 'lucide-react';
 import { EmptyState } from '@/components/email-settings/empty-state';

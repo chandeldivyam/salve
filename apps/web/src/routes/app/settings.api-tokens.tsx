@@ -1,3 +1,4 @@
+import { useQuery } from '@rocicorp/zero/react';
 import {
   Button,
   CopyValue,
@@ -18,14 +19,13 @@ import {
   Input,
   Label,
   Skeleton,
-} from '@opendesk/ui';
+} from '@salve/ui';
 import {
   type ApiTokenRow,
   queries,
   type ServiceAccountRow,
   type ServiceAccountTokenRow,
-} from '@opendesk/zero-schema';
-import { useQuery } from '@rocicorp/zero/react';
+} from '@salve/zero-schema';
 import { createFileRoute, useRouteContext } from '@tanstack/react-router';
 import { format, formatDistanceToNowStrict } from 'date-fns';
 import { Bot, Key, MoreHorizontal } from 'lucide-react';

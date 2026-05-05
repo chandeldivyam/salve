@@ -1,5 +1,5 @@
-import { type AuthData, builder } from '@opendesk/zero-schema';
 import { defineMutator, type ReadonlyJSONValue, type Transaction } from '@rocicorp/zero';
+import { type AuthData, builder } from '@salve/zero-schema';
 import { z } from 'zod';
 import {
   assertCanModifyCustomer,

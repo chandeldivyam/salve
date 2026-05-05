@@ -1,4 +1,4 @@
-import { SalveClient } from '@opendesk/api-client';
+import { SalveClient } from '@salve/api-client';
 import { defineCommand } from 'citty';
 import { getBooleanFlag, getFlag, getNumberFlag, parseArgv } from './args.js';
 import { clearAuthConfig, writeAuthConfig, writeWorkspaceConfig } from './auth/config.js';
@@ -805,7 +805,7 @@ async function action(
 }
 
 function printVersion(): void {
-  const commit = process.env.SALVE_COMMIT_SHA ?? process.env.OPENDESK_COMMIT_SHA ?? 'dev';
+  const commit = process.env.SALVE_COMMIT_SHA ?? 'dev';
   process.stdout.write(`salve ${VERSION} (${commit})\n`);
 }
 

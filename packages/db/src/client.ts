@@ -1,4 +1,4 @@
-// @opendesk/db — Drizzle client built from process.env.DATABASE_URL.
+// @salve/db — Drizzle client built from process.env.DATABASE_URL.
 // Uses the `postgres` driver (not `pg`) per Drizzle's modern recommendation.
 
 import { drizzle } from 'drizzle-orm/postgres-js';

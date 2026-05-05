@@ -18,6 +18,7 @@
 // shape. The matching predicate runs in `customFieldPredicate` over the
 // materialized `customFieldValues` rows.
 
+import { useQuery } from '@rocicorp/zero/react';
 import {
   Avatar,
   AvatarFallback,
@@ -32,10 +33,9 @@ import {
   DropdownMenuTrigger,
   Input,
   initialsFromName,
-} from '@opendesk/ui';
-import type { CustomField as CustomFieldDef, CustomFieldType, Filter } from '@opendesk/zero-schema';
-import { queries } from '@opendesk/zero-schema';
-import { useQuery } from '@rocicorp/zero/react';
+} from '@salve/ui';
+import type { CustomField as CustomFieldDef, CustomFieldType, Filter } from '@salve/zero-schema';
+import { queries } from '@salve/zero-schema';
 import { ChevronDown, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { CACHE_FOREVER } from '@/lib/zero-cache';

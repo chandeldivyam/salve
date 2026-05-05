@@ -1,8 +1,8 @@
-name: opendesk-dev
+name: salve-dev
 
 networks:
-  opendesk_dev:
-    name: opendesk_dev
+  salve_dev:
+    name: salve_dev
     driver: bridge
 
 volumes:
@@ -13,15 +13,15 @@ volumes:
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: opendesk-postgres
+    container_name: salve-postgres
     restart: unless-stopped
-    networks: [opendesk_dev]
+    networks: [salve_dev]
     ports:
       - '5433:5432'
     environment:
-      POSTGRES_USER: opendesk
-      POSTGRES_PASSWORD: opendesk
-      POSTGRES_DB: opendesk
+      POSTGRES_USER: salve
+      POSTGRES_PASSWORD: salve
+      POSTGRES_DB: salve
     command: >
       postgres
       -c wal_level=logical
@@ -32,16 +32,16 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ../scripts/init-db.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U opendesk -d opendesk']
+      test: ['CMD-SHELL', 'pg_isready -U salve -d salve']
       interval: 5s
       timeout: 5s
       retries: 10
 
   redis:
     image: redis:7-alpine
-    container_name: opendesk-redis
+    container_name: salve-redis
     restart: unless-stopped
-    networks: [opendesk_dev]
+    networks: [salve_dev]
     ports:
       - '6379:6379'
     volumes:
@@ -54,33 +54,44 @@ services:
 
   inngest:
     image: inngest/inngest:latest
-    container_name: opendesk-inngest
+    container_name: salve-inngest
     restart: unless-stopped
-    networks: [opendesk_dev]
+    networks: [salve_dev]
     ports:
       - '8288:8288'
-    command: ['inngest', 'dev', '--no-discovery', '--host', '0.0.0.0', '--port', '8288']
+    command:
+      [
+        'inngest',
+        'dev',
+        '--no-discovery',
+        '--sdk-url',
+        'http://host.docker.internal:3001/api/inngest',
+        '--host',
+        '0.0.0.0',
+        '--port',
+        '8288',
+      ]
 
   mailpit:
     image: axllent/mailpit:latest
-    container_name: opendesk-mailpit
+    container_name: salve-mailpit
     restart: unless-stopped
-    networks: [opendesk_dev]
+    networks: [salve_dev]
     ports:
       - '1025:1025'
       - '8025:8025'
 
   minio:
     image: minio/minio:latest
-    container_name: opendesk-minio
+    container_name: salve-minio
     restart: unless-stopped
-    networks: [opendesk_dev]
+    networks: [salve_dev]
     ports:
       - '9000:9000'
       - '9001:9001'
     environment:
-      MINIO_ROOT_USER: opendesk
-      MINIO_ROOT_PASSWORD: opendeskdev
+      MINIO_ROOT_USER: salve
+      MINIO_ROOT_PASSWORD: salvedev
     command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data
@@ -92,9 +103,9 @@ services:
 
   adminer:
     image: adminer:latest
-    container_name: opendesk-adminer
+    container_name: salve-adminer
     restart: unless-stopped
-    networks: [opendesk_dev]
+    networks: [salve_dev]
     ports:
       - '8080:8080'
     depends_on:

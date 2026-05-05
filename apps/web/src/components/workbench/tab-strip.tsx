@@ -19,7 +19,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from '@opendesk/ui';
+} from '@salve/ui';
 import { useRouter } from '@tanstack/react-router';
 import { Copy, ExternalLink, MoreHorizontal, Pin, PinOff, Plus, RotateCcw, X } from 'lucide-react';
 import { Fragment, useEffect, useRef, useState } from 'react';

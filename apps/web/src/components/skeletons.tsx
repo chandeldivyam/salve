@@ -4,7 +4,7 @@
 // or syncing with the server. Never reach for a centered spinner; show a
 // skeleton at the right shape — it feels twice as fast.
 
-import { cn } from '@opendesk/ui';
+import { cn } from '@salve/ui';
 
 const SHIMMER = 'animate-pulse bg-muted/70';
 

@@ -1,4 +1,4 @@
-// Custom JWT issuance for opendesk.
+// Custom JWT issuance for salve.
 //
 // After better-auth sets a session, we issue OUR OWN HS256 JWT signed with
 // AUTH_SECRET (same value zero-cache reads as ZERO_AUTH_SECRET). The cookie is
@@ -11,7 +11,7 @@ const COOKIE_NAME = 'jwt';
 const ALG = 'HS256';
 const SEVEN_DAYS_SECONDS = 60 * 60 * 24 * 7;
 
-export interface OpendeskJwtClaims {
+export interface SalveJwtClaims {
   sub: string;
   workspaceID: string | null;
   role: 'owner' | 'admin' | 'agent' | null;
@@ -22,18 +22,18 @@ export interface OpendeskJwtClaims {
 export interface IssueJwtInput {
   userID: string;
   workspaceID: string | null;
-  role: OpendeskJwtClaims['role'];
+  role: SalveJwtClaims['role'];
 }
 
 function getSecretBytes(): Uint8Array {
   const secret = process.env.AUTH_SECRET;
   if (!secret) {
-    throw new Error('AUTH_SECRET is not set; cannot sign opendesk JWT.');
+    throw new Error('AUTH_SECRET is not set; cannot sign salve JWT.');
   }
   return new TextEncoder().encode(secret);
 }
 
-export async function issueOpendeskJwt(input: IssueJwtInput): Promise<string> {
+export async function issueSalveJwt(input: IssueJwtInput): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
   const exp = now + SEVEN_DAYS_SECONDS;
   return await new SignJWT({
@@ -47,7 +47,7 @@ export async function issueOpendeskJwt(input: IssueJwtInput): Promise<string> {
     .sign(getSecretBytes());
 }
 
-export async function verifyOpendeskJwt(token: string): Promise<OpendeskJwtClaims> {
+export async function verifySalveJwt(token: string): Promise<SalveJwtClaims> {
   const { payload } = await jwtVerify(token, getSecretBytes(), {
     algorithms: [ALG],
   });
@@ -57,7 +57,7 @@ export async function verifyOpendeskJwt(token: string): Promise<OpendeskJwtClaim
   return {
     sub: payload.sub,
     workspaceID: (payload.workspaceID as string | null | undefined) ?? null,
-    role: (payload.role as OpendeskJwtClaims['role']) ?? null,
+    role: (payload.role as SalveJwtClaims['role']) ?? null,
     iat: typeof payload.iat === 'number' ? payload.iat : 0,
     exp: typeof payload.exp === 'number' ? payload.exp : 0,
   };

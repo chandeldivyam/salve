@@ -28,7 +28,7 @@ src/
 
 ## Notable patterns
 
-- **Auto-derive everything possible.** `tools/registry.ts` walks `ALL_ACTIONS.filter(a => a.mcp)` and registers a tool for each; annotations are derived from contract metadata. Adding an action to the MCP surface is a metadata change in `@opendesk/action-contracts`, not a code change here.
+- **Auto-derive everything possible.** `tools/registry.ts` walks `ALL_ACTIONS.filter(a => a.mcp)` and registers a tool for each; annotations are derived from contract metadata. Adding an action to the MCP surface is a metadata change in `@salve/action-contracts`, not a code change here.
 - **Annotations** map mechanically:
   - `readOnlyHint: true` ← any action scope ends in `:read`
   - `destructiveHint: true` ← `mcp.destructive === true` (close, delete, …)
@@ -44,7 +44,7 @@ src/
 `client.ts` resolves the bearer token in this order:
 
 1. `SALVE_TOKEN` env var (set by host config).
-2. `OPENDESK_TOKEN` env var (legacy).
+2. `SALVE_TOKEN` env var (legacy).
 3. `~/.config/salve/auth.json` (the CLI's `salve login` output).
 
 Workspace id resolution:
@@ -57,7 +57,7 @@ The `SALVE_CONFIG_DIR` env var overrides the config root.
 
 ## Tests
 
-`pnpm --filter @opendesk/mcp test` (Node native test runner via `tsx --test`):
+`pnpm --filter @salve/mcp test` (Node native test runner via `tsx --test`):
 
 - `tools/list` includes every action with `mcp` metadata + the three composites; manifest under 16 KB.
 - Action tool invocation routes through `client.action(...)` with idempotency-key generation for `'required'` actions.
@@ -68,7 +68,7 @@ The harness uses `InMemoryTransport.createLinkedPair()` so the real `Client` dri
 
 ## Live testing
 
-Build with `pnpm --filter @opendesk/mcp build` and exercise the binary against a running `apps/api`:
+Build with `pnpm --filter @salve/mcp build` and exercise the binary against a running `apps/api`:
 
 - Wire into Claude Desktop / Cursor / Cline by pointing `command: "node", args: [".../dist/salve-mcp.mjs"], env: { SALVE_TOKEN, SALVE_API_URL }`.
 - For programmatic harnessing, spawn the bin via `StdioClientTransport({command, args, env})` and drive with the SDK's `Client`.
@@ -76,7 +76,7 @@ Build with `pnpm --filter @opendesk/mcp build` and exercise the binary against a
 
 ## Build & distribution
 
-`tsdown` produces `dist/salve-mcp.mjs` (~52 KB). `package.json` `bin` exposes it as `salve-mcp`. We bundle `@opendesk/*` workspaces (`alwaysBundle: [/^@opendesk\//]`) so the published artifact is self-contained.
+`tsdown` produces `dist/salve-mcp.mjs` (~52 KB). `package.json` `bin` exposes it as `salve-mcp`. We bundle `@salve/*` workspaces (`alwaysBundle: [/^@salve\//]`) so the published artifact is self-contained.
 
 The README documents Claude Desktop / Cursor / Cline configs. Future work (not done): publish to npm under `@salve/mcp` so `npx -y @salve/mcp` works out of the box.
 

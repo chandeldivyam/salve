@@ -1,4 +1,4 @@
-// @opendesk/inngest — placeholder workspace.
+// @salve/inngest — placeholder workspace.
 //
 // Phase 3a: the `outbound-email` function lives in
 // `apps/api/src/inngest/functions/outbound-email.ts` because it needs the
@@ -9,4 +9,4 @@
 // Phase 3b will start migrating function code here once the inbound pipeline
 // stabilises (those functions are heavier and want their own deploy lane).
 
-export const PLACEHOLDER = '@opendesk/inngest' as const;
+export const PLACEHOLDER = '@salve/inngest' as const;

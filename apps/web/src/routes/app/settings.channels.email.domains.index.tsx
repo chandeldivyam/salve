@@ -3,9 +3,9 @@
 // for one slice). The setup checklist deep-links here with `?action=add`
 // to auto-open the add form.
 
-import { Badge, Button } from '@opendesk/ui';
-import { queries } from '@opendesk/zero-schema';
 import { useQuery } from '@rocicorp/zero/react';
+import { Badge, Button } from '@salve/ui';
+import { queries } from '@salve/zero-schema';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { format } from 'date-fns';
 import { ChevronRight, Mail, Plus } from 'lucide-react';

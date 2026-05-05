@@ -5,7 +5,7 @@ import {
   workbenchRoutes,
 } from './routes';
 
-const APP_ORIGIN = 'https://opendesk.local';
+const APP_ORIGIN = 'https://salve.local';
 
 export function stripTrailingSlash(pathname: string): string {
   if (pathname === '/') return pathname;

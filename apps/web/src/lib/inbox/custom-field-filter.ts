@@ -12,7 +12,7 @@
 // the chip filters in question (typically ≤5). It's a few thousand
 // operations per render — well below the noise floor for a 60fps UI.
 
-import type { Filter, FilterField } from '@opendesk/zero-schema';
+import type { Filter, FilterField } from '@salve/zero-schema';
 
 /**
  * The minimum shape we need from a materialized ticket row. Matches the

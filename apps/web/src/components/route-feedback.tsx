@@ -1,12 +1,4 @@
-import {
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  Logo,
-} from '@opendesk/ui';
+import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Logo } from '@salve/ui';
 import type { ErrorComponentProps } from '@tanstack/react-router';
 import { Link } from '@tanstack/react-router';
 import type { ReactNode } from 'react';

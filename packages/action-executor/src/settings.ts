@@ -6,8 +6,8 @@ import {
   scopesExceeding,
   scopesForRole,
   settingsActions,
-} from '@opendesk/action-contracts';
-import { authSchema, schema as dbSchema } from '@opendesk/db';
+} from '@salve/action-contracts';
+import { authSchema, schema as dbSchema } from '@salve/db';
 import { and, asc, eq, type SQL, sql } from 'drizzle-orm';
 import type { Executor, ExecutorCtx, UntypedExecutor } from './ctx.js';
 import { asUntypedExecutor } from './ctx.js';

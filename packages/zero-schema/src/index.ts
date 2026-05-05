@@ -1,10 +1,10 @@
-// @opendesk/zero-schema — public surface.
+// @salve/zero-schema — public surface.
 //
 // `schema.ts` defines the Zero schema (mirroring `packages/db/src/schema/
 // domain.ts`). `queries.ts` adds workspace-scoped `defineQueries` helpers
 // that every read in the app must funnel through.
 
-export const ZERO_SCHEMA_NAME = 'opendesk' as const;
+export const ZERO_SCHEMA_NAME = 'salve' as const;
 // Tags, tag joins, custom field definitions, custom field values, and
 // customer-scoped audit events.
 // Phase 40: view, view_member, builtin_view_member tables and relationships.

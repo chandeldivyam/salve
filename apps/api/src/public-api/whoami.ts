@@ -10,7 +10,7 @@
 // Cookie auth deliberately is not accepted here — the goal is to validate the
 // bearer path exactly as external tools use it.
 
-import { authSchema, getDb } from '@opendesk/db';
+import { authSchema, getDb } from '@salve/db';
 import { asc, eq } from 'drizzle-orm';
 import type { Context } from 'hono';
 import type { AuthContext } from '../middleware.js';

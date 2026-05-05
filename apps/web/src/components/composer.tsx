@@ -19,7 +19,7 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
-} from '@opendesk/ui';
+} from '@salve/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import Link from '@tiptap/extension-link';
 import { EditorContent, useEditor } from '@tiptap/react';

@@ -30,14 +30,14 @@ For the full reasoning + a decision table, see `guidelines/architecture.md`.
 ## Brand & design
 
 - Brand color: muted teal-leaning blue (`oklch(~0.58 0.115 200)`) — Salve = healing balm. Tokens in `src/styles.css` `@theme {}` block. `--color-brand-{50,100,500,600,700,900}`.
-- **Never use `slate-*` classes for accent colors** in `@opendesk/ui` components. Always `brand-*`. Slate is fine for body copy and borders.
-- Logo is a hand-pathed SVG leaf (`@opendesk/ui` `Logo` component) in `text-brand-600`. Optional `withWordmark` shows "Salve" beside it.
+- **Never use `slate-*` classes for accent colors** in `@salve/ui` components. Always `brand-*`. Slate is fine for body copy and borders.
+- Logo is a hand-pathed SVG leaf (`@salve/ui` `Logo` component) in `text-brand-600`. Optional `withWordmark` shows "Salve" beside it.
 
 ## Gotchas hit
 
 - Tailwind v4 doesn't auto-detect classes from sibling workspace packages. Explicit `@source "../../../packages/ui/src/**/*.{ts,tsx}"` in `styles.css` is required, otherwise every shadcn component renders with no background fill.
 - TanStack Router's `routeTree.gen.ts` must be regenerated before `tsc --noEmit` will pass. The router plugin in `vite.config.ts` regenerates on file changes; just run `pnpm dev` once after pulling.
-- `lucide-react` must be a direct dep of `apps/web`, not just `@opendesk/ui`, or Rolldown auto-codesplit fails to resolve it from route files.
+- `lucide-react` must be a direct dep of `apps/web`, not just `@salve/ui`, or Rolldown auto-codesplit fails to resolve it from route files.
 - TanStack Router devtools (`@tanstack/react-router-devtools`) version-lags the router by 1-2 versions; we omit it for now.
 
 ## Where to look

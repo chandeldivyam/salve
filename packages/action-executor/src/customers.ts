@@ -1,9 +1,5 @@
-import {
-  type ActionOutput,
-  type CustomerActionID,
-  customerActions,
-} from '@opendesk/action-contracts';
-import { schema as dbSchema } from '@opendesk/db';
+import { type ActionOutput, type CustomerActionID, customerActions } from '@salve/action-contracts';
+import { schema as dbSchema } from '@salve/db';
 import { and, asc, desc, eq, ilike, inArray, lt, or, type SQL, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Executor, ExecutorCtx, UntypedExecutor } from './ctx.js';

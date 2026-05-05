@@ -4,8 +4,7 @@
 
 import { defineConfig } from 'drizzle-kit';
 
-const databaseUrl =
-  process.env.DATABASE_URL ?? 'postgres://opendesk:opendesk@localhost:5433/opendesk';
+const databaseUrl = process.env.DATABASE_URL ?? 'postgres://salve:salve@localhost:5433/salve';
 
 export default defineConfig({
   dialect: 'postgresql',

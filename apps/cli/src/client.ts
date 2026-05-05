@@ -1,4 +1,4 @@
-import { SalveClient, type SalveRequestOptions } from '@opendesk/api-client';
+import { SalveClient, type SalveRequestOptions } from '@salve/api-client';
 import { getFlag } from './args.js';
 import { readAuthConfig, readWorkspaceConfig } from './auth/config.js';
 

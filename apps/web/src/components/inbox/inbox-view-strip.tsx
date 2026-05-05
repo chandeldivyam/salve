@@ -11,7 +11,8 @@
 // available depend on whether the pill is a built-in, a personal view, or
 // a workspace view (and whether the caller owns it).
 
-import { mutators } from '@opendesk/mutators';
+import { useQuery } from '@rocicorp/zero/react';
+import { mutators } from '@salve/mutators';
 import {
   Button,
   cn,
@@ -26,9 +27,8 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@opendesk/ui';
-import { type BuiltinViewMember, queries, type View, type ViewMember } from '@opendesk/zero-schema';
-import { useQuery } from '@rocicorp/zero/react';
+} from '@salve/ui';
+import { type BuiltinViewMember, queries, type View, type ViewMember } from '@salve/zero-schema';
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import {
   Archive,

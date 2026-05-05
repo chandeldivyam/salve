@@ -1,7 +1,7 @@
-import { mutators } from '@opendesk/mutators';
-import { cn, Dialog, DialogContent, DialogDescription, DialogTitle } from '@opendesk/ui';
-import { queries } from '@opendesk/zero-schema';
 import { useQuery } from '@rocicorp/zero/react';
+import { mutators } from '@salve/mutators';
+import { cn, Dialog, DialogContent, DialogDescription, DialogTitle } from '@salve/ui';
+import { queries } from '@salve/zero-schema';
 import { useRouteContext, useRouter } from '@tanstack/react-router';
 import { Command as Cmdk } from 'cmdk';
 import { Search, Ticket, UserRound, X } from 'lucide-react';

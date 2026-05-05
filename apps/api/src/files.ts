@@ -46,9 +46,9 @@ const MAX_BYTES = 25 * 1024 * 1024; // 25 MB
 
 const region = process.env.S3_REGION ?? 'us-east-1';
 const endpoint = process.env.S3_ENDPOINT ?? 'http://localhost:9000';
-const accessKeyId = process.env.S3_ACCESS_KEY_ID ?? 'opendesk';
-const secretAccessKey = process.env.S3_SECRET_ACCESS_KEY ?? 'opendeskdev';
-const bucket = process.env.S3_BUCKET ?? 'opendesk-dev';
+const accessKeyId = process.env.S3_ACCESS_KEY_ID ?? 'salve';
+const secretAccessKey = process.env.S3_SECRET_ACCESS_KEY ?? 'salvedev';
+const bucket = process.env.S3_BUCKET ?? 'salve-dev';
 const forcePathStyle = (process.env.S3_FORCE_PATH_STYLE ?? 'true') === 'true';
 
 const s3 = new S3Client({

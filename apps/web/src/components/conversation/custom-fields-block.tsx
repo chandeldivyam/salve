@@ -1,3 +1,4 @@
+import { useQuery } from '@rocicorp/zero/react';
 import {
   cn,
   DropdownMenu,
@@ -9,8 +10,7 @@ import {
   DropdownMenuTrigger,
   Input,
   Textarea,
-} from '@opendesk/ui';
-import { useQuery } from '@rocicorp/zero/react';
+} from '@salve/ui';
 import { ChevronDown, Settings2, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {

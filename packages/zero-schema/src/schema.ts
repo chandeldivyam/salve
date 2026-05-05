@@ -1,4 +1,4 @@
-// @opendesk/zero-schema — Zero schema mirroring the Drizzle source-of-truth in
+// @salve/zero-schema — Zero schema mirroring the Drizzle source-of-truth in
 // `packages/db/src/schema`. Auth mirrors expose only UI-safe columns.
 
 import {

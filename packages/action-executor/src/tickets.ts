@@ -3,8 +3,8 @@ import {
   type ActionOutput,
   type TicketActionID,
   ticketActions,
-} from '@opendesk/action-contracts';
-import { schema as dbSchema } from '@opendesk/db';
+} from '@salve/action-contracts';
+import { schema as dbSchema } from '@salve/db';
 import { and, asc, desc, eq, inArray, lt, or, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Executor, ExecutorCtx, UntypedExecutor } from './ctx.js';

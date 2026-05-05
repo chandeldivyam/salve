@@ -4,7 +4,7 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
-} from '@opendesk/ui';
+} from '@salve/ui';
 import { Check, Laptop, Moon, Sun } from 'lucide-react';
 import { setThemeMode, type ThemeMode, useTheme } from '@/lib/theme';
 

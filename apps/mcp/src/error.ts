@@ -1,5 +1,5 @@
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { hintForErrorCode, SalveApiError } from '@opendesk/api-client';
+import { hintForErrorCode, SalveApiError } from '@salve/api-client';
 import { ZodError } from 'zod';
 
 export function mcpErrorResult(error: unknown, actionId?: string): CallToolResult {

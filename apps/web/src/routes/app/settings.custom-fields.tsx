@@ -2,6 +2,7 @@
 // in-page Ticket | Customer pill for category. Create + edit live in a side
 // sheet (tier B). Key and type are locked after creation.
 
+import { useQuery } from '@rocicorp/zero/react';
 import {
   Badge,
   Button,
@@ -13,8 +14,7 @@ import {
   DropdownMenuTrigger,
   Input,
   Textarea,
-} from '@opendesk/ui';
-import { useQuery } from '@rocicorp/zero/react';
+} from '@salve/ui';
 import { createFileRoute } from '@tanstack/react-router';
 import { Archive, ChevronDown, Plus, RotateCcw, Settings2 } from 'lucide-react';
 import { type FormEvent, useEffect, useState } from 'react';

@@ -2,6 +2,7 @@
 // state-driven pagination via the +1 sentinel, client-side sort, j/k/Enter
 // keyboard navigation.
 
+import { useQuery } from '@rocicorp/zero/react';
 import {
   Avatar,
   AvatarFallback,
@@ -15,9 +16,8 @@ import {
   DropdownMenuTrigger,
   Input,
   initialsFromName,
-} from '@opendesk/ui';
-import { MAX_LIST_LIMIT, PAGE, queries } from '@opendesk/zero-schema';
-import { useQuery } from '@rocicorp/zero/react';
+} from '@salve/ui';
+import { MAX_LIST_LIMIT, PAGE, queries } from '@salve/zero-schema';
 import { createFileRoute, Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { ArrowDownAZ, ArrowDownWideNarrow, Calendar, ChevronDown, Search } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';

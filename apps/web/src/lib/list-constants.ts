@@ -1,5 +1,5 @@
 // UI-side constants for list views. Data-side limits live in
-// `@opendesk/zero-schema` (see `consts.ts`).
+// `@salve/zero-schema` (see `consts.ts`).
 
 /** Inbox row height in pixels — used by the virtualizer's `estimateSize`. */
 export const INBOX_ROW_HEIGHT = 36;

@@ -22,7 +22,7 @@
 // `apps/api/src/inngest/functions/` drops records older than 24h. The
 // `idempotency_record_created_at_idx` index keeps that scan cheap.
 
-import { type Database, schema } from '@opendesk/db';
+import { type Database, schema } from '@salve/db';
 import { and, sql as dsql, eq } from 'drizzle-orm';
 
 // Five minutes. Has to clear long executor tail latencies (multi-mutation

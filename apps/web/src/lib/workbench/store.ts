@@ -72,7 +72,7 @@ interface WorkbenchStore extends WorkbenchPersistedState {
 }
 
 const MAX_UNPINNED_TABS = 20;
-const STORAGE_PREFIX = 'opendesk.workbench.v1';
+const STORAGE_PREFIX = 'salve.workbench.v1';
 
 /**
  * The canonical inbox tab — the always-pinned home surface that ships with

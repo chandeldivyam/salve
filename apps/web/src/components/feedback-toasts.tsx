@@ -1,4 +1,4 @@
-import { cn } from '@opendesk/ui';
+import { cn } from '@salve/ui';
 import { AlertCircle, CheckCircle2, Info, X } from 'lucide-react';
 import { dismissFeedback, type FeedbackMessage, useFeedbackMessages } from '@/lib/feedback';
 

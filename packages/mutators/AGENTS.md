@@ -18,7 +18,7 @@ src/
   1. **Validate input** (Zod schema in `args`).
   2. **Assert authorization** via helpers from `auth.ts`. Throw `MutationError` with the right `MutationErrorCode`.
   3. **Write via `tx.mutate.<table>.{insert,update,delete}`** — never via raw SQL.
-- **Workspace scoping is mandatory.** Every write filters by `workspaceID = ctx.workspaceID` (read-side too — see `@opendesk/zero-schema`'s `applyWorkspaceScope`). Cross-workspace probes return `MutationErrorCode.CROSS_WORKSPACE` with the **generic "not found" message** to avoid leaking entity existence (zbugs `auth.ts:53` pattern).
+- **Workspace scoping is mandatory.** Every write filters by `workspaceID = ctx.workspaceID` (read-side too — see `@salve/zero-schema`'s `applyWorkspaceScope`). Cross-workspace probes return `MutationErrorCode.CROSS_WORKSPACE` with the **generic "not found" message** to avoid leaking entity existence (zbugs `auth.ts:53` pattern).
 - **Use `crypto.randomUUID()` for new row IDs**, not `nanoid` — the schema's UUID columns reject nanoid's character set.
 - **Ticket transitions emit audit_event rows** in the same Zero transaction so the audit trail is atomic with the state change.
 

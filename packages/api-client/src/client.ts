@@ -10,7 +10,7 @@ import {
   settingsActions,
   ticketActions,
   viewActions,
-} from '@opendesk/action-contracts';
+} from '@salve/action-contracts';
 import { SalveApiError } from './errors.js';
 import {
   buildActionRequest,
@@ -760,7 +760,7 @@ export class SalveClient {
 }
 
 function readTokenFromEnv(): string | undefined {
-  return process.env.SALVE_TOKEN ?? process.env.OPENDESK_TOKEN;
+  return process.env.SALVE_TOKEN;
 }
 
 function timeoutOrAbortError(error: unknown, timedOut: boolean): unknown {

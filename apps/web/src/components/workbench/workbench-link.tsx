@@ -1,4 +1,4 @@
-import { cn } from '@opendesk/ui';
+import { cn } from '@salve/ui';
 import { useRouteContext, useRouter } from '@tanstack/react-router';
 import type { AnchorHTMLAttributes, MouseEvent, ReactNode } from 'react';
 import type { SessionData } from '@/lib/session-loader';

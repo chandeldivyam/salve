@@ -1,6 +1,6 @@
 # apps/cli · AGENTS.md
 
-The `salve` CLI. A hand-written dispatcher in `src/main.ts` that routes verbs to `@opendesk/api-client` calls. The `cli` metadata on each action contract is the **declarative source** for what verbs should exist (and is asserted by a coverage test) — it doesn't drive registration. Built with `tsdown`; ships as a single `dist/salve.mjs`. Read root `AGENTS.md` and `guidelines/agent-platform.md` first.
+The `salve` CLI. A hand-written dispatcher in `src/main.ts` that routes verbs to `@salve/api-client` calls. The `cli` metadata on each action contract is the **declarative source** for what verbs should exist (and is asserted by a coverage test) — it doesn't drive registration. Built with `tsdown`; ships as a single `dist/salve.mjs`. Read root `AGENTS.md` and `guidelines/agent-platform.md` first.
 
 ## Layout
 
@@ -34,7 +34,7 @@ src/
 
 `formatError(error)` (in `error.ts`) is the single rendering point:
 
-- `SalveApiError` — one-line summary `(status type) [code]`, reason, optional `field`, `requestId`, hint from `hintForErrorCode` in `@opendesk/api-client`. Exit 1.
+- `SalveApiError` — one-line summary `(status type) [code]`, reason, optional `field`, `requestId`, hint from `hintForErrorCode` in `@salve/api-client`. Exit 1.
 - `ZodError` — `validation_error (client-side)` header, then per-issue `path: message` lines, then a "fix the offending input and retry" tail. Exit 1.
 - Network/transport failure (`fetch failed`, `ENOTFOUND`, etc.) — short message + check-`SALVE_API_URL`-and-network hint. Exit 2.
 - Unknown error — `request.failed` + `String(error)`. Exit 2.
@@ -43,7 +43,7 @@ Don't add ad-hoc string-matching. New error types get a new branch in `formatErr
 
 ## Tests
 
-`pnpm --filter @opendesk/cli test` (Node native test runner via `tsx --test`):
+`pnpm --filter @salve/cli test` (Node native test runner via `tsx --test`):
 
 - Argv parser (positionals, flags, booleans, negation, value extraction).
 - Auth/workspace config: respects `SALVE_CONFIG_DIR`, enforces 600 permissions, round-trips correctly.
@@ -55,15 +55,15 @@ When adding a verb that needs custom rendering, add a test next to `output/`.
 
 ## Build
 
-`pnpm --filter @opendesk/cli build` produces `dist/salve.mjs` via `tsdown` — single minified ESM, ~52 KB gzipped. The `bin` field in `package.json` makes it `salve` after `pnpm link --global` or `npm install -g`.
+`pnpm --filter @salve/cli build` produces `dist/salve.mjs` via `tsdown` — single minified ESM, ~52 KB gzipped. The `bin` field in `package.json` makes it `salve` after `pnpm link --global` or `npm install -g`.
 
-For dev: `pnpm --filter @opendesk/cli dev <args...>` runs the source via `tsx`.
+For dev: `pnpm --filter @salve/cli dev <args...>` runs the source via `tsx`.
 
 ## Gotchas hit
 
-- **`SALVE_API_URL` must be set in dev**, otherwise the client points at production (`https://api.usesalve.com`). Default `pnpm --filter @opendesk/cli dev login` against localhost requires `SALVE_API_URL=http://localhost:3001`.
+- **`SALVE_API_URL` must be set in dev**, otherwise the client points at production (`https://api.usesalve.com`). Default `pnpm --filter @salve/cli dev login` against localhost requires `SALVE_API_URL=http://localhost:3001`.
 - **Bash subshells don't persist `export VAR=...`** between separate `bash -c '...'` calls. Inline the env var on the command line for one-shots: `SALVE_TOKEN=… node dist/salve.mjs whoami`.
-- **`zod@4.x`** is a runtime dep (the api-client's input validation throws `ZodError` instances; the CLI must instanceof-check them). Pin the same version as `@opendesk/api-client` so error formatting works.
+- **`zod@4.x`** is a runtime dep (the api-client's input validation throws `ZodError` instances; the CLI must instanceof-check them). Pin the same version as `@salve/api-client` so error formatting works.
 - **Help output** is hand-curated in `main.ts` per command; when adding a verb, update the help string in the same PR.
 
 ## Where to look

@@ -1,6 +1,6 @@
 # packages/action-executor · AGENTS.md
 
-Server-side runtime for every action defined in `@opendesk/action-contracts`. Each executor is a typed function `(ctx, input) => Promise<output>`. Read root `AGENTS.md`, `guidelines/agent-platform.md`, and `packages/action-contracts/AGENTS.md` first.
+Server-side runtime for every action defined in `@salve/action-contracts`. Each executor is a typed function `(ctx, input) => Promise<output>`. Read root `AGENTS.md`, `guidelines/agent-platform.md`, and `packages/action-contracts/AGENTS.md` first.
 
 ## Layout
 
@@ -59,7 +59,7 @@ Currently the package has no `test` script of its own; coverage comes from `apps
 
 | File | What it is |
 |---|---|
-| `src/ctx.ts` | `ExecutorCtx` shape + helpers. The `runMutation` method is the bridge to `@opendesk/mutators`. |
+| `src/ctx.ts` | `ExecutorCtx` shape + helpers. The `runMutation` method is the bridge to `@salve/mutators`. |
 | `src/ids.ts` | `actionResourceID` derivation; SHA-256 of `(workspace, actionID, idempotencyKey, suffix)`. |
 | `src/errors.ts` | `ActionExecutorError` + factories. `apps/api/src/public-api/errors.ts` maps these to HTTP responses. |
 | `src/registry.ts` | `actionExecutors` record — used to assert that every contract has an executor (test-time check). |

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { getClient } from '@opendesk/db';
+import { getClient } from '@salve/db';
 import type { Context } from 'hono';
 import { inngest } from '../inngest/client.js';
 import { PROVIDER_EVENT } from '../inngest/events.js';
@@ -29,7 +29,7 @@ export async function handleSesWebhook(c: Context): Promise<Response> {
   if (!secret) {
     return c.json({ error: 'webhook-secret-required' }, 500);
   }
-  if (c.req.header('x-opendesk-webhook-secret') !== secret) {
+  if (c.req.header('x-salve-webhook-secret') !== secret) {
     return c.json({ error: 'unauthorized' }, 401);
   }
 

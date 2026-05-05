@@ -1,18 +1,18 @@
 # Salve CLI
 
-Internal workspace package for the `salve` command. It is published later as `@salve/cli`, while the monorepo keeps the package under `@opendesk/cli`.
+Internal workspace package for the `salve` command. It is published later as `@salve/cli`, while the monorepo keeps the package under `@salve/cli`.
 
 ```sh
-pnpm --filter @opendesk/cli dev -- login
-pnpm --filter @opendesk/cli dev -- whoami --api-base-url http://127.0.0.1:3001
-pnpm --filter @opendesk/cli dev -- tickets list --status open
+pnpm --filter @salve/cli dev -- login
+pnpm --filter @salve/cli dev -- whoami --api-base-url http://127.0.0.1:3001
+pnpm --filter @salve/cli dev -- tickets list --status open
 ```
 
 Set `SALVE_TOKEN` for CI or run `salve login` to store a token in `~/.config/salve/auth.json` with `0600` permissions. `SALVE_API_URL` overrides the default API origin, and `SALVE_WORKSPACE_ID` overrides the active workspace header.
 
 Human output defaults to tables on a TTY. Use `--json` for stable JSON or `--jsonl` for one object per line. Errors are printed to stderr and use exit code `1` for validation/auth failures and `2` for network or server failures.
 
-The CLI is intentionally thin: all domain operations use `@opendesk/api-client`. The `salve api <METHOD> <PATH>` escape hatch also runs through the SDK so auth, retries, idempotency, and error formatting stay consistent.
+The CLI is intentionally thin: all domain operations use `@salve/api-client`. The `salve api <METHOD> <PATH>` escape hatch also runs through the SDK so auth, retries, idempotency, and error formatting stay consistent.
 
 Example `tickets list` output:
 

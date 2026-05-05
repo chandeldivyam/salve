@@ -1,4 +1,4 @@
-// @opendesk/zero-schema/queries — workspace-scoped query helpers.
+// @salve/zero-schema/queries — workspace-scoped query helpers.
 //
 // Pattern from `/tmp/zero-mono/apps/zbugs/shared/queries.ts:69-306`. Every
 // query goes through `applyWorkspaceScope` so a missing `.where('workspaceID',

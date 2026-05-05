@@ -39,7 +39,7 @@ export const view = pgTable(
     description: text('description'),
     icon: text('icon'),
     color: text('color'),
-    // ViewQuery / ViewSort / DisplayProps in @opendesk/zero-schema/views.
+    // ViewQuery / ViewSort / DisplayProps in @salve/zero-schema/views.
     query: jsonb('query').notNull(),
     sort: jsonb('sort').notNull(),
     groupBy: text('group_by'),

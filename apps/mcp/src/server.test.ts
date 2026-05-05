@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { SalveApiError, type SalveClient, type SalveRequestOptions } from '@opendesk/api-client';
+import { SalveApiError, type SalveClient, type SalveRequestOptions } from '@salve/api-client';
 import { formatError } from './error.js';
 import { buildServer } from './server.js';
 import { MCP_ACTIONS } from './tools/registry.js';

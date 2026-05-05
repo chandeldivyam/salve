@@ -1,5 +1,5 @@
 {
-  "name": "@opendesk/api-client",
+  "name": "@salve/api-client",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -21,7 +21,7 @@
     "test": "tsx --test src/*.test.ts"
   },
   "dependencies": {
-    "@opendesk/action-contracts": "workspace:*"
+    "@salve/action-contracts": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "25.6.0",

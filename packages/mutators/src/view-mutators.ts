@@ -5,6 +5,7 @@
 // mutator funnels its auth check through `assertHasWorkspace`; cross-workspace
 // reads are blocked by `assertViewInWorkspace`.
 
+import { defineMutator, type Transaction } from '@rocicorp/zero';
 import {
   builder,
   DEFAULT_DISPLAY_PROPS,
@@ -16,8 +17,7 @@ import {
   type ViewSort,
   viewQueryZ,
   viewSortZ,
-} from '@opendesk/zero-schema';
-import { defineMutator, type Transaction } from '@rocicorp/zero';
+} from '@salve/zero-schema';
 import { z } from 'zod';
 import { assertHasWorkspace, type WorkspaceAuthData } from './auth.js';
 import { MutationError, MutationErrorCode } from './error.js';

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { schema as dbSchema, getDb } from '@opendesk/db';
+import { schema as dbSchema, getDb } from '@salve/db';
 import { and, eq, sql } from 'drizzle-orm';
 import type { Context } from 'hono';
 import { z } from 'zod';

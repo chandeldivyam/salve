@@ -1,4 +1,4 @@
-import { cn } from '@opendesk/ui';
+import { cn } from '@salve/ui';
 import {
   Bell,
   BellOff,

@@ -1,4 +1,4 @@
-import type { ActionID } from '@opendesk/action-contracts';
+import type { ActionID } from '@salve/action-contracts';
 
 const DESCRIPTIONS: Partial<Record<ActionID, string>> = {
   whoami:

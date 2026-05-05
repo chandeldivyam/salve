@@ -1,4 +1,4 @@
-import { viewActions } from '@opendesk/action-contracts';
+import { viewActions } from '@salve/action-contracts';
 import {
   createViewExecutor,
   deleteViewExecutor,
@@ -6,7 +6,7 @@ import {
   listViewsExecutor,
   updateViewExecutor,
   viewTicketsExecutor,
-} from '@opendesk/action-executor';
+} from '@salve/action-executor';
 import { Hono } from 'hono';
 import { actionHandler, actionMiddlewares, readJsonBody } from './action-route.js';
 

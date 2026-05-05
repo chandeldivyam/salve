@@ -1,6 +1,6 @@
 # apps/zero-cache · AGENTS.md
 
-Thin runner workspace whose only job is to invoke `zero-cache-dev` against `@opendesk/zero-schema`. Read root `AGENTS.md` first.
+Thin runner workspace whose only job is to invoke `zero-cache-dev` against `@salve/zero-schema`. Read root `AGENTS.md` first.
 
 ## What it does
 
@@ -10,7 +10,7 @@ In dev: one `zero-cache-dev` Node process at `:4848`. In prod (Phase 6): contain
 
 ## Notable patterns
 
-- This workspace has **no source code of its own** beyond a placeholder; it depends on `@opendesk/zero-schema` and runs the bundled `zero-cache-dev` CLI.
+- This workspace has **no source code of its own** beyond a placeholder; it depends on `@salve/zero-schema` and runs the bundled `zero-cache-dev` CLI.
 - Schema path passed via flag: `zero-cache-dev --schema-path ../../packages/zero-schema/src/schema.ts`.
 - Replica file (`zero.db`) lives at the workspace root; gitignored. `pnpm dev:clean` (root script) deletes it.
 - The mutator + query endpoints zero-cache calls live in `apps/api`. Configured via `ZERO_MUTATE_URL` and `ZERO_QUERY_URL`.
@@ -18,7 +18,7 @@ In dev: one `zero-cache-dev` Node process at `:4848`. In prod (Phase 6): contain
 ## Env
 
 ```
-ZERO_UPSTREAM_DB=postgresql://opendesk:opendesk@127.0.0.1:5432/opendesk
+ZERO_UPSTREAM_DB=postgresql://salve:salve@127.0.0.1:5432/salve
 ZERO_REPLICA_FILE=./zero.db
 ZERO_AUTH_SECRET=<same as AUTH_SECRET in apps/api>
 ZERO_PORT=4848

@@ -8,7 +8,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from '@opendesk/ui';
+} from '@salve/ui';
 import {
   Activity,
   Copy,

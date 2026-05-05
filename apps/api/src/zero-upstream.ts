@@ -1,5 +1,5 @@
-import { schema } from '@opendesk/zero-schema';
 import { zeroPostgresJS } from '@rocicorp/zero/server/adapters/postgresjs';
+import { schema } from '@salve/zero-schema';
 
 const upstreamDB = process.env.DATABASE_URL ?? '';
 let zql: ReturnType<typeof zeroPostgresJS<typeof schema>> | undefined;

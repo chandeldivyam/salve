@@ -8,8 +8,8 @@
 // Hotkeys (`Alt+V` save, `[`/`]` next/prev) live in `inbox-list.tsx` next
 // to the keybinding shape; this hook only handles the data-driven catalog.
 
-import { type BuiltinViewMember, queries, type View, type ViewMember } from '@opendesk/zero-schema';
 import { useQuery } from '@rocicorp/zero/react';
+import { type BuiltinViewMember, queries, type View, type ViewMember } from '@salve/zero-schema';
 import { Filter as FilterIcon } from 'lucide-react';
 import { useEffect, useMemo } from 'react';
 import type { Command } from '@/lib/commands/registry';

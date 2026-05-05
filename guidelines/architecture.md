@@ -2,7 +2,7 @@
 
 The single most-asked question on this codebase is *"where does this change go?"* This guide answers it. Read it before you start a feature.
 
-opendesk has two write paths. They look superficially similar — both produce database rows, audit events, and Inngest dispatches — but they have different invariants, different auth models, and different consumers. Mixing them up is the most common cause of subtle multi-tenant bugs.
+salve has two write paths. They look superficially similar — both produce database rows, audit events, and Inngest dispatches — but they have different invariants, different auth models, and different consumers. Mixing them up is the most common cause of subtle multi-tenant bugs.
 
 ---
 
@@ -36,8 +36,8 @@ For anything that runs **outside the React app**: external integrations, agentic
 
 > **The web app never calls `/v1`. External consumers never call Zero.**
 
-- `apps/web` reads through Zero subscriptions (`useQuery`) and writes through Zero mutators (`zero.mutate.<ns>.<action>`). It does not import from `@opendesk/api-client` or fetch `/v1/*`.
-- The CLI, MCP server, and SDK consumers go through `/v1`. They do not import `@opendesk/zero-schema` or `@opendesk/mutators` directly.
+- `apps/web` reads through Zero subscriptions (`useQuery`) and writes through Zero mutators (`zero.mutate.<ns>.<action>`). It does not import from `@salve/api-client` or fetch `/v1/*`.
+- The CLI, MCP server, and SDK consumers go through `/v1`. They do not import `@salve/zero-schema` or `@salve/mutators` directly.
 - The two paths *converge* server-side: the action executor calls `ctx.runMutation('<ns>.<action>', args)`, which runs the same `defineMutators` code the web app would have run. That's why business logic stays in one place.
 
 Why the rule exists:
@@ -68,7 +68,7 @@ If a write needs to be available **both** to the UI and to programmatic consumer
 
 | Surface | Principal | Auth | Scope check |
 |---|---|---|---|
-| Web app | user (JWT cookie) | better-auth → JWT → Zero `<ZeroProvider>` | `assertCanModify*` helpers in `@opendesk/mutators/src/auth.ts` |
+| Web app | user (JWT cookie) | better-auth → JWT → Zero `<ZeroProvider>` | `assertCanModify*` helpers in `@salve/mutators/src/auth.ts` |
 | `/v1` (REST/CLI/MCP) | user (PAT) or service account | `Authorization: Bearer slv_{pat,svc}_…` | `requireApiScopes(action.scopes)` middleware + executor invariants |
 
 Service-account tokens carry a `principalKind: 'service_account'` claim. The audit trail records the API-key id so admins can revoke.
@@ -80,7 +80,7 @@ Service-account tokens carry a `principalKind: 'service_account'` claim. The aud
 Two layers, both required for write actions:
 
 1. **HTTP layer** — `Idempotency-Key` header is taken from `idempotencyKeyMiddleware`. The action route stores `(workspaceID, actionID, key) → response` in `idempotency_record`; replays return the cached response with `Idempotency-Replayed: true`. Mismatched-body replays return `409 idempotency_key.reused_with_different_request`.
-2. **Resource layer** — `actionResourceID(ctx, actionID, suffix)` (in `@opendesk/action-executor`) derives a deterministic UUID from `(workspaceID, actionID, idempotencyKey, suffix)` so the *generated row id* is stable across retries. Without an idempotency key, it falls back to `randomUUID()`.
+2. **Resource layer** — `actionResourceID(ctx, actionID, suffix)` (in `@salve/action-executor`) derives a deterministic UUID from `(workspaceID, actionID, idempotencyKey, suffix)` so the *generated row id* is stable across retries. Without an idempotency key, it falls back to `randomUUID()`.
 
 Contracts declare `idempotency: 'none' | 'optional' | 'required'`. The CLI and MCP auto-generate a key for `'required'`; the api-client mints one for the same set. Audit-event creation, message sends, and ticket creation are all `'required'`.
 
@@ -116,7 +116,7 @@ No DB pollers. The original RFC committed to this for a reason — the moment a 
 
 - **Calling `fetch('/v1/...')` from a React component.** It bypasses the local Zero cache, breaks optimistic UI, and the request fails CORS in dev. Use `zero.mutate.<ns>.<action>` instead.
 - **Writing from the executor with raw SQL or `ctx.db.insert(...)`.** Bypasses audit emission and the Zero mutator's reactive cache. Always go through `ctx.runMutation('<ns>.<action>', …)`.
-- **Adding a CLI subcommand that doesn't have an action contract.** The CLI is a thin wrapper; if the action doesn't exist in `@opendesk/action-contracts`, the command shouldn't exist either.
+- **Adding a CLI subcommand that doesn't have an action contract.** The CLI is a thin wrapper; if the action doesn't exist in `@salve/action-contracts`, the command shouldn't exist either.
 - **Skipping `idempotency: 'required'` on a write.** Then a network retry doubles the row. The api-client auto-generates a key only when the contract demands one.
 - **Using `idSchema` (`z.string().min(1)`) for input UUIDs.** Lets non-UUID strings reach the postgres driver and explode as `500 internal_error` instead of `400 validation_error`. Use `z.string().uuid()` for all user-supplied identifiers (see post-H hardening 2026-05-05).
 - **Polling the database for "things to send".** Inngest is the durable queue. Server mutators dispatch post-commit; recovery cron is a no-op in healthy operation.

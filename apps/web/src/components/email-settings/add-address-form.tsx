@@ -20,7 +20,7 @@ import {
   FieldLabel,
   Input,
   Textarea,
-} from '@opendesk/ui';
+} from '@salve/ui';
 import { Check, ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 import { showError, showSuccess } from '@/lib/feedback';

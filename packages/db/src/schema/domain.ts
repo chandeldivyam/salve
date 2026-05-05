@@ -2,7 +2,7 @@
 //
 // Multi-tenant boundary: every row carries `workspaceId` (FK to better-auth's
 // `organization.id`, which is a TEXT id). Postgres is the source of truth;
-// Zero (in `@opendesk/zero-schema`) mirrors these tables.
+// Zero (in `@salve/zero-schema`) mirrors these tables.
 //
 // Notes:
 // - Timestamps are `timestamptz` so Postgres knows the timezone. Zero's

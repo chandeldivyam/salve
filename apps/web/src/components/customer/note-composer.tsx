@@ -1,5 +1,5 @@
-import { mutators } from '@opendesk/mutators';
-import { Button, cn } from '@opendesk/ui';
+import { mutators } from '@salve/mutators';
+import { Button, cn } from '@salve/ui';
 import { Pin, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { showError } from '@/lib/feedback';

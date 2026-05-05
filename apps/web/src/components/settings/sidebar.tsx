@@ -3,7 +3,7 @@
 //
 // Used inside `WorkbenchLeftRail` when the route is under `/app/settings/*`.
 
-import { cn } from '@opendesk/ui';
+import { cn } from '@salve/ui';
 import { Link, useLocation } from '@tanstack/react-router';
 import type { LucideIcon } from 'lucide-react';
 

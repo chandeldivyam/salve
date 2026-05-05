@@ -19,7 +19,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { ALL_ACTIONS } from '@opendesk/action-contracts';
+import { ALL_ACTIONS } from '@salve/action-contracts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MAIN_PATH = resolve(__dirname, 'main.ts');

@@ -1,12 +1,12 @@
-// better-auth setup for opendesk.
+// better-auth setup for salve.
 //
-// - Drizzle adapter pointed at @opendesk/db's schema.
+// - Drizzle adapter pointed at @salve/db's schema.
 // - Email/password enabled. Google OAuth + magic link kept as placeholders
 //   (gated on env so dev runs without third-party config).
 // - Organization plugin enabled so workspace = better-auth `organization`.
 
 import { apiKey } from '@better-auth/api-key';
-import { authSchema, getDb } from '@opendesk/db';
+import { authSchema, getDb } from '@salve/db';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { magicLink } from 'better-auth/plugins/magic-link';
@@ -84,7 +84,7 @@ export const auth = betterAuth({
       // credential into the platform's log pipeline.
       sendMagicLink: async ({ email, url }) => {
         if (process.env.NODE_ENV !== 'production') {
-          console.log(`[opendesk-api] magic-link → ${email} → ${url}`);
+          console.log(`[salve-api] magic-link → ${email} → ${url}`);
         }
       },
     }),

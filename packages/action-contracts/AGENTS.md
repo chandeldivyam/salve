@@ -48,7 +48,7 @@ src/
 | File | What it is |
 |---|---|
 | `src/types.ts` | `defineAction` + `AnyActionContract` + helper generics. |
-| `src/registry.ts` | `ALL_ACTIONS` aggregation; consumed by `@opendesk/action-executor` registry, `apps/cli`, `apps/mcp`, OpenAPI. |
+| `src/registry.ts` | `ALL_ACTIONS` aggregation; consumed by `@salve/action-executor` registry, `apps/cli`, `apps/mcp`, OpenAPI. |
 | `src/scopes.ts` | Closed enum of allowed scope strings. |
 | `src/openapi.ts` | OpenAPI doc generator. |
 | `src/<domain>.ts` | The actual contract definitions per domain. |

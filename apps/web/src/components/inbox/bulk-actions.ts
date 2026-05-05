@@ -9,7 +9,7 @@
 // the logic here means the palette's bulk section is a thin shim over the
 // same calls the bar uses.
 
-import { mutators } from '@opendesk/mutators';
+import { mutators } from '@salve/mutators';
 import { showError, showSuccess } from '@/lib/feedback';
 import type { useZero } from '@/lib/zero';
 

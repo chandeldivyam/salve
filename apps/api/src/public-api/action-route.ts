@@ -1,6 +1,6 @@
-import type { ActionInput, AnyActionContract } from '@opendesk/action-contracts';
-import type { Executor, ExecutorAuth, ExecutorCtx } from '@opendesk/action-executor';
-import { getDb } from '@opendesk/db';
+import type { ActionInput, AnyActionContract } from '@salve/action-contracts';
+import type { Executor, ExecutorAuth, ExecutorCtx } from '@salve/action-executor';
+import { getDb } from '@salve/db';
 import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import type { z } from 'zod';

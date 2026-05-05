@@ -6,9 +6,9 @@
 // the assertion runs (zbugs does the same — the trick is what makes the
 // `authData.workspaceID` access typed-as-non-null inside the body).
 
-import type { AuthData } from '@opendesk/zero-schema';
-import { builder } from '@opendesk/zero-schema';
 import type { Transaction } from '@rocicorp/zero';
+import type { AuthData } from '@salve/zero-schema';
+import { builder } from '@salve/zero-schema';
 import { MutationError, MutationErrorCode } from './error.js';
 
 /**
@@ -50,7 +50,7 @@ export function assertHasWorkspace(
  * Confirm the JWT names the workspace the caller is trying to write to. Refuse
  * stale tokens (where the JWT's claim doesn't match the row's workspace). Pass
  * `targetWorkspaceID` as the workspace embedded in the payload the caller sent
- * us — for opendesk that means we never trust a `workspaceID` field on
+ * us — for salve that means we never trust a `workspaceID` field on
  * `args` (callers don't supply one — we always derive it from `authData`).
  * This helper exists for the rare case we need to verify a related row's
  * workspace inside a mutator (e.g. assigning a ticket to an assignee — we check

@@ -1,4 +1,4 @@
-import type { SalveClient } from '@opendesk/api-client';
+import type { SalveClient } from '@salve/api-client';
 
 export interface SalveMcpAuth {
   userId: string;

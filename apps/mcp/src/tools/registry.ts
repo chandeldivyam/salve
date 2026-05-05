@@ -1,5 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { type ActionID, ALL_ACTIONS, type AnyActionContract } from '@opendesk/action-contracts';
+import { type ActionID, ALL_ACTIONS, type AnyActionContract } from '@salve/action-contracts';
 import type { SalveMcpContext } from '../types.js';
 import { descriptionForAction } from './describe.js';
 import { runActionTool } from './execute.js';

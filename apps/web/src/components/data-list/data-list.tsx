@@ -6,7 +6,7 @@
 // drives those features. Until then, callers wire their own keyboard nav
 // (e.g. `useShortcut(['j'], ...)`).
 
-import { Button, cn } from '@opendesk/ui';
+import { Button, cn } from '@salve/ui';
 import type { ReactNode } from 'react';
 
 export interface DataListProps<T> {

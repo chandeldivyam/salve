@@ -1,6 +1,6 @@
 # Frontend Guidelines
 
-> The standard the opendesk web app holds itself to. Read it once, refer back often. When this file disagrees with code already in the repo, update the code — not the guidelines.
+> The standard the salve web app holds itself to. Read it once, refer back often. When this file disagrees with code already in the repo, update the code — not the guidelines.
 
 The goal is a help desk that feels engineered to a degree most teams skip. Two reference points:
 
@@ -44,7 +44,7 @@ Five rules sit above everything else. If a PR violates one of them, it fails rev
 2. **Keyboard-first, mouse-optional.** Every primary action has a shortcut. Power users should be able to triage 100 tickets without touching the mouse. The shortcut is shown in the button's tooltip; the global cheatsheet is `?`.
 3. **Restraint over decoration.** No gradients in chrome. No shadows on flat surfaces. No animation without purpose. Color carries meaning (status, priority, severity); decoration carries none.
 4. **Density without crowding.** Lists are tabular, not cards. Body text is 13 px, metadata 12 px, labels 11 px. We squeeze information density up to the limit of legibility and stop there.
-5. **The brand IS the experience.** The 404 page, the empty inbox, the error toast, the loading skeleton — these *are* opendesk. They are not chores to delegate to a default. They get the same craft as the inbox itself.
+5. **The brand IS the experience.** The 404 page, the empty inbox, the error toast, the loading skeleton — these *are* salve. They are not chores to delegate to a default. They get the same craft as the inbox itself.
 
 Practical translation:
 
@@ -93,7 +93,7 @@ packages/
 
 - **Co-locate by feature, not by type.** As a folder grows past ~6 files, split it into a feature subfolder (e.g. `components/conversation/` for the metadata block UI). Don't keep adding to a flat `components/` until it has 30 files. Same applies to `routes/app/` once a domain has 3+ routes.
 - **`lib/` is for *cross-cutting* utilities** (theme, feedback, session). Anything domain-specific (e.g. `support-metadata.ts`) is on the wrong floor — move it under the feature it serves.
-- **`packages/ui/` is for *domain-agnostic* primitives only.** A `<Button>` belongs there. A `<TicketStatusBadge>` does not — that is opendesk-specific and lives in `apps/web/src/components/`.
+- **`packages/ui/` is for *domain-agnostic* primitives only.** A `<Button>` belongs there. A `<TicketStatusBadge>` does not — that is salve-specific and lives in `apps/web/src/components/`.
 - **One responsibility per route file.** When a route file passes ~300 lines (`inbox.t.$ticketId.tsx` is currently ~870 — the canonical bad example), split immediately into header / thread / sidebar / composer subcomponents.
 
 ### File naming
@@ -107,7 +107,7 @@ packages/
 
 ## 3. Writing Zero: schema, queries, mutators
 
-zbugs is the source of truth. When opendesk diverges, the divergence must have a written reason.
+zbugs is the source of truth. When salve diverges, the divergence must have a written reason.
 
 ### 3.1 Schema
 
@@ -123,7 +123,7 @@ The single most important rule:
 
 > **Every workspace-scoped query MUST go through `applyWorkspaceScope`** (`packages/zero-schema/src/queries.ts:65`). A missing `.where('workspaceID', ...)` is a cross-tenant data leak. The helper makes that mistake structurally impossible.
 
-This is the opendesk equivalent of zbugs's `applyIssuePermissions` (zbugs `queries.ts:16-23`). The pattern:
+This is the salve equivalent of zbugs's `applyIssuePermissions` (zbugs `queries.ts:16-23`). The pattern:
 
 ```ts
 export const queries = defineQueries({
@@ -189,7 +189,7 @@ useEffect(() => {
 return <IssueView issue={issue} />;   // renders immediately from cache
 ```
 
-Applied to opendesk:
+Applied to salve:
 
 ```tsx
 // inbox-list.tsx
@@ -247,7 +247,7 @@ zbugs reference: `/tmp/zero-mono/apps/zbugs/shared/mutators.ts`. Patterns to cop
 
 ### 3.3.1 List queries are bounded; pagination is a window, not a page
 
-> **No unbounded list query.** Every list query that can grow with workspace size MUST take a `limit` argument with a sensible default. The default for opendesk is **200**, the ceiling **2000**.
+> **No unbounded list query.** Every list query that can grow with workspace size MUST take a `limit` argument with a sensible default. The default for salve is **200**, the ceiling **2000**.
 
 `inboxOpen` (`packages/zero-schema/src/queries.ts`) is the canonical example:
 
@@ -423,7 +423,7 @@ CVA centralizes variants and produces a typed `ButtonProps` automatically. Don't
 
 ### Domain components live with the app, not in `ui/`
 
-`<TicketStatusBadge>`, `<AssigneePicker>`, `<TagPill>` belong in `apps/web/src/components/`. They depend on `mutators` / `queries` / `AuthData` and are not reusable outside opendesk. Keep `packages/ui/` shape-agnostic.
+`<TicketStatusBadge>`, `<AssigneePicker>`, `<TagPill>` belong in `apps/web/src/components/`. They depend on `mutators` / `queries` / `AuthData` and are not reusable outside salve. Keep `packages/ui/` shape-agnostic.
 
 ### Component size budget
 
@@ -489,7 +489,7 @@ When designing components:
 - Status colors *vibrate* at high chroma in dark mode. Drop chroma slightly (`0.13 → 0.11`) — already done in `styles.css`.
 - Pure black is wrong. Our `bg-canvas` is `oklch(0.155 …)`, not `#000`. Pure black causes halation against white text.
 - Pure white text is wrong. `fg-primary` is `oklch(0.96 …)` (off-white). Pure white at full chroma against a dark surface creates harsh contrast and "screen glare."
-- **Hue choice is opinionated.** Dark mode runs hue 270 at chroma 0.003–0.008 — *very* low, but enough to harmonize with the brand indigo. Light mode runs hue 320 (Linear's "warm grey" tilt). Cool grays (hue 200–230) read "techy / cold" and were the single biggest reason opendesk used to look generic. Don't reintroduce them.
+- **Hue choice is opinionated.** Dark mode runs hue 270 at chroma 0.003–0.008 — *very* low, but enough to harmonize with the brand indigo. Light mode runs hue 320 (Linear's "warm grey" tilt). Cool grays (hue 200–230) read "techy / cold" and were the single biggest reason salve used to look generic. Don't reintroduce them.
 
 ### Motion, shadows, z-layers, icons
 
@@ -1142,7 +1142,7 @@ If you do any of these, expect to be asked to undo them in code review.
 24. **`as unknown as Foo` casts.** Almost always means a type definition is wrong upstream. Fix the schema, not the call site.
 25. **Adding a new color outside the token system.** Add a token, then use it.
 26. **`useQuery(queries.X())` without a TTL.** No second argument means no cache survival, which means a hard reload re-mounts cold and the UI flashes a loading state. Always pass `CACHE_FOREVER` / `CACHE_NAV` / `CACHE_NONE` from `lib/zero-cache.ts`. See §3.2.
-27. **Gating UI on `status?.type !== 'unknown'`.** This was the source of opendesk's "Loading inbox…" flash. Render from `data` whenever it has rows; only treat `status.type === 'complete'` as "server has confirmed completeness" — useful for analytics, preload triggers, and disambiguating *truly empty* from *not yet hydrated*. Never the gate for whether to render. See §3.2.1.
+27. **Gating UI on `status?.type !== 'unknown'`.** This was the source of salve's "Loading inbox…" flash. Render from `data` whenever it has rows; only treat `status.type === 'complete'` as "server has confirmed completeness" — useful for analytics, preload triggers, and disambiguating *truly empty* from *not yet hydrated*. Never the gate for whether to render. See §3.2.1.
 28. **`!ticket` → "Not found" without checking status.** A `.one()` query returns `undefined` while hydrating, *and* when the row genuinely doesn't exist. Show "not found" only when `status.type === 'complete'`; otherwise show a skeleton.
 29. **Unbounded list queries.** Every list that grows with workspace size needs a `limit` arg + window growth. `.orderBy(...).orderBy('id', 'desc')` *without* a `.limit()` is a code-review blocker. See §3.3.1.
 30. **No preload at the app shell.** Inbox + workspace metadata must be subscribed via `preloadWorkspace(z)` for the lifetime of `<ZeroProvider>`. Without it, navigating away from `/app/inbox` lets the TTL clock start and a quick reload races the cache. See `apps/web/src/lib/zero-preload.ts`.

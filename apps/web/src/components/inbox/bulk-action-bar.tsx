@@ -6,6 +6,7 @@
 // Sits OUTSIDE the virtualized scroll area (positioned absolute) so the
 // overlay never pushes rows or triggers re-measurement.
 
+import { useQuery } from '@rocicorp/zero/react';
 import {
   Avatar,
   AvatarFallback,
@@ -21,9 +22,8 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from '@opendesk/ui';
-import { queries } from '@opendesk/zero-schema';
-import { useQuery } from '@rocicorp/zero/react';
+} from '@salve/ui';
+import { queries } from '@salve/zero-schema';
 import { AlertTriangle, ChevronDown, Clock, Tag, UserPlus, X } from 'lucide-react';
 import {
   type BulkPriority,

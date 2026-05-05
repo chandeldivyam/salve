@@ -1,4 +1,4 @@
-import { customerActions } from '@opendesk/action-contracts';
+import { customerActions } from '@salve/action-contracts';
 import {
   addCustomerTagsExecutor,
   createCustomerNoteExecutor,
@@ -10,7 +10,7 @@ import {
   setCustomerCustomFieldExecutor,
   updateCustomerExecutor,
   updateCustomerNoteExecutor,
-} from '@opendesk/action-executor';
+} from '@salve/action-executor';
 import { Hono } from 'hono';
 import { actionHandler, actionMiddlewares, readJsonBody } from './action-route.js';
 

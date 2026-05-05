@@ -8,7 +8,7 @@
 
 import { randomBytes, randomUUID } from 'node:crypto';
 import { defaultKeyHasher } from '@better-auth/api-key';
-import { authSchema, getDb } from '@opendesk/db';
+import { authSchema, getDb } from '@salve/db';
 import { and, eq } from 'drizzle-orm';
 import type { Context } from 'hono';
 import { z } from 'zod';

@@ -36,7 +36,7 @@ The two surfaces share one underlying component (`<TimelineFeed>`) and one data 
 - New comments from other users below the viewport surface as a toast that scroll-jumps + highlights on click (`issue-page.tsx:1010-1090`).
 - All queries share `CACHE_NAV` (10s TTL) — uniform, simple.
 
-**Opendesk today** (`apps/web/src/routes/app/inbox.t.$ticketId.tsx`):
+**Salve today** (`apps/web/src/routes/app/inbox.t.$ticketId.tsx`):
 - Two-column: messages on the left, custom-fields rail on the right (320px ≥ xl).
 - Message stream is messages-only. **No activity events rendered, even though `auditEvent` exists in the schema** (`packages/zero-schema/src/schema.ts:110-122`).
 - No date dividers, no "load earlier" affordance — every message in the ticket loads via `ticketByID`.

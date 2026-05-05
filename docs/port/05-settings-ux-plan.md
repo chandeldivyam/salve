@@ -6,7 +6,7 @@ Snapshot of current state at the bottom (§9). The plan first.
 
 ---
 
-## 1. The decision: vertical-sidebar layout (Linear-shaped, opendesk-tuned)
+## 1. The decision: vertical-sidebar layout (Linear-shaped, salve-tuned)
 
 We adopt **a single vertical sidebar with grouped sections**, not the current horizontal section strip. Reasons:
 
@@ -209,7 +209,7 @@ In order, each landable on its own:
 
 1. **Build primitives**
    - `SettingsSidebar`, `SettingsHeader`, `FormSection`, `ListSection`, `EmptyState`, side-sheet variant of existing `Dialog`, sticky `SaveBar` (auto-save indicator, not a button).
-   - Add to `@opendesk/ui` and document in `guidelines/frontend.md` §11 (new section).
+   - Add to `@salve/ui` and document in `guidelines/frontend.md` §11 (new section).
 
 2. **Migrate Setup**
    - Move under Workspace group. Same checklist content. Drop the `bg-brand-soft` icon tile in favor of a neutral `bg-bg-elevated` tile (accent restraint).

@@ -38,22 +38,22 @@ importers:
       '@hono/node-server':
         specifier: 2.0.0
         version: 2.0.0(hono@4.12.15)
-      '@opendesk/action-contracts':
+      '@salve/action-contracts':
         specifier: workspace:*
         version: link:../../packages/action-contracts
-      '@opendesk/action-executor':
+      '@salve/action-executor':
         specifier: workspace:*
         version: link:../../packages/action-executor
-      '@opendesk/core':
+      '@salve/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@opendesk/db':
+      '@salve/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@opendesk/mutators':
+      '@salve/mutators':
         specifier: workspace:*
         version: link:../../packages/mutators
-      '@opendesk/zero-schema':
+      '@salve/zero-schema':
         specifier: workspace:*
         version: link:../../packages/zero-schema
       '@rocicorp/zero':
@@ -115,10 +115,10 @@ importers:
         specifier: 4.4.1
         version: 4.4.1
     devDependencies:
-      '@opendesk/action-contracts':
+      '@salve/action-contracts':
         specifier: workspace:*
         version: link:../../packages/action-contracts
-      '@opendesk/api-client':
+      '@salve/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
       '@types/node':
@@ -150,10 +150,10 @@ importers:
         specifier: 4.4.1
         version: 4.4.1
     devDependencies:
-      '@opendesk/action-contracts':
+      '@salve/action-contracts':
         specifier: workspace:*
         version: link:../../packages/action-contracts
-      '@opendesk/api-client':
+      '@salve/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
       '@types/node':
@@ -180,16 +180,16 @@ importers:
       '@hookform/resolvers':
         specifier: 5.2.2
         version: 5.2.2(react-hook-form@7.74.0(react@19.2.5))
-      '@opendesk/core':
+      '@salve/core':
         specifier: workspace:^
         version: link:../../packages/core
-      '@opendesk/mutators':
+      '@salve/mutators':
         specifier: workspace:*
         version: link:../../packages/mutators
-      '@opendesk/ui':
+      '@salve/ui':
         specifier: workspace:*
         version: link:../../packages/ui
-      '@opendesk/zero-schema':
+      '@salve/zero-schema':
         specifier: workspace:*
         version: link:../../packages/zero-schema
       '@rocicorp/zero':
@@ -277,7 +277,7 @@ importers:
 
   apps/zero-cache:
     dependencies:
-      '@opendesk/zero-schema':
+      '@salve/zero-schema':
         specifier: workspace:*
         version: link:../../packages/zero-schema
       '@rocicorp/zero':
@@ -295,10 +295,10 @@ importers:
       '@better-auth/api-key':
         specifier: 1.6.9
         version: 1.6.9(@better-auth/core@1.6.9(@better-auth/utils@0.4.0)(@better-fetch/fetch@1.1.21)(@opentelemetry/api@1.9.1)(better-call@1.3.5(zod@4.4.1))(jose@6.2.3)(kysely@0.28.16)(nanostores@1.3.0))(@better-auth/utils@0.4.0)(better-auth@1.6.9(@opentelemetry/api@1.9.1)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)(kysely@0.28.16)(postgres@3.4.9))(react-dom@19.2.5(react@19.2.5))(react@19.2.5))
-      '@opendesk/action-contracts':
+      '@salve/action-contracts':
         specifier: workspace:*
         version: link:../action-contracts
-      '@opendesk/db':
+      '@salve/db':
         specifier: workspace:*
         version: link:../db
       drizzle-orm:
@@ -314,7 +314,7 @@ importers:
 
   packages/api-client:
     dependencies:
-      '@opendesk/action-contracts':
+      '@salve/action-contracts':
         specifier: workspace:*
         version: link:../action-contracts
     devDependencies:
@@ -345,7 +345,7 @@ importers:
 
   packages/mutators:
     dependencies:
-      '@opendesk/zero-schema':
+      '@salve/zero-schema':
         specifier: workspace:*
         version: link:../zero-schema
       '@rocicorp/zero':

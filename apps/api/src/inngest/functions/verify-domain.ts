@@ -1,6 +1,6 @@
 import { resolveMx, resolveTxt } from 'node:dns/promises';
 import { GetEmailIdentityCommand, SESv2Client } from '@aws-sdk/client-sesv2';
-import { getClient } from '@opendesk/db';
+import { getClient } from '@salve/db';
 import type postgres from 'postgres';
 import { inngest } from '../client.js';
 import { DOMAIN_EVENT, domainVerificationRequestedDataSchema } from '../events.js';

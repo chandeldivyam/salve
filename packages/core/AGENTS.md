@@ -5,15 +5,15 @@ Shared domain types + pure utilities. Mostly a placeholder right now — fills u
 ## What goes here
 
 - **Pure functions** with no Drizzle / Zero / Hono / React deps. Importable from any app or package.
-- Domain types that aren't already in `@opendesk/db` (Drizzle types) or `@opendesk/zero-schema` (Zero `Row<T>` types).
+- Domain types that aren't already in `@salve/db` (Drizzle types) or `@salve/zero-schema` (Zero `Row<T>` types).
 - Validation helpers, formatters, parsing utilities.
 
 ## What does NOT go here
 
-- Drizzle schema → `@opendesk/db`.
-- Zero schema / queries → `@opendesk/zero-schema`.
-- Mutator logic → `@opendesk/mutators`.
-- React components → `@opendesk/ui`.
+- Drizzle schema → `@salve/db`.
+- Zero schema / queries → `@salve/zero-schema`.
+- Mutator logic → `@salve/mutators`.
+- React components → `@salve/ui`.
 - Server-only code (postgres client, S3 SDK, SES) → `apps/api`.
 
 ## Coming in Phase 3+

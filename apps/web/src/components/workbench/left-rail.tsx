@@ -13,7 +13,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from '@opendesk/ui';
+} from '@salve/ui';
 import { useLocation, useNavigate, useRouteContext } from '@tanstack/react-router';
 import {
   ArrowLeft,

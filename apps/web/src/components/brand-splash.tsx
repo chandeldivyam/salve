@@ -7,7 +7,7 @@
 // The animation is a subtle breathing scale on the leaf glyph plus three
 // trailing dots. Restraint over decoration: no spinners, no bars.
 
-import { cn, Logo } from '@opendesk/ui';
+import { cn, Logo } from '@salve/ui';
 
 interface BrandSplashProps {
   className?: string;

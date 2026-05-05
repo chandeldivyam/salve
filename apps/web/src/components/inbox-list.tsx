@@ -5,8 +5,9 @@
 // drive the same query path as custom views. Free-text search remains
 // client-side for v1; FTS intersection lands in T-4006.
 
-import { mutators } from '@opendesk/mutators';
-import { Button, Input } from '@opendesk/ui';
+import { useQuery } from '@rocicorp/zero/react';
+import { mutators } from '@salve/mutators';
+import { Button, Input } from '@salve/ui';
 import {
   type Filter,
   INBOX_INITIAL_PAGE,
@@ -18,8 +19,7 @@ import {
   type ViewMember,
   type ViewQuery,
   type ViewSort,
-} from '@opendesk/zero-schema';
-import { useQuery } from '@rocicorp/zero/react';
+} from '@salve/zero-schema';
 import { Link, useNavigate, useRouteContext, useSearch } from '@tanstack/react-router';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowRight, Inbox, ListChecks, Search } from 'lucide-react';
@@ -52,7 +52,7 @@ interface SavedInboxState {
   pageLimit: number;
 }
 
-const SCROLL_KEY_PREFIX = 'opendesk.inbox.state.';
+const SCROLL_KEY_PREFIX = 'salve.inbox.state.';
 
 function scrollKeyFor(workspaceID: string | null, viewID: string) {
   return `${SCROLL_KEY_PREFIX}${workspaceID ?? 'no-workspace'}.${viewID}`;

@@ -1,4 +1,4 @@
-import { Button, cn, Dialog, DialogContent, DialogDescription, DialogTitle } from '@opendesk/ui';
+import { Button, cn, Dialog, DialogContent, DialogDescription, DialogTitle } from '@salve/ui';
 import { X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { currentHotkeyPlatform, formatHotkey, type HotkeyPlatform } from '@/lib/commands/format';

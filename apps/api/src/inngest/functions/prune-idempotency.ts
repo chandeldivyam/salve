@@ -11,7 +11,7 @@
 // concurrently re-read by `withIdempotency` (which always queries by
 // `(workspaceID, actionID, key)`).
 
-import { getDb, schema } from '@opendesk/db';
+import { getDb, schema } from '@salve/db';
 import { lt } from 'drizzle-orm';
 import { inngest } from '../client.js';
 

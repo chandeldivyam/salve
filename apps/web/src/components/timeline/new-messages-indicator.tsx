@@ -1,4 +1,4 @@
-import { Button } from '@opendesk/ui';
+import { Button } from '@salve/ui';
 import { ArrowDown } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { TimelineMessage } from './types';

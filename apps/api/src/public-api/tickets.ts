@@ -1,4 +1,4 @@
-import { ticketActions } from '@opendesk/action-contracts';
+import { ticketActions } from '@salve/action-contracts';
 import {
   addTicketTagsExecutor,
   assignTicketExecutor,
@@ -19,7 +19,7 @@ import {
   snoozeTicketExecutor,
   updateMessageExecutor,
   updateTicketExecutor,
-} from '@opendesk/action-executor';
+} from '@salve/action-executor';
 import { Hono } from 'hono';
 import { actionHandler, actionMiddlewares, readJsonBody } from './action-route.js';
 

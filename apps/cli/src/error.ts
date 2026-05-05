@@ -1,4 +1,4 @@
-import { hintForErrorCode, SalveApiError } from '@opendesk/api-client';
+import { hintForErrorCode, SalveApiError } from '@salve/api-client';
 import { ZodError } from 'zod';
 
 export function formatError(error: unknown): { message: string; exitCode: number } {

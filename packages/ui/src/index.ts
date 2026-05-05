@@ -1,6 +1,6 @@
-// @opendesk/ui — shadcn-derived components, design tokens.
+// @salve/ui — shadcn-derived components, design tokens.
 
-export const UI_PACKAGE = '@opendesk/ui' as const;
+export const UI_PACKAGE = '@salve/ui' as const;
 
 export {
   Avatar,

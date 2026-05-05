@@ -14,8 +14,8 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from '@opendesk/ui';
-import type { InboxRow as InboxRowData, Ticket } from '@opendesk/zero-schema';
+} from '@salve/ui';
+import type { InboxRow as InboxRowData, Ticket } from '@salve/zero-schema';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { AlertTriangle, Check } from 'lucide-react';
 import type { MouseEvent } from 'react';

@@ -2,9 +2,9 @@
 // sub-routes plus the inbound forwarding + reply addresses, both rendered
 // with CopyValue.
 
-import { Badge, CopyValue } from '@opendesk/ui';
-import { queries } from '@opendesk/zero-schema';
 import { useQuery } from '@rocicorp/zero/react';
+import { Badge, CopyValue } from '@salve/ui';
+import { queries } from '@salve/zero-schema';
 import { createFileRoute, Link, useRouteContext } from '@tanstack/react-router';
 import type { LucideIcon } from 'lucide-react';
 import { ArrowRight, Inbox, Mail, Reply, Route as RouteIcon, ShieldOff } from 'lucide-react';

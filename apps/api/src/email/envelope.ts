@@ -237,7 +237,7 @@ export function buildEnvelope(args: BuildEnvelopeArgs): BuiltEnvelope {
   // <ticket-cohort> = month-bucket of ticket creation as a coarse cohort key
   // to avoid every ticket being its own feedback loop.
   const ticketCohort = ticket.shortID > 0 ? `t${Math.floor(ticket.shortID / 100)}` : 'tnew';
-  const feedbackID = `t:${workspace.id}:${ticketCohort}:opendesk`;
+  const feedbackID = `t:${workspace.id}:${ticketCohort}:salve`;
 
   const headers: Array<[string, string]> = [
     ['MIME-Version', '1.0'],
@@ -271,7 +271,7 @@ export function buildEnvelope(args: BuildEnvelopeArgs): BuiltEnvelope {
 
 function appendHtmlSignature(html: string, signature?: string | null): string {
   if (!signature?.trim()) return html;
-  return `${html}<br><br><div class="opendesk-email-signature">${signature}</div>`;
+  return `${html}<br><br><div class="salve-email-signature">${signature}</div>`;
 }
 
 function appendTextSignature(text: string, signature?: string | null): string {
@@ -305,7 +305,7 @@ const CRLF = '\r\n';
  */
 export function serializeEnvelopeToRaw(env: BuiltEnvelope): Buffer {
   // Boundary uniqueness: derive from rfcMessageID — already unique-per-message.
-  const boundary = `=_opendesk_${env.rfcMessageID.replace(/[^a-zA-Z0-9]/g, '').slice(0, 32)}`;
+  const boundary = `=_salve_${env.rfcMessageID.replace(/[^a-zA-Z0-9]/g, '').slice(0, 32)}`;
 
   const headerLines = [
     ...env.headers.map(([k, v]) => `${k}: ${encodeHeaderValue(v)}`),

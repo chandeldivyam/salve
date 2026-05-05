@@ -1,4 +1,4 @@
-# opendesk · AGENTS.md
+# salve · AGENTS.md
 
 Read this before touching anything. It's how the project operates and what we've learned along the way. Per-area details live in `AGENTS.md` files inside each `apps/*` and `packages/*`. Cross-cutting practice lives in `guidelines/`:
 
@@ -12,7 +12,7 @@ Read this before touching anything. It's how the project operates and what we've
 
 ## Project at a glance
 
-- **Internal name (folder, npm scope, env vars, repo, code identifiers): `opendesk`** — `@opendesk/*` packages, `OPENDESK_*` env vars.
+- **Internal name (folder, npm scope, env vars, repo, code identifiers): `salve`** — `@salve/*` packages, `SALVE_*` env vars.
 - **Public brand: Salve** at `usesalve.com`. Tagline *"Healing the help-desk."* Used in customer-facing copy only — never in package names or code identifiers.
 - **What it is**: B2B multi-tenant help-desk SaaS. Open-source alternative to Intercom/Zendesk, with a public REST/CLI/MCP surface (`/v1`, `salve`, `salve-mcp`) for programmatic + agentic consumers.
 - **Stack**: TypeScript + pnpm 10 + Turborepo + Vite 8 + React 19 + TanStack Router + Tailwind v4 + shadcn-derived UI + Hono + Drizzle + `@rocicorp/zero@1.3.0` + Inngest + Postgres + Biome 2.4 + Zod 4 + `@modelcontextprotocol/sdk` 1.x. Hosting: AWS via SST v3 (Phase 6).
@@ -115,7 +115,7 @@ agent-browser find role button 'Sign in' click
 ### Tailwind v4 + UI
 
 - Tailwind v4's auto-content detection misses workspace siblings. Add `@source "../../../packages/ui/src/**/*.tsx"` to `apps/web/src/styles.css`. Cost us "buttons render with no fill" in design review.
-- Brand tokens (`--color-brand-{50,500,600,700,900}`) live in `@theme {}` in `styles.css`. Components in `@opendesk/ui` reference `brand-*` classes — never `slate-*` for accent colors.
+- Brand tokens (`--color-brand-{50,500,600,700,900}`) live in `@theme {}` in `styles.css`. Components in `@salve/ui` reference `brand-*` classes — never `slate-*` for accent colors.
 - `<select>` natively styled is acceptable for Phase 1 utilities (workspace switcher) but **not** for help-desk-specific UI; replace with shadcn DropdownMenu by Phase 4.
 - Forms: `noValidate` on `<form>` + `aria-invalid` on inputs + inline `<p className="text-sm text-red-600">` errors. Never the browser default tooltip — it's inconsistent with our card design.
 
@@ -154,7 +154,7 @@ The public REST API at `/v1`, the `salve` CLI, and the `salve-mcp` MCP server sh
 ## Repo navigation map
 
 ```
-opendesk/
+salve/
 ├── apps/
 │   ├── api/            # Hono server: auth, JWT, /api/zero/*, /api/files/*, /v1/*, server-mutators
 │   ├── cli/            # `salve` CLI binary — auto-derived from action contracts (Phase G)
@@ -190,4 +190,4 @@ opendesk/
 `pnpm dev` runs web (5173) + api (3001) + zero-cache (4848) in parallel via Turbo.
 `pnpm dev:docker:up` boots all backing services. `pnpm dev:clean` resets state.
 
-CLI dev: `SALVE_API_URL=http://localhost:3001 pnpm --filter @opendesk/cli dev <args>`. MCP dev: `pnpm --filter @opendesk/mcp build` then point your MCP host at `dist/salve-mcp.mjs`.
+CLI dev: `SALVE_API_URL=http://localhost:3001 pnpm --filter @salve/cli dev <args>`. MCP dev: `pnpm --filter @salve/mcp build` then point your MCP host at `dist/salve-mcp.mjs`.

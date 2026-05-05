@@ -1,4 +1,4 @@
-import { mutators } from '@opendesk/mutators';
+import { mutators } from '@salve/mutators';
 import {
   AlertTriangle,
   Archive,

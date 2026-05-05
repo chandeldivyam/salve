@@ -1,14 +1,14 @@
 {
-  "name": "opendesk",
+  "name": "salve",
   "private": true,
   "version": "0.0.0",
-  "description": "Salve — open-source Intercom/Zendesk alternative. Internal monorepo name: opendesk.",
+  "description": "Salve — open-source Intercom/Zendesk alternative.",
   "packageManager": "pnpm@10.33.2",
   "engines": {
     "node": ">=20"
   },
   "scripts": {
-    "dev": "turbo run dev --parallel",
+    "dev": "turbo run dev --parallel --filter=@salve/api --filter=@salve/web --filter=@salve/zero-cache",
     "dev:docker:up": "docker compose -f docker/docker-compose.yml up -d",
     "dev:docker:down": "docker compose -f docker/docker-compose.yml down",
     "dev:docker:logs": "docker compose -f docker/docker-compose.yml logs -f",
@@ -21,10 +21,11 @@
     "check": "biome check .",
     "check:fix": "biome check --write .",
     "check:file-sizes": "node scripts/check-file-sizes.mjs",
-    "db:generate": "pnpm --filter @opendesk/db db:generate",
-    "db:migrate": "pnpm --filter @opendesk/db db:migrate",
-    "db:push": "pnpm --filter @opendesk/db db:push",
-    "db:studio": "pnpm --filter @opendesk/db db:studio"
+    "db:generate": "pnpm --filter @salve/db db:generate",
+    "db:migrate": "pnpm --filter @salve/db db:migrate",
+    "db:push": "pnpm --filter @salve/db db:push",
+    "db:studio": "pnpm --filter @salve/db db:studio",
+    "db:seed:scale": "pnpm --filter @salve/db db:seed:scale"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.13",

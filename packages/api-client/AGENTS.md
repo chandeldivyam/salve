@@ -41,13 +41,13 @@ The client's API is committed; renaming a public method without a deprecation cy
 
 ## Gotchas hit
 
-- **Don't import `@opendesk/zero-schema` or `@opendesk/mutators` from this package.** It must be runnable in any Node environment without the Zero stack.
+- **Don't import `@salve/zero-schema` or `@salve/mutators` from this package.** It must be runnable in any Node environment without the Zero stack.
 - **`SalveApiError.message` mutates over time** as we tweak server messages; only the `code` is contract.
 - **Service-account vs PAT tokens.** The client doesn't care which prefix the bearer token has; the server differentiates. The CLI's `salve login` paths are user-PAT-only; service-account credentials get pasted as raw env vars in headless contexts.
 
 ## Tests
 
-`pnpm --filter @opendesk/api-client test` (Node native test runner via `tsx --test`):
+`pnpm --filter @salve/api-client test` (Node native test runner via `tsx --test`):
 
 - Asserts every action contract has either a namespace method *or* falls through to `client.action`.
 - Idempotency-key reuse across retries.

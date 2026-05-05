@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { SalveApiError } from '@opendesk/api-client';
+import { SalveApiError } from '@salve/api-client';
 import { z } from 'zod';
 import { formatError } from './error.js';
 

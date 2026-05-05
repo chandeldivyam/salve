@@ -7,7 +7,8 @@
 // Auto-name comes from chip filters first; if none, suggests "Copy of
 // <active view>". A read-only chip preview shows what's being saved.
 
-import { mutators } from '@opendesk/mutators';
+import { useQuery } from '@rocicorp/zero/react';
+import { mutators } from '@salve/mutators';
 import {
   Button,
   cn,
@@ -18,15 +19,14 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
-} from '@opendesk/ui';
+} from '@salve/ui';
 import type {
   CustomField as CustomFieldDef,
   Filter,
   ViewQuery,
   ViewSort,
-} from '@opendesk/zero-schema';
-import { queries } from '@opendesk/zero-schema';
-import { useQuery } from '@rocicorp/zero/react';
+} from '@salve/zero-schema';
+import { queries } from '@salve/zero-schema';
 import { useNavigate } from '@tanstack/react-router';
 import { AlertTriangle, CheckCircle2, Sparkles, Tag as TagIcon, UserRound } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';

@@ -1,6 +1,6 @@
-# Atlas → Opendesk Port Plan
+# Atlas → Salve Port Plan
 
-Port the email-support feature set from Atlas (`/Users/divyamchandel/Documents/atlas/app`) to opendesk, on top of the Zero live-query foundation we already have. Each phase doc is a self-contained sub-agent brief: read Atlas references, write code in opendesk, verify, hand back.
+Port the email-support feature set from Atlas (`/Users/divyamchandel/Documents/atlas/app`) to salve, on top of the Zero live-query foundation we already have. Each phase doc is a self-contained sub-agent brief: read Atlas references, write code in salve, verify, hand back.
 
 ## Scope
 
@@ -15,7 +15,7 @@ Port the email-support feature set from Atlas (`/Users/divyamchandel/Documents/a
 
 When a ticket references an Atlas file, the path is relative to one of those two roots unless prefixed.
 
-## Opendesk references
+## Salve references
 
 - Plan of record: `~/.claude/plans/https-zero-rocicorp-dev-docs-introductio-buzzing-reddy.md`
 - Repo conventions: `AGENTS.md` (root) plus per-area `AGENTS.md`

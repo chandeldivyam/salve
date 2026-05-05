@@ -18,10 +18,10 @@ action-contracts (Zod + meta)     │
 action-executor (server runtime) ─┤── MCP tool    ── apps/mcp (auto-derived from mcp metadata)
         │                         │
         ▼                         └─ SDK call     ── packages/api-client (auto-derived; no per-action method)
-@opendesk/mutators (writes)
+@salve/mutators (writes)
         │
         ▼
-@opendesk/db (Drizzle)
+@salve/db (Drizzle)
 ```
 
 A single Zod input schema and a single server function (the executor) drive every consumer. Adding a surface to an action is a **metadata** change, not a code change.
@@ -102,7 +102,7 @@ Hard rules:
 3. **Use `actionResourceID(ctx, actionID, suffix)` for any new row id derived from the request.** Two retries with the same `Idempotency-Key` produce the *same* UUID, so the database's unique constraint catches the duplicate even if the higher-level idempotency-store has been GC'd. Without a key, it falls back to `randomUUID()`.
 4. **Wrap multi-write executors in a transaction.** `ctx.db.transaction(async (tx) => {...})`. If the second insert fails, the first rolls back. Critical for any action that writes more than one row (ticket-create + first-message, customer events + customer fields). Learned the hard way during Phase E events ingest.
 5. **Catch unique-violation as a retry-recovery branch when applicable.** The events-ingest executor wraps its insert in try/catch; on duplicate-key it re-fetches the existing row by `actionResourceID` and returns the original output. This makes the action *fully* idempotent even if the HTTP idempotency-store missed.
-6. **Throw `notFound`, `validationError`, etc. (from `@opendesk/action-executor/errors`), never bare `Error`.** The error handler at the route layer maps these to the right HTTP status; bare errors fall to 500.
+6. **Throw `notFound`, `validationError`, etc. (from `@salve/action-executor/errors`), never bare `Error`.** The error handler at the route layer maps these to the right HTTP status; bare errors fall to 500.
 
 ### Postgres binding gotchas
 
@@ -145,7 +145,7 @@ The router gets mounted in `apps/api/src/server.ts` at `app.route('/v1/<domain>'
 
 ## 5. API client
 
-`@opendesk/api-client` exposes two things:
+`@salve/api-client` exposes two things:
 
 1. A typed namespaced surface: `client.tickets.resolve(ticketId, options?)`, `client.customers.search({…})`, etc.
 2. The escape hatch: `client.action(actionId, input, options?)` — useful for actions whose namespace method doesn't exist yet, for tests, and for the CLI's untyped action runner.
@@ -163,7 +163,7 @@ When adding a new action, you don't need to touch `client.ts` unless you're addi
 
 ## 6. CLI (`apps/cli`)
 
-A hand-written dispatcher in `apps/cli/src/main.ts` routes verbs to `@opendesk/api-client` calls. The `cli` metadata on each action contract is the *declarative source* for what should be wired up — `apps/cli/src/coverage.test.ts` asserts every shipped CLI verb has a matching contract entry, so drift is caught at CI. (Earlier docs called this "auto-derived" — it isn't; the metadata exists for the test, the help text, and to future-proof a generator if we ever build one.)
+A hand-written dispatcher in `apps/cli/src/main.ts` routes verbs to `@salve/api-client` calls. The `cli` metadata on each action contract is the *declarative source* for what should be wired up — `apps/cli/src/coverage.test.ts` asserts every shipped CLI verb has a matching contract entry, so drift is caught at CI. (Earlier docs called this "auto-derived" — it isn't; the metadata exists for the test, the help text, and to future-proof a generator if we ever build one.)
 
 Conventions:
 
@@ -218,15 +218,15 @@ Hints live in `packages/api-client/src/hints.ts` and are consumed by every forma
 
 Before you commit:
 
-1. `pnpm --filter @opendesk/action-contracts type-check` — Zod + metadata compile.
-2. `pnpm --filter @opendesk/action-executor type-check` — executor signature matches contract.
-3. `pnpm --filter @opendesk/api type-check` — REST router compiles.
-4. `pnpm --filter @opendesk/api-client test` — namespace method (if added) works in unit harness.
-5. `pnpm --filter @opendesk/cli test` — CLI dispatcher still parses cleanly.
-6. `pnpm --filter @opendesk/mcp test` — manifest still under 16 KB; tool registers; annotations correct.
+1. `pnpm --filter @salve/action-contracts type-check` — Zod + metadata compile.
+2. `pnpm --filter @salve/action-executor type-check` — executor signature matches contract.
+3. `pnpm --filter @salve/api type-check` — REST router compiles.
+4. `pnpm --filter @salve/api-client test` — namespace method (if added) works in unit harness.
+5. `pnpm --filter @salve/cli test` — CLI dispatcher still parses cleanly.
+6. `pnpm --filter @salve/mcp test` — manifest still under 16 KB; tool registers; annotations correct.
 7. `pnpm -r type-check` — workspace-wide.
 8. `pnpm -r --workspace-concurrency=4 test` — workspace-wide test sweep.
-9. **Live test against `localhost:3001`**: with a PAT, exercise the new action via curl *and* via the CLI (`pnpm --filter @opendesk/cli dev <verb tree>`) *and* via the MCP harness if `mcp` metadata is set. Don't trust unit tests alone — Phase G's bugs only surfaced in live runs.
+9. **Live test against `localhost:3001`**: with a PAT, exercise the new action via curl *and* via the CLI (`pnpm --filter @salve/cli dev <verb tree>`) *and* via the MCP harness if `mcp` metadata is set. Don't trust unit tests alone — Phase G's bugs only surfaced in live runs.
 
 The Phase G/H pattern: build the binary, point it at the dev server with a real PAT, and exercise every verb. Each phase has caught bugs that no unit test would have surfaced (bind type mismatches, error mapping holes, schema drift between client and server).
 

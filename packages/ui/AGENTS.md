@@ -68,7 +68,7 @@ If you add a new package consumed by `apps/web` that uses Tailwind classes, **ad
 
 ## Gotchas hit
 
-- `lucide-react` icons must be a direct dep of any app that uses them (not just `@opendesk/ui`) or Rolldown auto-codesplit fails to resolve.
+- `lucide-react` icons must be a direct dep of any app that uses them (not just `@salve/ui`) or Rolldown auto-codesplit fails to resolve.
 - `@radix-ui/react-tooltip` requires a single `<TooltipProvider>` wrapping the app — placed in `apps/web/src/routes/app.tsx`.
 - The native browser focus ring is suppressed (`focus:outline-none`) and replaced with `focus-visible:ring-2 focus-visible:ring-brand-500`. Keep this consistent across all interactive components.
 - Workspace switcher is currently a native `<select>` (Phase 1 simplicity); the dropdown-menu primitive lands a Combobox replacement in Phase 4+.

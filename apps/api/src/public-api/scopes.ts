@@ -1,4 +1,4 @@
-import { isScope as isActionScope, SCOPES, type Scope } from '@opendesk/action-contracts';
+import { isScope as isActionScope, SCOPES, type Scope } from '@salve/action-contracts';
 
 export const API_SCOPES = SCOPES;
 
@@ -59,4 +59,4 @@ export {
   type RoleForScopes as AppRoleForScopes,
   scopesExceeding,
   scopesForRole,
-} from '@opendesk/action-contracts';
+} from '@salve/action-contracts';

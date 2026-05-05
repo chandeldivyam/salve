@@ -13,7 +13,7 @@ const isDev = process.env.NODE_ENV !== 'production';
 const devBase = process.env.INNGEST_DEV_URL ?? 'http://localhost:8288';
 
 export const inngest = new Inngest({
-  id: 'opendesk',
+  id: 'salve',
   eventKey: process.env.INNGEST_EVENT_KEY ?? (isDev ? 'dev-key' : undefined),
   ...(isDev ? { baseUrl: devBase } : {}),
 });

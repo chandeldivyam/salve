@@ -25,7 +25,7 @@ export const { useSession } = authClient;
  * Switch the active workspace by hitting our custom endpoint, which:
  *  - verifies membership server-side
  *  - calls better-auth's setActiveOrganization
- *  - re-issues the opendesk JWT cookie
+ *  - re-issues the salve JWT cookie
  */
 export async function switchWorkspace(workspaceID: string): Promise<void> {
   const res = await fetch(`${apiUrl}/api/auth/switch-workspace`, {

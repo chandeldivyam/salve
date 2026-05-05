@@ -1,4 +1,4 @@
-import { Avatar, AvatarFallback, Badge, Button, cn, initialsFromName } from '@opendesk/ui';
+import { Avatar, AvatarFallback, Badge, Button, cn, initialsFromName } from '@salve/ui';
 import { ChevronDown, ChevronRight, MessageSquare, RotateCcw } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { NoteCard } from '@/components/customer/note-card';

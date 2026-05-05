@@ -1,26 +1,26 @@
 // Shared Hono middleware:
 //  - resolves better-auth session from request headers
 //  - looks up the user's role for the active workspace via the `member` table
-//  - issues / refreshes the opendesk JWT cookie on every authenticated request
+//  - issues / refreshes the salve JWT cookie on every authenticated request
 //  - enforces 401/403 for routes that require a workspace context.
 
-import { authSchema, getDb } from '@opendesk/db';
+import { authSchema, getDb } from '@salve/db';
 import { and, eq } from 'drizzle-orm';
 import type { Context, MiddlewareHandler } from 'hono';
 import { auth } from './auth.js';
 import {
   buildJwtCookieHeader,
   type CookieAttrs,
-  issueOpendeskJwt,
+  issueSalveJwt,
   JWT_COOKIE_NAME,
-  type OpendeskJwtClaims,
+  type SalveJwtClaims,
 } from './jwt.js';
 import { type ApiScope, scopesFromPermissionStatements } from './public-api/scopes.js';
 
 const isProduction = process.env.NODE_ENV === 'production';
 const cookieAttrs: CookieAttrs = { isProduction };
 
-export type AppRole = OpendeskJwtClaims['role'];
+export type AppRole = SalveJwtClaims['role'];
 
 export interface AuthContext {
   userID: string;
@@ -39,9 +39,9 @@ declare module 'hono' {
   }
 }
 
-function toOpendeskRole(role: string | null | undefined): AppRole {
+function toSalveRole(role: string | null | undefined): AppRole {
   if (role === 'owner' || role === 'admin' || role === 'agent') return role;
-  // better-auth's default member role is 'member'; map to 'agent' for opendesk semantics.
+  // better-auth's default member role is 'member'; map to 'agent' for salve semantics.
   if (role === 'member') return 'agent';
   return null;
 }
@@ -57,7 +57,7 @@ async function resolveRole(userID: string, workspaceID: string): Promise<AppRole
     .limit(1);
   const row = rows[0];
   if (!row) return null;
-  return toOpendeskRole(row.role);
+  return toSalveRole(row.role);
 }
 
 async function buildAuthContextFromHeaders(headers: Headers): Promise<AuthContext | null> {
@@ -84,7 +84,7 @@ function readBearerToken(headers: Headers): string | null {
   return token;
 }
 
-function tokenLooksLikeOpendeskApiKey(token: string): boolean {
+function tokenLooksLikeSalveApiKey(token: string): boolean {
   return token.startsWith('slv_pat_') || token.startsWith('slv_svc_');
 }
 
@@ -106,7 +106,7 @@ function principalKindFromTokenMetadata(
 }
 
 export async function buildAuthContextFromApiKey(token: string): Promise<AuthContext | null> {
-  if (!tokenLooksLikeOpendeskApiKey(token)) return null;
+  if (!tokenLooksLikeSalveApiKey(token)) return null;
 
   const verified = await auth.api.verifyApiKey({ body: { key: token } });
   if (!verified.valid || !verified.key) return null;
@@ -165,7 +165,7 @@ export async function buildAuthContextFromApiKey(token: string): Promise<AuthCon
 
   const row = rows[0];
   if (!row) return null;
-  const role = toOpendeskRole(row.role);
+  const role = toSalveRole(row.role);
   if (!role) return null;
 
   return {
@@ -181,7 +181,7 @@ export async function buildAuthContextFromApiKey(token: string): Promise<AuthCon
 }
 
 /**
- * The opendesk auth middleware:
+ * The salve auth middleware:
  *   1. Resolve the better-auth session from incoming request headers and populate
  *      `c.var.auth` so downstream handlers can use it BEFORE response time.
  *   2. After the route handler runs, re-resolve the session against headers that
@@ -191,7 +191,7 @@ export async function buildAuthContextFromApiKey(token: string): Promise<AuthCon
  *      response.
  *
  * Doing the second pass makes the very first request that creates a session
- * (sign-up, sign-in) emit the opendesk JWT cookie alongside better-auth's own.
+ * (sign-up, sign-in) emit the salve JWT cookie alongside better-auth's own.
  */
 export const authMiddleware: MiddlewareHandler = async (c, next) => {
   const bearerToken = readBearerToken(c.req.raw.headers);
@@ -225,7 +225,7 @@ export const authMiddleware: MiddlewareHandler = async (c, next) => {
   }
 
   if (finalCtx) {
-    const token = await issueOpendeskJwt({
+    const token = await issueSalveJwt({
       userID: finalCtx.userID,
       workspaceID: finalCtx.workspaceID,
       role: finalCtx.role,

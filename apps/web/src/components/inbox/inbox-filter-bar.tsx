@@ -12,6 +12,7 @@
 // v1 supports: status, priority, assignee, tag. Date / custom-field chips
 // land in the next slice.
 
+import { useQuery } from '@rocicorp/zero/react';
 import {
   Avatar,
   AvatarFallback,
@@ -24,10 +25,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   initialsFromName,
-} from '@opendesk/ui';
-import type { CustomField as CustomFieldDef, Filter, FilterField } from '@opendesk/zero-schema';
-import { queries } from '@opendesk/zero-schema';
-import { useQuery } from '@rocicorp/zero/react';
+} from '@salve/ui';
+import type { CustomField as CustomFieldDef, Filter, FilterField } from '@salve/zero-schema';
+import { queries } from '@salve/zero-schema';
 import {
   AlertTriangle,
   CheckCircle2,

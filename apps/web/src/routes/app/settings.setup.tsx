@@ -1,9 +1,9 @@
 // /app/settings/setup — first-run checklist. Items are computed live from Zero
 // queries via `useSetupProgress` and stay reactive after each side effect.
 
-import { Button, cn } from '@opendesk/ui';
-import { queries } from '@opendesk/zero-schema';
 import { useQuery } from '@rocicorp/zero/react';
+import { Button, cn } from '@salve/ui';
+import { queries } from '@salve/zero-schema';
 import { createFileRoute, Link, useRouteContext } from '@tanstack/react-router';
 import { Check, Circle, Loader2 } from 'lucide-react';
 import type { ReactNode } from 'react';

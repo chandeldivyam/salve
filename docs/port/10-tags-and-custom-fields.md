@@ -295,7 +295,7 @@ This phase introduces the sidebar (it doesn't exist yet — see Phase 80 for sha
 - Drizzle migration applies cleanly to a fresh db.
 - `pnpm typecheck` green.
 - Zero replicates the new tables (visible in `pg_replication_slots` + zero-cache logs on dev startup).
-- Shape exported from `@opendesk/zero-schema` exposes `tag`, `tagGroup`, `ticketTag`.
+- Shape exported from `@salve/zero-schema` exposes `tag`, `tagGroup`, `ticketTag`.
 
 **Deps:** none.
 
@@ -467,7 +467,7 @@ This phase introduces the sidebar (it doesn't exist yet — see Phase 80 for sha
 - New component `apps/web/src/components/conversation/custom-fields-block.tsx`.
 - Subscribe to `customFieldsByCategory({ category: "ticket" })` + the ticket's `customFieldValues` relateds.
 - Render one input per active field, sorted by `sortOrder`.
-- One controlled input component per field type (use existing `@opendesk/ui` primitives where possible — `Input`, `Select`, `MultiSelect`, `Checkbox`, `DatePicker`).
+- One controlled input component per field type (use existing `@salve/ui` primitives where possible — `Input`, `Select`, `MultiSelect`, `Checkbox`, `DatePicker`).
 - Conditional visibility: evaluate `field.rules` against current values; hide if condition false.
 - On change → `customField.setValueOnTicket` (debounced 400ms for text, immediate for selects).
 - Empty state (no fields configured): collapsed by default with link to settings.

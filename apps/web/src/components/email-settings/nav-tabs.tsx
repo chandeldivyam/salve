@@ -3,7 +3,7 @@
 // Domains tab matches both the list page and a domain-detail child route
 // (so the tab stays selected when drilling into DNS records).
 
-import { cn } from '@opendesk/ui';
+import { cn } from '@salve/ui';
 import { Link, useLocation } from '@tanstack/react-router';
 import {
   Inbox,

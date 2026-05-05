@@ -1,4 +1,4 @@
-import type { ActionID } from '@opendesk/action-contracts';
+import type { ActionID } from '@salve/action-contracts';
 import type { UntypedExecutor } from './ctx.js';
 import { customerExecutors } from './customers.js';
 import { settingsExecutors } from './settings.js';

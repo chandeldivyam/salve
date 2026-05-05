@@ -5,8 +5,8 @@ import {
   parseAuthenticationResults,
   stripQuotedHtml,
   stripQuotedText,
-} from '@opendesk/core';
-import { getClient } from '@opendesk/db';
+} from '@salve/core';
+import { getClient } from '@salve/db';
 import { type AddressObject, type EmailAddress, type ParsedMail, simpleParser } from 'mailparser';
 import type postgres from 'postgres';
 import { parseReplyAddress, verifyBodyMarker } from '../../email/reply-token.js';
@@ -321,9 +321,9 @@ async function loadRawRFC822(row: RawInboundRow): Promise<string> {
       `inbound raw exceeds ${MAX_INBOUND_RAW_BYTES} bytes (got ${row.raw_blob_size_bytes})`,
     );
   }
-  const devRaw = nestedString(row.headers, ['opendesk', 'devRawRFC822']);
+  const devRaw = nestedString(row.headers, ['salve', 'devRawRFC822']);
   if (row.raw_blob_s3_key?.startsWith('dev://')) {
-    if (!devRaw) throw new Error('dev inbound raw row is missing opendesk.devRawRFC822');
+    if (!devRaw) throw new Error('dev inbound raw row is missing salve.devRawRFC822');
     if (Buffer.byteLength(devRaw) > MAX_INBOUND_RAW_BYTES) {
       throw new Error(`inbound raw exceeds ${MAX_INBOUND_RAW_BYTES} bytes`);
     }
@@ -832,7 +832,7 @@ async function markProcessed(
     skipReason: null,
     authenticationResults: metadata.authResults,
     subject: typeof metadata.subject === 'string' ? metadata.subject : undefined,
-    headersPatch: { opendesk: { processed: true, ...metadata } },
+    headersPatch: { salve: { processed: true, ...metadata } },
   });
 }
 
@@ -848,7 +848,7 @@ async function markSkipped(
     skipReason,
     authenticationResults: metadata.authResults,
     subject: typeof metadata.subject === 'string' ? metadata.subject : undefined,
-    headersPatch: { opendesk: { skipped: true, skipReason, ...metadata } },
+    headersPatch: { salve: { skipped: true, skipReason, ...metadata } },
   });
 }
 
@@ -857,7 +857,7 @@ async function markParseError(sql: Sql, rawID: string, parseError: string): Prom
     processedAt: true,
     parseError,
     skipReason: 'parse_error',
-    headersPatch: { opendesk: { skipped: true, skipReason: 'parse_error' } },
+    headersPatch: { salve: { skipped: true, skipReason: 'parse_error' } },
   });
 }
 
@@ -1458,7 +1458,7 @@ function parseS3Ref(ref: string): { bucket: string; key: string } {
     if (slash < 1) throw new Error(`invalid s3 raw blob key: ${ref}`);
     return { bucket: withoutScheme.slice(0, slash), key: withoutScheme.slice(slash + 1) };
   }
-  return { bucket: process.env.S3_BUCKET ?? 'opendesk-dev', key: ref };
+  return { bucket: process.env.S3_BUCKET ?? 'salve-dev', key: ref };
 }
 
 function nestedString(value: unknown, path: string[]): string | null {

@@ -1,4 +1,5 @@
-import { mutators } from '@opendesk/mutators';
+import { useQuery } from '@rocicorp/zero/react';
+import { mutators } from '@salve/mutators';
 import {
   Avatar,
   AvatarFallback,
@@ -18,7 +19,7 @@ import {
   SheetDescription,
   SheetHeader,
   SheetTitle,
-} from '@opendesk/ui';
+} from '@salve/ui';
 import {
   ALL_TICKET_MESSAGE_LIMIT,
   CUSTOMER_EVENT_LIMIT,
@@ -29,8 +30,7 @@ import {
   queries,
   type ViewQuery,
   type ViewSort,
-} from '@opendesk/zero-schema';
-import { useQuery } from '@rocicorp/zero/react';
+} from '@salve/zero-schema';
 import { Link, useNavigate, useRouteContext, useSearch } from '@tanstack/react-router';
 import { formatDistanceToNow } from 'date-fns';
 import {

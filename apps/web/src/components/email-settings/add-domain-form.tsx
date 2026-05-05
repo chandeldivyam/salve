@@ -2,7 +2,7 @@
 // `/api/settings/channels/email/domains` endpoint and falls back to the
 // older `/api/settings/email/domains` so older deployments stay working.
 
-import { Button, Field, FieldDescription, FieldError, FieldLabel, Input } from '@opendesk/ui';
+import { Button, Field, FieldDescription, FieldError, FieldLabel, Input } from '@salve/ui';
 import { useState } from 'react';
 import { showError, showSuccess } from '@/lib/feedback';
 import { postJSON } from './types';

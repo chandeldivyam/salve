@@ -1,5 +1,5 @@
 {
-  "name": "@opendesk/inngest",
+  "name": "@salve/inngest",
   "private": true,
   "version": "0.0.0",
   "type": "module",

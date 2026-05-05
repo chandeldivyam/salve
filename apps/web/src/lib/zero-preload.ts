@@ -10,7 +10,7 @@
 // subscription stays alive until `cleanup()` is called. The returned
 // composite cleanup releases all underlying subscriptions at once.
 
-import { INBOX_INITIAL_PAGE, queries } from '@opendesk/zero-schema';
+import { INBOX_INITIAL_PAGE, queries } from '@salve/zero-schema';
 import { CACHE_PRELOAD } from './zero-cache';
 
 // Phase 40 default-view warm-up: the inbox now subscribes to

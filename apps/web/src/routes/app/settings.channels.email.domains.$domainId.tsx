@@ -2,9 +2,9 @@
 // must add. Variant C: SettingsHeader/Body shell, flat record sections,
 // hairline separators, copy-value primitives.
 
-import { Badge, Button, CopyValue } from '@opendesk/ui';
-import { queries, type SendingDomainDetailRow } from '@opendesk/zero-schema';
 import { useQuery } from '@rocicorp/zero/react';
+import { Badge, Button, CopyValue } from '@salve/ui';
+import { queries, type SendingDomainDetailRow } from '@salve/zero-schema';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { format } from 'date-fns';
 import { ArrowLeft, Check, Loader2, ShieldCheck } from 'lucide-react';

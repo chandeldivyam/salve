@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { DEFAULT_BASE_URL, SalveClient } from '@opendesk/api-client';
+import { DEFAULT_BASE_URL, SalveClient } from '@salve/api-client';
 import type { SalveMcpContext } from './types.js';
 
 interface AuthConfig {
@@ -20,7 +20,7 @@ export async function createClientContext(): Promise<SalveMcpContext> {
     readAuthConfig(configRoot),
     readWorkspaceConfig(configRoot),
   ]);
-  const token = process.env.SALVE_TOKEN ?? process.env.OPENDESK_TOKEN ?? authConfig?.token;
+  const token = process.env.SALVE_TOKEN ?? authConfig?.token;
 
   if (!token) {
     throw new Error(

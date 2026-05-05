@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { getClient } from '@opendesk/db';
+import { getClient } from '@salve/db';
 import type { Context } from 'hono';
 import type postgres from 'postgres';
 import { z } from 'zod';

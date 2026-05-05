@@ -4,7 +4,7 @@
 // ListSection: collections. Header row (count + filters + CTA), then dense rows.
 // EmptyState: centered icon/title/description/CTA.
 
-import { cn } from '@opendesk/ui';
+import { cn } from '@salve/ui';
 import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 

@@ -7,8 +7,8 @@
 // Returns a `Filter` shape via `onChange`. The caller decides which field
 // the filter targets — this component is type-agnostic.
 
-import { Button, cn, DropdownMenuLabel, DropdownMenuSeparator } from '@opendesk/ui';
-import type { Filter, FilterField } from '@opendesk/zero-schema';
+import { Button, cn, DropdownMenuLabel, DropdownMenuSeparator } from '@salve/ui';
+import type { Filter, FilterField } from '@salve/zero-schema';
 import { useEffect, useMemo, useState } from 'react';
 
 type DateUnit = 'minute' | 'hour' | 'day' | 'week';

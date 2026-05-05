@@ -14,7 +14,7 @@ import {
   Field,
   FieldDescription,
   FieldLabel,
-} from '@opendesk/ui';
+} from '@salve/ui';
 import { Check, ChevronDown, UserRound } from 'lucide-react';
 import { useState } from 'react';
 import { showError, showSuccess } from '@/lib/feedback';

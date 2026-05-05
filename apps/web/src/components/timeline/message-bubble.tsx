@@ -1,4 +1,4 @@
-import { MESSAGE_EDIT_WINDOW_MS, mutators } from '@opendesk/mutators';
+import { MESSAGE_EDIT_WINDOW_MS, mutators } from '@salve/mutators';
 import {
   Avatar,
   AvatarFallback,
@@ -17,7 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   initialsFromName,
-} from '@opendesk/ui';
+} from '@salve/ui';
 import { format } from 'date-fns';
 import { Lock, MoreHorizontal, Paperclip, Pencil, ShieldCheck, Trash2 } from 'lucide-react';
 import { type FormEvent, useState } from 'react';

@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { getClient } from '@opendesk/db';
+import { getClient } from '@salve/db';
 import type { Context } from 'hono';
 import { type AddressObject, simpleParser } from 'mailparser';
 import type postgres from 'postgres';
@@ -168,7 +168,7 @@ function devWorkspaceID(c: Context): string | null {
   const auth = c.get('auth');
   if (auth?.workspaceID) return auth.workspaceID;
   if (process.env.NODE_ENV === 'production') return null;
-  return c.req.header('x-opendesk-dev-workspace-id')?.trim() || null;
+  return c.req.header('x-salve-dev-workspace-id')?.trim() || null;
 }
 
 export async function handleSesInboundEmail(c: Context): Promise<Response> {
@@ -179,7 +179,7 @@ export async function handleSesInboundEmail(c: Context): Promise<Response> {
   if (!secret) {
     return c.json({ error: 'webhook-secret-required' }, 500);
   }
-  if (c.req.header('x-opendesk-webhook-secret') !== secret) {
+  if (c.req.header('x-salve-webhook-secret') !== secret) {
     return c.json({ error: 'unauthorized' }, 401);
   }
 
@@ -243,7 +243,7 @@ export async function handleSesInboundEmail(c: Context): Promise<Response> {
       rawSizeBytes: 0,
       headers: {
         ...headerMap,
-        opendesk: {
+        salve: {
           source: 'ses',
           s3Key: rawBlobS3Key,
           notification,
@@ -340,7 +340,7 @@ function buildRawFromParts(input: DevInboundJson): string {
     return `${headersToRFC822(headers)}\r\n\r\n${text}`;
   }
 
-  const boundary = `=_opendesk_inbound_${randomUUID().replace(/-/g, '')}`;
+  const boundary = `=_salve_inbound_${randomUUID().replace(/-/g, '')}`;
   headers.set('MIME-Version', '1.0');
   headers.set('Content-Type', `multipart/alternative; boundary="${boundary}"`);
   const body = [
@@ -417,7 +417,7 @@ async function queueInboundEmail(
     rawSizeBytes: Buffer.byteLength(args.raw),
     headers: {
       ...headerMap,
-      opendesk: {
+      salve: {
         source: 'dev',
         emailAddressID: resolved.emailAddressID,
         devRawRFC822: args.devRawRFC822,

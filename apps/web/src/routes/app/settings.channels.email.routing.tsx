@@ -2,9 +2,9 @@
 // grouped by destination address, with an inline RoutingRuleForm for
 // adding new rules. Variant C: flat sections, no card outlines.
 
-import { Badge, Button } from '@opendesk/ui';
-import { queries } from '@opendesk/zero-schema';
 import { useQuery } from '@rocicorp/zero/react';
+import { Badge, Button } from '@salve/ui';
+import { queries } from '@salve/zero-schema';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { ArrowRight, Plus, Route as RouteIcon } from 'lucide-react';
 import { useState } from 'react';

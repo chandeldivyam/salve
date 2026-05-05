@@ -1,4 +1,4 @@
-import { getClient } from '@opendesk/db';
+import { getClient } from '@salve/db';
 import type postgres from 'postgres';
 import { inngest } from '../client.js';
 import { DELIVERY_EVENT } from '../events.js';

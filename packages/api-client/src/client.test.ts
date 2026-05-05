@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ALL_ACTIONS } from '@opendesk/action-contracts';
+import { ALL_ACTIONS } from '@salve/action-contracts';
 import { ACTION_METHOD_PATHS, SalveClient } from './client.js';
 import { SalveApiError } from './errors.js';
 import type { SalveFetch } from './fetch.js';

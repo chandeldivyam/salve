@@ -1,4 +1,4 @@
-import { Button } from '@opendesk/ui';
+import { Button } from '@salve/ui';
 import { Link } from '@tanstack/react-router';
 import { ListChecks } from 'lucide-react';
 import { useSetupProgress } from '@/lib/setup-progress';

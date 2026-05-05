@@ -5,9 +5,9 @@
 //     `signatureToPlainText`.
 //   - Forwarding/inbound addresses use <CopyValue inline>.
 
-import { Badge, Button, CopyValue } from '@opendesk/ui';
-import { queries } from '@opendesk/zero-schema';
 import { useQuery } from '@rocicorp/zero/react';
+import { Badge, Button, CopyValue } from '@salve/ui';
+import { queries } from '@salve/zero-schema';
 import { createFileRoute, Link, useRouteContext, useSearch } from '@tanstack/react-router';
 import { ArrowRight, Inbox, Mail, Plus, Reply, Signature } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';

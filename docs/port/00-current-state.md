@@ -1,4 +1,4 @@
-# Current state — what already exists in opendesk
+# Current state — what already exists in salve
 
 Snapshot as of slice 3.5 (commit `6bb8c90`). Use this as the "do not rebuild" reference when scoping new tickets.
 

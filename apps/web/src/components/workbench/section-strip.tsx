@@ -1,4 +1,4 @@
-import { cn } from '@opendesk/ui';
+import { cn } from '@salve/ui';
 import { Link, useLocation } from '@tanstack/react-router';
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useRef } from 'react';

@@ -1,4 +1,4 @@
-// @opendesk/mutators — Zero custom mutators, shared by web (optimistic) and api
+// @salve/mutators — Zero custom mutators, shared by web (optimistic) and api
 // (authoritative). Pattern from `/tmp/zero-mono/apps/zbugs/shared/mutators.ts`.
 //
 // Every mutator:
@@ -12,13 +12,13 @@
 // `delivery/message.requested` for `message.send`) live in
 // `apps/api/src/server-mutators.ts`.
 
-import { builder } from '@opendesk/zero-schema';
 import {
   defineMutator,
   defineMutators,
   type ReadonlyJSONValue,
   type Transaction,
 } from '@rocicorp/zero';
+import { builder } from '@salve/zero-schema';
 import { z } from 'zod';
 import {
   assertCanModifyTicket,

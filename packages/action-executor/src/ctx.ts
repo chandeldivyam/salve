@@ -1,10 +1,5 @@
-import type {
-  ActionInput,
-  ActionOutput,
-  AnyActionContract,
-  Scope,
-} from '@opendesk/action-contracts';
-import type { Database } from '@opendesk/db';
+import type { ActionInput, ActionOutput, AnyActionContract, Scope } from '@salve/action-contracts';
+import type { Database } from '@salve/db';
 
 export type ExecutorRole = 'owner' | 'admin' | 'agent' | null;
 export type ExecutorPrincipalKind = 'user' | 'service_account';

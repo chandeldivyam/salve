@@ -4,7 +4,7 @@ import {
   PutEmailIdentityMailFromAttributesCommand,
   SESv2Client,
 } from '@aws-sdk/client-sesv2';
-import { getClient } from '@opendesk/db';
+import { getClient } from '@salve/db';
 import type postgres from 'postgres';
 import { inngest } from '../client.js';
 import { DOMAIN_EVENT, domainProvisionRequestedDataSchema } from '../events.js';

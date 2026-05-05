@@ -1,9 +1,9 @@
 import { serve } from '@hono/node-server';
-import { SERVICE_NAME } from '@opendesk/core';
-import { authSchema, getDb } from '@opendesk/db';
-import { type AuthData, queries, schema } from '@opendesk/zero-schema';
 import { mustGetMutator, mustGetQuery, type ReadonlyJSONValue } from '@rocicorp/zero';
 import { handleMutateRequest, handleQueryRequest } from '@rocicorp/zero/server';
+import { SERVICE_NAME } from '@salve/core';
+import { authSchema, getDb } from '@salve/db';
+import { type AuthData, queries, schema } from '@salve/zero-schema';
 import { and, eq } from 'drizzle-orm';
 import { Hono, type MiddlewareHandler } from 'hono';
 import { cors } from 'hono/cors';
@@ -23,7 +23,7 @@ import {
   routeInboundMessage,
   verifyDomain,
 } from './inngest/functions/index.js';
-import { buildJwtCookieHeader, issueOpendeskJwt, readJwtCookie, verifyOpendeskJwt } from './jwt.js';
+import { buildJwtCookieHeader, issueSalveJwt, readJwtCookie, verifySalveJwt } from './jwt.js';
 import { authMiddleware, authOf, requireUser, requireWorkspace } from './middleware.js';
 import {
   handleCreatePat,
@@ -82,7 +82,7 @@ app.use(
   }),
 );
 
-// Run before every request. Populates `c.var.auth` and refreshes the opendesk
+// Run before every request. Populates `c.var.auth` and refreshes the salve
 // JWT cookie on authenticated requests.
 app.use('*', authMiddleware);
 
@@ -93,12 +93,12 @@ app.get('/', (c) =>
 app.get('/healthz', (c) =>
   c.json({
     status: 'ok',
-    service: 'opendesk-api',
+    service: 'salve-api',
     version: '0.0.0',
   }),
 );
 
-// Re-issue the opendesk JWT for a different workspace. Verifies membership
+// Re-issue the salve JWT for a different workspace. Verifies membership
 // server-side and updates better-auth's activeOrganizationId via the org plugin
 // so subsequent /api/auth/get-session reflects the change. Registered BEFORE
 // the catch-all better-auth handler so /api/auth/switch-workspace doesn't get
@@ -133,14 +133,14 @@ app.post('/api/auth/switch-workspace', requireUser, async (c) => {
     headers: c.req.raw.headers,
   });
 
-  // Stamp a fresh opendesk JWT cookie eagerly (saves the client a round-trip).
+  // Stamp a fresh salve JWT cookie eagerly (saves the client a round-trip).
   // Per RFC 6265 the appended Set-Cookie wins on the client over any earlier one
   // emitted by `authMiddleware` for the previous workspace.
   const role =
     membership.role === 'owner' || membership.role === 'admin' || membership.role === 'agent'
       ? membership.role
       : 'agent';
-  const token = await issueOpendeskJwt({
+  const token = await issueSalveJwt({
     userID: ctxAuth.userID,
     workspaceID,
     role,
@@ -263,7 +263,7 @@ async function authDataFromRequest(c: { req: { raw: Request } }): Promise<AuthDa
   const token = readJwtCookie(cookieHeader);
   if (!token) return undefined;
   try {
-    const claims = await verifyOpendeskJwt(token);
+    const claims = await verifySalveJwt(token);
     return {
       sub: claims.sub,
       workspaceID: claims.workspaceID,
@@ -271,7 +271,7 @@ async function authDataFromRequest(c: { req: { raw: Request } }): Promise<AuthDa
       principalKind: 'user',
     };
   } catch (e) {
-    console.warn('[opendesk-api] zero endpoint: rejecting bad jwt', (e as Error).message);
+    console.warn('[salve-api] zero endpoint: rejecting bad jwt', (e as Error).message);
     return undefined;
   }
 }
@@ -329,5 +329,5 @@ app.post('/api/zero/query', async (c) => {
 const port = Number.parseInt(process.env.PORT ?? '3001', 10);
 
 serve({ fetch: app.fetch, port }, (info) => {
-  console.log(`[opendesk-api] listening on http://localhost:${info.port}`);
+  console.log(`[salve-api] listening on http://localhost:${info.port}`);
 });

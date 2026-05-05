@@ -1,4 +1,4 @@
-import { ALL_ACTIONS, buildOpenApiDocument } from '@opendesk/action-contracts';
+import { ALL_ACTIONS, buildOpenApiDocument } from '@salve/action-contracts';
 import type { Context } from 'hono';
 
 export function handleOpenApi(c: Context): Response {

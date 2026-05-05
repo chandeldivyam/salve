@@ -1,9 +1,9 @@
 {
-  "name": "@opendesk/zero-cache",
+  "name": "@salve/zero-cache",
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "zero-cache-dev runner for the opendesk monorepo. In dev runs the view-syncer + replication-manager in a single process; reads .env via dotenv-flow loader baked into zero.",
+  "description": "zero-cache-dev runner for the salve monorepo. In dev runs the view-syncer + replication-manager in a single process; reads .env via dotenv-flow loader baked into zero.",
   "scripts": {
     "dev": "zero-cache-dev --schema-path ../../packages/zero-schema/src/schema.ts",
     "type-check": "tsc -p tsconfig.json --noEmit",
@@ -11,7 +11,7 @@
     "check": "biome check ."
   },
   "dependencies": {
-    "@opendesk/zero-schema": "workspace:*",
+    "@salve/zero-schema": "workspace:*",
     "@rocicorp/zero": "1.3.0"
   }
 }

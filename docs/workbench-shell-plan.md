@@ -3,7 +3,7 @@
 Status: **draft v2 — pending sign-off on §11 open questions**
 Date: 2026-05-01 (initial), 2026-05-01 (v2 revision)
 
-This document is the consolidated plan for moving opendesk from a conventional page app into a PostHog-style support workbench. It supersedes v1 with sharper decisions, PostHog-source-code grounding, and a re-ordered delivery plan that keeps `main` shippable through every phase.
+This document is the consolidated plan for moving salve from a conventional page app into a PostHog-style support workbench. It supersedes v1 with sharper decisions, PostHog-source-code grounding, and a re-ordered delivery plan that keeps `main` shippable through every phase.
 
 ---
 
@@ -183,11 +183,11 @@ export function newInternalTab(path?: string, source = 'internal_link'): void {
 }
 ```
 
-**For opendesk we DO want canonicalisation per route** — different from PostHog. Reason: `/app/inbox/t/abc` and `/app/inbox/t/abc?compose=1` should be the same tab. `/app/settings/setup` and `/app/settings/tags` should be the same tab. We codify this as `tabKey(pathname, params)` per route in the registry (§6).
+**For salve we DO want canonicalisation per route** — different from PostHog. Reason: `/app/inbox/t/abc` and `/app/inbox/t/abc?compose=1` should be the same tab. `/app/settings/setup` and `/app/settings/tags` should be the same tab. We codify this as `tabKey(pathname, params)` per route in the registry (§6).
 
 **Trailing slashes are stripped** by `locationChanged` (`sceneLogic.tsx:1092-1094`) via `router.replace`. Tab-URL equality must canonicalise.
 
-**Two storage layers in PostHog.** sessionStorage for the full tab list (per-tab session continuity), localStorage for pinned tabs only + homepage (synced cross-tab via `storage` event), plus a backend sync for pinned tabs (debounced 500ms, `sceneLogic.tsx:1530-1543`). **Opendesk v1: just localStorage, no cross-tab sync, no backend persistence.** Add later if needed.
+**Two storage layers in PostHog.** sessionStorage for the full tab list (per-tab session continuity), localStorage for pinned tabs only + homepage (synced cross-tab via `storage` event), plus a backend sync for pinned tabs (debounced 500ms, `sceneLogic.tsx:1530-1543`). **Salve v1: just localStorage, no cross-tab sync, no backend persistence.** Add later if needed.
 
 **Cmd-K palette is single-mode and reuses the active tab on Enter.** `Command.tsx`'s `handleItemSelect` is literally `closeCommand(); router.actions.push(item.href)`. There is no "open in new tab from palette" — that would require explicit `Cmd+Enter → newInternalTab(href)` which we should add.
 
@@ -202,7 +202,7 @@ export function newInternalTab(path?: string, source = 'internal_link'): void {
 - **Kea entirely.** Replace with Zustand + `subscribeWithSelector` for the workbench store; replace Kea loaders with TanStack Query (or simpler — direct fetches into Zustand) for command palette result groups; replace `kea-router` with TanStack Router. Kea's `urlToAction` becomes TanStack's route `loader` / `beforeLoad`.
 - **`paramsToProps` + `BindLogic`.** Use TanStack Router's `useParams()` inside scenes.
 - **Per-tab Kea logic mounting** (`cache.mountedTabLogic[tabId]`). With Zero, the shared store is keyed by query already; if a tab opens `/tickets/123`, `useQuery(queries.ticketByID({id:'123'}))` shares cache across tabs naturally.
-- **`panelLayoutLogic` flyout system.** Opendesk doesn't need a project-tree flyout. Icon rail navigates directly.
+- **`panelLayoutLogic` flyout system.** Salve doesn't need a project-tree flyout. Icon rail navigates directly.
 - **`featureFlagLogic`-gated scenes.** No feature flags yet.
 - **`PersistedPinnedState` cross-tab sync via `storage` event** (`sceneLogic.tsx:1664-1668`). Nice-to-have. Skip in v1.
 - **Backend persistence** of pinned tabs to `/api/user_home_settings/`. Skip v1.
@@ -304,7 +304,7 @@ interface WorkbenchState {
 ```
 
 - One Zustand slice. Use `subscribeWithSelector` for per-tab title updates (so renaming doesn't rerender the entire list).
-- Persist with `persist` middleware. **Storage key: `opendesk.workbench.v1:${userID}`.** Workspace ID is *inside* the value, not the key — switching workspace doesn't clear other workspaces' tabs.
+- Persist with `persist` middleware. **Storage key: `salve.workbench.v1:${userID}`.** Workspace ID is *inside* the value, not the key — switching workspace doesn't clear other workspaces' tabs.
 - Validate on load with a Zod schema. On parse error, fall back to `[{tabKey: 'inbox', pinned: true, ...}]` for the active workspace.
 - **Sign-out clears the slice.** Add `resetWorkbench()` next to `clearSessionCache()` and call it in the `onSignOut` flow.
 - Cap at 20 unpinned tabs per workspace (silently drop oldest by `lastActiveAt` when a new tab pushes past the cap).
@@ -327,7 +327,7 @@ interface ComposerDraftsState {
 }
 ```
 
-- Persisted under `opendesk.composer-drafts.v1:${userID}`.
+- Persisted under `salve.composer-drafts.v1:${userID}`.
 - Composer subscribes; on mount, reads draft if present; on every keystroke (debounced 300ms), persists; on send-success, clears.
 - Drafts survive reload — a bonus over PostHog's session-only model.
 
@@ -391,7 +391,7 @@ Legacy email-domain routes (`/app/settings/email/domains*`) canonicalise to the 
 - **Cmd-click on a ticket row, or the row's "Open in new tab" context menu, forks** a ticket tab (`tabKey: 'ticket:abc'`). The forked ticket tab is single-pane (no list), full-width detail.
 - Direct URL paste of `/app/inbox/t/abc` reuses the active tab if it's the Inbox tab; otherwise creates a ticket tab. Mirror PostHog's pinned-tab-fork behaviour: pasting into a pinned active tab spawns a new tab.
 
-**Rationale:** help-desk agents triage in two-pane (list + detail) and *occasionally* want a second ticket open beside the work they're triaging — usually for cross-referencing. Front, Help Scout, Intercom all do this. PostHog's "every link reuses active tab" doesn't fit because PostHog's primary use is sequential exploration; opendesk has parallel-context work.
+**Rationale:** help-desk agents triage in two-pane (list + detail) and *occasionally* want a second ticket open beside the work they're triaging — usually for cross-referencing. Front, Help Scout, Intercom all do this. PostHog's "every link reuses active tab" doesn't fit because PostHog's primary use is sequential exploration; salve has parallel-context work.
 
 ### D2 — Settings layout
 

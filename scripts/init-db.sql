@@ -1,4 +1,4 @@
--- opendesk Postgres init script
+-- salve Postgres init script
 -- Runs once on first container start, when the data directory is empty.
 -- Sets up extensions and the application role used by Drizzle/Hono.
 --
@@ -12,19 +12,19 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- Application role used by Drizzle (and read by Hono).
 -- The bootstrap superuser is the postgres image's default role
--- (POSTGRES_USER=opendesk in docker-compose.yml). The app role is separate
+-- (POSTGRES_USER=salve in docker-compose.yml). The app role is separate
 -- so we can later strip it of replication / superuser privileges.
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'opendesk_app') THEN
-    CREATE ROLE opendesk_app WITH LOGIN PASSWORD 'opendesk_app';
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'salve_app') THEN
+    CREATE ROLE salve_app WITH LOGIN PASSWORD 'salve_app';
   END IF;
 END
 $$;
 
-GRANT CONNECT ON DATABASE opendesk TO opendesk_app;
-GRANT USAGE, CREATE ON SCHEMA public TO opendesk_app;
+GRANT CONNECT ON DATABASE salve TO salve_app;
+GRANT USAGE, CREATE ON SCHEMA public TO salve_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
-  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO opendesk_app;
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO salve_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
-  GRANT USAGE, SELECT ON SEQUENCES TO opendesk_app;
+  GRANT USAGE, SELECT ON SEQUENCES TO salve_app;

@@ -1,6 +1,6 @@
 # Copy Guide
 
-The voice of opendesk. Read once, refer back when writing UI strings.
+The voice of salve. Read once, refer back when writing UI strings.
 
 Inspired by Shopify Polaris's [empty state](https://polaris-react.shopify.com/components/layout-and-structure/empty-state)
 and content guidelines, Linear Method's clarity principles, and
@@ -40,7 +40,7 @@ Rules:
   filler — prefer "No tags".
 - Never make the user feel behind ("You haven't done X" → "Add your first X").
 
-### Examples (rewrite of current opendesk strings)
+### Examples (rewrite of current salve strings)
 
 | Page | Before | After |
 |------|--------|-------|

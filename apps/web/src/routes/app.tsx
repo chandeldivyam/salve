@@ -5,10 +5,10 @@
 // (ZERO_QUERY_FORWARD_COOKIES / ZERO_MUTATE_FORWARD_COOKIES in
 // apps/zero-cache/.env).
 
-import { mutators } from '@opendesk/mutators';
-import { TooltipProvider } from '@opendesk/ui';
-import { schema } from '@opendesk/zero-schema/schema';
 import { ZeroProvider } from '@rocicorp/zero/react';
+import { mutators } from '@salve/mutators';
+import { TooltipProvider } from '@salve/ui';
+import { schema } from '@salve/zero-schema/schema';
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
 import { useEffect, useMemo } from 'react';
 import { RouteErrorFeedback, RouteNotFoundFeedback } from '@/components/route-feedback';

@@ -34,7 +34,7 @@ All nine Phase-A items from §14 are landed. The codebase ships:
 1. **Token reads went through Zero, not REST.** §14-A4 said list endpoints would stay until Phase D. They don't — `apikey` was added to the Zero schema (excluding the `key` hash and raw permission/metadata text), and three workspace-scoped queries replaced the GETs: `apiTokensForCurrentUser`, `serviceAccounts`, `serviceAccountTokens`. This matches the `frontend.md` "everything driven by Zero" rule.
 2. **Both create flows do direct `apikey` insert**, not `auth.api.createApiKey`. The plugin enforces an org-admin-role check on the `userId` we pass — fine for PATs but blocks setting our `principal_kind`/`principal_id` columns and impossible for service-account synthetic users (which we deliberately keep at `member.role='member'`). Direct insert uses the plugin's exported `defaultKeyHasher` so `verifyApiKey` finds the rows.
 3. **Idempotency schema is the simpler shipped shape**, not the slimmed/partitioned design in §6.4. We kept `response_body jsonb` and a btree index on `created_at` (no daily partitioning, no `resource_kind`/`resource_id`). Volume is zero today; the partition migration is a Phase-B+ optimisation when first action wires up `withIdempotency`. See §6 update.
-4. **PAT prefix `slv_pat_` / service prefix `slv_svc_`** wired through Better Auth's `defaultPrefix` and our middleware's `tokenLooksLikeOpendeskApiKey()` — both prefixes accepted and resolved to the right principal.
+4. **PAT prefix `slv_pat_` / service prefix `slv_svc_`** wired through Better Auth's `defaultPrefix` and our middleware's `tokenLooksLikeSalveApiKey()` — both prefixes accepted and resolved to the right principal.
 5. **`apikey` is a Zero table now** (schema version bumped 7 → 8). `member` got a `createdAt` column added so service-account ordering works.
 
 Phase B is now shipped too — see §0b and §14. Tested at the API layer end-to-end (sign-up → org → PAT → whoami → revoke → 401, plus service-account flow, plus cross-user isolation, plus expired-token rejection, plus idempotency-store unit behaviour). Web app type-checks, builds, and Phase A surface UI is shipped behind `Settings → Developer → API tokens`.
@@ -69,7 +69,7 @@ Both are real features with their own settings + worker work — out of scope fo
 
 ## 0c. Phase G — shipped (2026-05-05)
 
-`apps/cli` (`@opendesk/cli`, binary `salve`) is live. The CLI consumes `@opendesk/api-client` exclusively — no hand-written `fetch` calls — and re-uses the SDK's idempotency, retry, error-envelope, and auto-`/v1` behaviour. §11 has the user-facing command tree; §14 Phase G has the implementation plan with all G1–G10 ship-checklist items checked.
+`apps/cli` (`@salve/cli`, binary `salve`) is live. The CLI consumes `@salve/api-client` exclusively — no hand-written `fetch` calls — and re-uses the SDK's idempotency, retry, error-envelope, and auto-`/v1` behaviour. §11 has the user-facing command tree; §14 Phase G has the implementation plan with all G1–G10 ship-checklist items checked.
 
 **End-to-end live verified against the running `/v1` API** with both a user PAT and a service-account token (`slv_pat_…` and `slv_svc_…`). The full battery exercised: `whoami`, `workspace list/use`, `tickets list` (table + `--json` + `--jsonl`), `tickets show`, `tickets create`, `tickets reply`, `tickets note` (internal), `tickets in-progress`, `tickets resolve`, `tickets reopen`, `tickets custom-field set` (list + number + boolean), `customers list/show/update`, `customers notes create`, `customers events ingest` (with and without explicit `--idempotency-key`), `views list/show/create`, `settings tags list/create`, `settings tag-groups create`, `settings custom-fields list/create`, `settings api-tokens list/create/revoke`, plus the `salve api` and `salve action` escape hatches. Both principals produced messages that show up in the inbox UI under the synthetic SA user (`sa-<uuid>@service-accounts.local`) or the real user account.
 
@@ -79,7 +79,7 @@ The Phase G live battery surfaced four issues that were not Phase G regressions 
 
 1. **`views.tickets` 500s on every view.** `packages/action-executor/src/views.ts` was binding the `in`-operator value array via raw template SQL — `sql\`${col} = ANY(${jsArray})\`` — which postgres-js does not serialise as a Postgres array literal. Fixed by switching to drizzle's `inArray(col, values)` helper (already imported) and narrowing values to strings (the only sensible payload for `in` on the supported columns: status, priority, assignee, customer, the timestamp columns).
 2. **`customers.events.ingest` 500s on Date binding + duplicate-key on retry.** Two issues stacked on top of each other in `packages/action-executor/src/customers.ts`. The `LEAST(COALESCE(first_seen_at, $1), $2)` clauses passed a JS `Date` through a parameter slot postgres-js wanted as a string; the first request errored, then api-client's automatic retry triggered a `duplicate key value violates unique constraint "custom_event_pkey"` because `actionResourceID` produces a deterministic UUID from `ctx.idempotencyKey` and the catch block only deduped via `input.idempotencyKey` (the contract field). Fixed by (a) passing `occurredAt.toISOString()` with explicit `::timestamptz` casts in the LEAST/GREATEST clauses, (b) wrapping the event INSERT and customer UPDATE in `ctx.db.transaction(...)` for atomicity, and (c) extending unique-violation recovery to fall back to `findEventByID(ctx, eventID)` when there is no `input.idempotencyKey` to dedup on.
-3. **CLI rendered client-side `ZodError` as a raw issues array.** `@opendesk/api-client` validates input against the contract's input schema before sending; on failure it throws a `ZodError` that the CLI's generic `Error` branch JSON-stringified into a wall of `{ origin, code, format, pattern, path, message }` objects. Fixed by adding a `ZodError` branch to `apps/cli/src/error.ts` that prints `validation_error (client-side)` followed by `<field path>: <message>` per issue, plus a hint that the request never left the CLI. Added zod as a direct dep so the import is explicit, and a unit test covering the format.
+3. **CLI rendered client-side `ZodError` as a raw issues array.** `@salve/api-client` validates input against the contract's input schema before sending; on failure it throws a `ZodError` that the CLI's generic `Error` branch JSON-stringified into a wall of `{ origin, code, format, pattern, path, message }` objects. Fixed by adding a `ZodError` branch to `apps/cli/src/error.ts` that prints `validation_error (client-side)` followed by `<field path>: <message>` per issue, plus a hint that the request never left the CLI. Added zod as a direct dep so the import is explicit, and a unit test covering the format.
 4. **Customer custom fields were not writable through `/v1`.** `customers.get` returned a `customFields[]` array but no action wrote to it. Added the full vertical:
    - **Contract:** `customers.customField.set` in `packages/action-contracts/src/customers.ts`. Mirrors `tickets.customField.set` — scope `customers:write`, idempotency `optional`, audit `customer.field_set`, REST `PUT /customers/:customerId/custom-fields/:fieldKey`, CLI `customers custom-field set`, MCP `salve.customers.custom_field_set`.
    - **Executor:** `setCustomerCustomFieldExecutor` + a new `findCustomerCustomFieldByKey` helper. Routes `value === null` to the existing `customField.clearValueOnCustomer` Zero mutator and any other JSON-serialisable value to `customField.setValueOnCustomer`. Both mutators existed already with full type-aware validation (list options, boolean coercion, multi-select, dynamic lists, address shape, URL shape). No new mutator work was needed.
@@ -94,7 +94,7 @@ The Phase G live battery surfaced four issues that were not Phase G regressions 
 
 ## 0d. Phase H — implemented for tester verification (2026-05-05)
 
-`apps/mcp` (`@opendesk/mcp`, binary `salve-mcp`, public package target `@salve/mcp`) is implemented as a local stdio MCP server. It consumes `@opendesk/api-client` exclusively; all domain calls still go through `/v1`, so scopes, idempotency, retries, and audit attribution remain API-owned.
+`apps/mcp` (`@salve/mcp`, binary `salve-mcp`, public package target `@salve/mcp`) is implemented as a local stdio MCP server. It consumes `@salve/api-client` exclusively; all domain calls still go through `/v1`, so scopes, idempotency, retries, and audit attribution remain API-owned.
 
 The shipped surface is intentionally curated to stay within the MCP connect-budget:
 
@@ -106,7 +106,7 @@ The shipped surface is intentionally curated to stay within the MCP connect-budg
 Verification completed locally:
 
 - `pnpm check`, `pnpm type-check`, `pnpm test`, and `pnpm build` pass at workspace root.
-- `pnpm --filter @opendesk/mcp check`, `type-check`, `test`, and `build` pass; bundle is 52.11 kB / 12.77 kB gzip.
+- `pnpm --filter @salve/mcp check`, `type-check`, `test`, and `build` pass; bundle is 52.11 kB / 12.77 kB gzip.
 - Local packed tarball install works; the packed package contains only `dist/salve-mcp.mjs`, `package.json`, and `README.md`.
 - Stdio live smoke against `http://127.0.0.1:3001` passed with both `slv_pat_…` and `slv_svc_…` temporary tokens; temp DB rows were deleted after the run.
 - `SALVE_API_URL`, `SALVE_TOKEN`, service-account tokens, `~/.config/salve/auth.json` fallback, CLI `config.json` active-workspace fallback, and missing/bad-token stderr errors were verified.
@@ -190,7 +190,7 @@ Recommendation: option 1 for v1 (simple, predictable), with the filter-builder s
 - Webhooks (`/api/inbound/email/*`, `/api/webhooks/ses`)
 - Inngest dispatch (`/api/inngest`)
 
-The auth middleware (`apps/api/src/middleware.ts:86`) reads the `opendesk-jwt` cookie and populates `c.var.auth = { sub, workspaceID, role }`. There is no token-bearer path today.
+The auth middleware (`apps/api/src/middleware.ts:86`) reads the `salve-jwt` cookie and populates `c.var.auth = { sub, workspaceID, role }`. There is no token-bearer path today.
 
 ### 2.5 The settings bypass
 
@@ -377,7 +377,7 @@ Add a path through `apps/api/src/middleware.ts` that recognises `Authorization: 
 4. CLI writes `~/.config/salve/auth.json` (`{ token, workspaceId, apiBaseUrl }`).
 5. `salve whoami` confirms.
 
-CI: `OPENDESK_TOKEN` env var takes precedence; no login step needed.
+CI: `SALVE_TOKEN` env var takes precedence; no login step needed.
 
 **Future (v2 if needed): browser-handoff device flow.** `salve login` opens a browser to `/auth/cli/init?port=<local>`, the page POSTs a freshly-minted PAT back to `http://localhost:<port>/callback`. Standard Vercel/`gh` UX. We hold this back from v1 because it requires a `/auth/cli/init` page and a localhost-callback flow that's measurably more code; the paste flow is the same UX as Stripe and Resend's CLIs and works fine.
 
@@ -539,7 +539,7 @@ POST   /v1/settings/custom-fields
 | `Authorization: Bearer slv_…` | request | Required on all `/v1` routes |
 | `Idempotency-Key: <uuid>` | request | Required on writes where `idempotency: 'required'` |
 | `X-Request-Id` | request/response | Echoed; we generate one if absent |
-| `X-Opendesk-Workspace` | request (optional) | Pin workspace explicitly; otherwise from token |
+| `X-Salve-Workspace` | request (optional) | Pin workspace explicitly; otherwise from token |
 
 ### 8.3 Pagination
 
@@ -786,7 +786,7 @@ The MCP host fetches these on demand; the agent references them by URI in conver
 
 ### 12.5 Auth
 
-OAuth-capable per the 2025-03-26 MCP spec, but for v1 ship simple: API token via `OPENDESK_TOKEN` env var, same scopes as REST. Local stdio means the user's local environment provides the token.
+OAuth-capable per the 2025-03-26 MCP spec, but for v1 ship simple: API token via `SALVE_TOKEN` env var, same scopes as REST. Local stdio means the user's local environment provides the token.
 
 ### 12.6 Safety
 
@@ -828,7 +828,7 @@ packages/
 
   api-client/                          NEW
     src/
-      client.ts                        OpenDeskClient; auth, retry, request IDs
+      client.ts                        SalveClient; auth, retry, request IDs
       tickets.ts                       client.tickets.create(), etc.
       customers.ts
       ...
@@ -1033,7 +1033,7 @@ Why this matters: a generator round-trips through JSON Schema (lossy), produces 
 
 #### F1. Package shape
 
-`packages/api-client/` (workspace name `@opendesk/api-client` internal; published as `@salve/api-client` when we cut a public release).
+`packages/api-client/` (workspace name `@salve/api-client` internal; published as `@salve/api-client` when we cut a public release).
 
 ```
 packages/api-client/src/
@@ -1042,7 +1042,7 @@ packages/api-client/src/
   errors.ts         SalveApiError typed exception
   fetch.ts          low-level request + retry
   pagination.ts     async-iterator helpers for cursor endpoints
-  types.ts          re-exports from @opendesk/action-contracts
+  types.ts          re-exports from @salve/action-contracts
 ```
 
 #### F2. Constructor + per-namespace surface
@@ -1081,7 +1081,7 @@ The raw `client.action(actionId, input)` caller is generated by walking `ALL_ACT
 | **Workspace pinning** | `X-Salve-Workspace` header attached when `workspaceId` is in constructor. |
 | **Auth refresh** | Not in v1 — tokens are long-lived PATs/service tokens, no rotation. Hook reserved for Phase G's `salve login` device flow. |
 | **Telemetry hooks** | `client.on('request', fn)` / `'response'` / `'error'` for instrumenting external integrations. |
-| **TypeScript types** | Re-exported from `@opendesk/action-contracts`. `SalveClient` has full inference: `tickets.list({ status: 'open' })` knows `status` is the enum, `tickets.create({...})` enforces `title` required. |
+| **TypeScript types** | Re-exported from `@salve/action-contracts`. `SalveClient` has full inference: `tickets.list({ status: 'open' })` knows `status` is the enum, `tickets.create({...})` enforces `title` required. |
 
 #### F4. `SalveApiError`
 
@@ -1100,7 +1100,7 @@ Callers branch on `code`, never on `message`. Same envelope shape as `/v1` retur
 
 #### F5. Used internally before publishing
 
-Phase G (`apps/cli`) and Phase H (`apps/mcp`) **both consume `@opendesk/api-client`** rather than hand-writing `fetch`. That's the dogfooding test — if the CLI feels good to write, external integrators will agree.
+Phase G (`apps/cli`) and Phase H (`apps/mcp`) **both consume `@salve/api-client`** rather than hand-writing `fetch`. That's the dogfooding test — if the CLI feels good to write, external integrators will agree.
 
 #### F6. Ship checklist
 
@@ -1118,13 +1118,13 @@ Ship: `@salve/api-client` is the SDK developers `npm install` to drive Salve fro
 
 ### Phase G — CLI ✅ shipped 2026-05-05 (post-G hardening landed in v9)
 
-The CLI consumes `@opendesk/api-client` exclusively — **no hand-written `fetch` calls**. It's a thin transport adapter over the SDK that adds three things the SDK doesn't: TTY-aware human output, stdin/file body reading for replies and notes, and a `~/.config/salve/auth.json` token store for the `login` flow. §11 has the command tree; this section is the scope of work.
+The CLI consumes `@salve/api-client` exclusively — **no hand-written `fetch` calls**. It's a thin transport adapter over the SDK that adds three things the SDK doesn't: TTY-aware human output, stdin/file body reading for replies and notes, and a `~/.config/salve/auth.json` token store for the `login` flow. §11 has the command tree; this section is the scope of work.
 
 **Status as of 2026-05-05 (v9):** shipped. Implemented in `apps/cli`, type-checked + biome-clean across the workspace, 8/8 unit tests pass, builds to a 121 kB ESM bundle (31 kB gzipped) via `tsdown`, and live-tested end-to-end against `/v1` with both a user PAT (`slv_pat_…`) and a service-account token (`slv_svc_…`). The four upstream bugs surfaced during live testing are documented and fixed in §0c.1.
 
 #### G1. Package shape
 
-`apps/cli/` (workspace name `@opendesk/cli` internal; published as `@salve/cli` when we cut a public release; the binary is `salve`).
+`apps/cli/` (workspace name `@salve/cli` internal; published as `@salve/cli` when we cut a public release; the binary is `salve`).
 
 ```
 apps/cli/
@@ -1178,7 +1178,7 @@ apps/cli/
 | Bundling | **tsdown** | Same bundler the rest of the monorepo uses; one ESM file + a tiny shim shebang. |
 | Distribution | `npm publish @salve/cli` | `npx @salve/cli` works zero-install. Homebrew/binary releases are post-v1. |
 
-The published bundle imports `@opendesk/api-client` and `@opendesk/action-contracts`; both ship as `dependencies`, not `peerDependencies` — users `npm install -g @salve/cli` and don't have to install anything else.
+The published bundle imports `@salve/api-client` and `@salve/action-contracts`; both ship as `dependencies`, not `peerDependencies` — users `npm install -g @salve/cli` and don't have to install anything else.
 
 #### G3. Auth flow (paste-token, v1)
 
@@ -1263,7 +1263,7 @@ The hint at the bottom is action-specific: `auth.scope_missing` suggests `app.us
 
 #### G9. Dogfooding loop
 
-The CLI is also the QA harness for `@opendesk/api-client`. Every command is a real-world test case for the SDK's ergonomics — if a command takes ≥3 lines of "unwrap the response" boilerplate, the SDK's namespace shape needs work. Friction discovered while writing the CLI commands feeds back into Phase F before publish.
+The CLI is also the QA harness for `@salve/api-client`. Every command is a real-world test case for the SDK's ergonomics — if a command takes ≥3 lines of "unwrap the response" boilerplate, the SDK's namespace shape needs work. Friction discovered while writing the CLI commands feeds back into Phase F before publish.
 
 #### G10. Ship checklist
 
@@ -1280,29 +1280,29 @@ The CLI is also the QA harness for `@opendesk/api-client`. Every command is a re
 - [x] Idempotency-Key auto-generated by the underlying SDK; surfacable via `--idempotency-key <uuid>` flag for explicit retries.
 - [x] `salve --version` prints package version + commit SHA.
 - [x] `salve --help` shows the noun tree; `salve tickets --help` shows verbs; `salve tickets reply --help` shows flags and examples.
-- [ ] `npx @salve/cli login` works zero-install. Release-time rename/publish task; local packed tarball install is verified under `@opendesk/cli`.
+- [ ] `npx @salve/cli login` works zero-install. Release-time rename/publish task; local packed tarball install is verified under `@salve/cli`.
 - [x] `README.md` in `apps/cli` with the quickstart and a `tickets list` output screenshot block.
-- [x] `pnpm pack && tarball verifies install correctly` — local `npm install --prefix ... ./opendesk-cli-*.tgz` produces a working `salve` binary.
+- [x] `pnpm pack && tarball verifies install correctly` — local `npm install --prefix ... ./salve-cli-*.tgz` produces a working `salve` binary.
 
 Ship: `npm install -g @salve/cli` (or `npx @salve/cli`) gets developers a complete keyboard-driven Salve workflow. The CLI proves out the SDK's ergonomics one more time before Phase H wraps it for AI agents.
 
 ### Phase H — MCP (week 6-7)
 
-The MCP server consumes `@opendesk/api-client` exclusively — same rule as the CLI, no hand-written `fetch`. It is a transport adapter that turns the action-contract surface (already typed, scoped, and idempotent) into MCP `tools`, `resources`, and `prompts`. §12 has the design intent; this section is the scope of work, structured to match Phase G's depth so the implementer can ship without re-deriving decisions.
+The MCP server consumes `@salve/api-client` exclusively — same rule as the CLI, no hand-written `fetch`. It is a transport adapter that turns the action-contract surface (already typed, scoped, and idempotent) into MCP `tools`, `resources`, and `prompts`. §12 has the design intent; this section is the scope of work, structured to match Phase G's depth so the implementer can ship without re-deriving decisions.
 
 **Status as of v10:** implemented and locally verified. All upstream dependencies (action contracts, executor, REST API, api-client, CLI) are shipped and live-verified. MCP reads `mcp: { toolName, destructive? }` metadata from the action contracts instead of hand-mapping each default tool, then adds read-only composites/resources/prompts for agent-friendly context. The MCP server is the last v1 distribution channel — the SDK is already the unit of trust.
 
 #### H1. Package shape
 
-`apps/mcp/` (workspace name `@opendesk/mcp` internal; published as `@salve/mcp` when we cut a public release; the binary is `salve-mcp`).
+`apps/mcp/` (workspace name `@salve/mcp` internal; published as `@salve/mcp` when we cut a public release; the binary is `salve-mcp`).
 
 ```
 apps/mcp/
   package.json                  bin: { "salve-mcp": ./dist/salve-mcp.mjs }
                                 runtime deps: @modelcontextprotocol/sdk,
                                       zod
-                                bundled workspace deps: @opendesk/api-client,
-                                      @opendesk/action-contracts
+                                bundled workspace deps: @salve/api-client,
+                                      @salve/action-contracts
   tsconfig.json
   tsdown.config.ts              same one-file ESM bundle pattern as the CLI
   src/
@@ -1335,7 +1335,7 @@ apps/mcp/
 | Auth | reuse Phase A bearer + scope plumbing | The MCP server is just another bearer client. Zero auth code in `apps/mcp` itself. |
 | ID generation | `crypto.randomUUID()` for idempotency keys | Same as the SDK's auto-key path. |
 
-The published bundle includes `@opendesk/api-client` and `@opendesk/action-contracts` in the single ESM artifact. User does `npm install -g @salve/mcp` and gets a working `salve-mcp` binary — no peer-dep dance.
+The published bundle includes `@salve/api-client` and `@salve/action-contracts` in the single ESM artifact. User does `npm install -g @salve/mcp` and gets a working `salve-mcp` binary — no peer-dep dance.
 
 #### H3. Auth flow (env var first, CLI-share fallback)
 
@@ -1370,7 +1370,7 @@ Two layers:
 **Layer 1 — default tools auto-registered from `action.mcp` metadata.** A `defineAction` opts into the MCP surface by declaring `mcp: { toolName, destructive? }`; omitting `mcp` keeps it out of the local-agent surface. At server build, walk `ALL_ACTIONS`, filter to those with `mcp` set, and register a default tool per action whose:
 - `name` = `action.mcp.toolName` (e.g. `salve.tickets.create`, `salve.customers.custom_field_set`)
 - `description` = `describe.ts`-supplied human prose (see H5; **not** an auto-dump of the contract `summary` — those are written for OpenAPI and run too long)
-- `inputSchema` = a compact top-level Zod object derived from `z.toJSONSchema(action.inputSchema)`; full contract validation still happens in `@opendesk/api-client` before the HTTP request
+- `inputSchema` = a compact top-level Zod object derived from `z.toJSONSchema(action.inputSchema)`; full contract validation still happens in `@salve/api-client` before the HTTP request
 - `annotations` = only meaningful MCP hints (`readOnlyHint`, `destructiveHint`, `idempotentHint`) so the manifest does not waste budget on repeated false flags
 - handler = `execute.ts`'s shared `runAction(id, args, ctx)` which calls `client.action(action.id, args)` under the principal's token; on success returns `{ content: [{ type: 'text', text: JSON.stringify(result) }] }`; on `SalveApiError` returns `{ isError: true, content: [{ type: 'text', text: friendly(error) }] }` with the request ID and any field hint
 
@@ -1404,7 +1404,7 @@ Write composites (e.g. "triage and act") deliberately out of scope for v1 — th
 
 The `describe.ts` registry stores per-action prose written by humans; it is the curated handle on tool quality. Ship it under `apps/mcp/src/tools/describe.ts` keyed by `actionId`. Missing entries fall back to the contract's `summary`.
 
-A measurement test runs in CI on `pnpm --filter @opendesk/mcp test`: instantiates the server in-process, calls `tools/list`, asserts total response payload is < 16 KB (~4k tokens). At v10 the manifest is 13,664 bytes. Regression alert when a new tool blows the budget.
+A measurement test runs in CI on `pnpm --filter @salve/mcp test`: instantiates the server in-process, calls `tools/list`, asserts total response payload is < 16 KB (~4k tokens). At v10 the manifest is 13,664 bytes. Regression alert when a new tool blows the budget.
 
 #### H6. Composite read tools — implementation
 
@@ -1458,7 +1458,7 @@ Each prompt's `arguments` carry `{ name, description, required }` so hosts rende
 
 #### H9. Errors and safety
 
-**Error envelope.** `SalveApiError` from `@opendesk/api-client` is mapped to MCP's `{ isError: true, content: [{ type: 'text', text: …}] }` shape. Format:
+**Error envelope.** `SalveApiError` from `@salve/api-client` is mapped to MCP's `{ isError: true, content: [{ type: 'text', text: …}] }` shape. Format:
 
 ```
 x tickets.resolve failed (403 forbidden) [auth.scope_missing]
@@ -1469,7 +1469,7 @@ Request: req_abc123
 Hint: <action-specific, same hint table as the CLI's error.ts>
 ```
 
-Same hint table as Phase G uses (`auth.scope_missing` → mint-token URL, `auth.required` → set `SALVE_TOKEN`, `idempotency_key.reused_with_different_request` → use a fresh key). The hint table now lives in `@opendesk/api-client`, shared by the CLI and MCP server.
+Same hint table as Phase G uses (`auth.scope_missing` → mint-token URL, `auth.required` → set `SALVE_TOKEN`, `idempotency_key.reused_with_different_request` → use a fresh key). The hint table now lives in `@salve/api-client`, shared by the CLI and MCP server.
 
 **Network errors** — pass through with the SDK's status `0` and the request never having reached the server. MCP error message says "request did not reach Salve; check `SALVE_API_URL` and connectivity".
 
@@ -1494,7 +1494,7 @@ Three install paths, in the order most users will use them:
    - Cursor: `~/.cursor/mcp.json`
    - Cline / Continue: settings UI
 
-2. **Local development.** `pnpm --filter @opendesk/mcp dev` runs the server pointed at `localhost:3001`. Useful for testing tool changes without `npm install -g`.
+2. **Local development.** `pnpm --filter @salve/mcp dev` runs the server pointed at `localhost:3001`. Useful for testing tool changes without `npm install -g`.
 
 3. **Global install.** `npm install -g @salve/mcp` puts `salve-mcp` on `$PATH` for users who run multiple MCP hosts and prefer one binary.
 
@@ -1502,11 +1502,11 @@ We do not ship a separate Docker image or HTTP-SSE deployment for v1.
 
 #### H11. Dogfooding loop
 
-Same shape as Phase G's relationship to the SDK. The MCP server is the second real-world test for `@opendesk/api-client`'s ergonomics:
+Same shape as Phase G's relationship to the SDK. The MCP server is the second real-world test for `@salve/api-client`'s ergonomics:
 
 - Every tool handler is a one-liner around `client.action(id, input)`. If a handler grows beyond a few lines, the SDK or the contract is wrong.
 - The composite tools force us to look at multi-action sequences. If one composite needs three back-to-back `client.tickets.get` calls, we have an n+1 problem in the contract that should be fixed at the executor level (not in the MCP layer).
-- The hint table lives in `@opendesk/api-client/src/hints.ts` so the CLI and MCP server render the same auth, idempotency, and connectivity guidance.
+- The hint table lives in `@salve/api-client/src/hints.ts` so the CLI and MCP server render the same auth, idempotency, and connectivity guidance.
 
 A live MCP smoke test in CI: spawn the server with stdio, send `initialize` + `tools/list` + a `tools/call` for `salve.whoami` against a test workspace seeded with a known PAT. Asserts a successful auth context comes back. This is the v1 equivalent of the api-client and CLI live-E2E tests already in place.
 
@@ -1523,7 +1523,7 @@ A live MCP smoke test in CI: spawn the server with stdio, send `initialize` + `t
 - [x] Prompts (`triage-inbox`, `summarize-thread`, `draft-reply`) registered with argument schemas.
 - [x] Destructive tools carry the `destructive: true` annotation. Verified by inspecting the manifest in the integration test.
 - [x] `SalveApiError` mapping verified for each major error code (`auth.required`, `auth.scope_missing`, `validation_error`, `idempotency_key.reused_with_different_request`, network status 0).
-- [x] Idempotency key auto-generated for `idempotency: 'required'` actions; verified by capturing the UUID passed from the tool executor into `@opendesk/api-client`.
+- [x] Idempotency key auto-generated for `idempotency: 'required'` actions; verified by capturing the UUID passed from the tool executor into `@salve/api-client`.
 - [x] README in `apps/mcp/README.md` with `claude_desktop_config.json` / `cursor` / `cline` setup blocks.
 - [ ] Live smoke run from Claude Desktop: connect, list tools, call `salve.tickets.list`, call `salve.tickets.note`, verify the note appears in `app.usesalve.com` inbox under the agent's principal. Local stdio smoke via SDK client passed; desktop-host smoke remains tester verification.
 - [x] In-process MCP client test: `initialize` → `tools/list` → `tools/call` `salve.whoami`; local packed-binary stdio smoke also verified against `/v1`.
@@ -1622,7 +1622,7 @@ Ship: agents in any MCP-capable host can drive Salve with the same scope and aud
 These were never blockers; the listed default carries unless someone objects during Phase A.
 
 7. **Read implementation strategy.** Hand-rolled Drizzle queries in `packages/action-executor/src/reads/` for v1. Accept the duplication with Zero queries; revisit a shared filter-builder if duplication exceeds ~3 queries (§2.3 option 3).
-8. **MCP transport — local stdio v1.** Each user runs the MCP server locally; auth via `SALVE_TOKEN` env var (`OPENDESK_TOKEN` is accepted only as a compatibility fallback). Remote HTTP-SSE deferred to v2 if hosted MCP becomes a product.
+8. **MCP transport — local stdio v1.** Each user runs the MCP server locally; auth via `SALVE_TOKEN` env var (`SALVE_TOKEN` is accepted only as a compatibility fallback). Remote HTTP-SSE deferred to v2 if hosted MCP becomes a product.
 9. **No composite write tools in MCP v1.** Read composites only (`triage`, `summarize_thread`). Write composites (`triage_and_act`) would obscure audit attribution; agents make individual write calls so each shows up cleanly in the audit log.
 10. **OpenAPI schema published at `/v1/openapi.json`.** Generated from contracts at build time; CI fails if generated spec drifts from committed snapshot.
 11. **Idempotency window — 24h.** Same as Stripe. Stored in `idempotency_record`; Inngest cron prunes nightly.

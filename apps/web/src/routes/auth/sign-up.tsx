@@ -8,7 +8,7 @@ import {
   Input,
   Label,
   Logo,
-} from '@opendesk/ui';
+} from '@salve/ui';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { authClient } from '@/lib/auth-client';

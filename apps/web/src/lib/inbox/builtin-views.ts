@@ -5,7 +5,7 @@
 // Their `viewQuery` shapes are exactly what `ticketsForView` would consume
 // for a custom view, so the same code path serves both.
 
-import { ME_TOKEN, type ViewQuery, type ViewSort } from '@opendesk/zero-schema';
+import { ME_TOKEN, type ViewQuery, type ViewSort } from '@salve/zero-schema';
 import { Inbox, ListChecks, UserMinus, UserRound } from 'lucide-react';
 import type { ComponentType } from 'react';
 
