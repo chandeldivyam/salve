@@ -39,6 +39,7 @@ export default $config({
     await import('./infra/components/cluster');
     await import('./infra/components/secrets');
     await import('./infra/components/buckets');
+    await import('./infra/components/ses');
     const { api } = await import('./infra/components/api');
     const { zeroCache } = await import('./infra/components/zero-cache');
     const { web } = await import('./infra/components/web');

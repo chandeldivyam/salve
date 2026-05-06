@@ -11,6 +11,7 @@ import {
   inngestSigningKey,
   sesWebhookSecret,
 } from './secrets';
+import { ses } from './ses';
 
 /**
  * Hono API on Fargate behind a public ALB at api.usesalve.com.
@@ -62,6 +63,36 @@ export const api = new sst.aws.Service('Api', {
     inngestSigningKey,
     sesWebhookSecret,
   ],
+  // SES permissions for the task role:
+  //   - Identity management: provision-domain Inngest fn creates per-tenant
+  //     EmailIdentity + MAIL FROM attrs at runtime when a customer adds a
+  //     domain. Scoped resource * because identities are per-tenant.
+  //   - Send: deliver-message Inngest fn sends via SES (raw + simple).
+  //   - Suppression: lookups for the suppression list.
+  // Pre-launch: wide. Narrow by ARN per workspace before launch (plan §12).
+  permissions: [
+    {
+      actions: [
+        'ses:CreateEmailIdentity',
+        'ses:GetEmailIdentity',
+        'ses:DeleteEmailIdentity',
+        'ses:ListEmailIdentities',
+        'ses:PutEmailIdentityMailFromAttributes',
+        'ses:PutEmailIdentityDkimAttributes',
+        'ses:PutEmailIdentityDkimSigningAttributes',
+        'ses:PutEmailIdentityFeedbackAttributes',
+        'ses:PutEmailIdentityConfigurationSetAttributes',
+        'ses:SendEmail',
+        'ses:SendBulkEmail',
+        'ses:GetConfigurationSet',
+        'ses:GetSuppressedDestination',
+        'ses:PutSuppressedDestination',
+        'ses:DeleteSuppressedDestination',
+        'ses:GetAccount',
+      ],
+      resources: ['*'],
+    },
+  ],
   environment: {
     NODE_ENV: 'production',
     PORT: '3001',
@@ -91,6 +122,8 @@ export const api = new sst.aws.Service('Api', {
     MAIL_FROM_SUBDOMAIN: 'mail',
     SES_WEBHOOK_SECRET: sesWebhookSecret.value,
     SES_SNS_AUTO_CONFIRM: '1',
+    SES_CONFIGURATION_SET: ses.configSetName,
+    SES_SYSTEM_IDENTITY: ses.systemIdentityName,
     // OAuth
     GOOGLE_CLIENT_ID: googleClientId.value,
     GOOGLE_CLIENT_SECRET: googleClientSecret.value,
