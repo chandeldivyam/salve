@@ -26,12 +26,8 @@ jobs:
     name: sst diff prod
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    outputs:
-      run_migrations: ${{ steps.detect_migrations.outputs.run }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
 
       - uses: pnpm/action-setup@v4
         with:
@@ -53,18 +49,6 @@ jobs:
 
       - name: sst diff
         run: pnpm sst diff --stage prod
-
-      - name: Detect migration changes
-        id: detect_migrations
-        run: |
-          if git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" 2>/dev/null \
-            | grep -q '^packages/db/src/migrations/'; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-            echo "Migration files changed since last commit."
-          else
-            echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "No migration files changed."
-          fi
 
   apply:
     name: sst deploy prod
@@ -96,14 +80,25 @@ jobs:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+      - name: sst deploy
+        run: pnpm sst deploy --stage prod
+
+      # Always run migrations — never gated on file diffs. Reasons:
+      # 1. Fresh deploys (e.g. after `sst remove`) need migrations even
+      #    though no migration files changed since the last commit.
+      # 2. Drizzle is idempotent: already-applied migrations are tracked
+      #    in `drizzle.__drizzle_migrations` and skipped on re-run.
+      # 3. The cost of always running is ~5s when no-op vs. the cost of
+      #    a missed migration is total app outage.
+      #
+      # Order: AFTER `sst deploy` so the migrate task definition (and
+      # Aurora) exist. On a fresh deploy the API/Web/Zero services may
+      # briefly fail-to-connect against the empty DB until migrate runs;
+      # they self-heal once tables exist (no manual restart needed).
       - name: Run database migrations
-        if: needs.diff.outputs.run_migrations == 'true'
         run: STAGE=prod bash scripts/run-migrate.sh
         env:
           AWS_REGION: ${{ secrets.AWS_REGION }}
-
-      - name: sst deploy
-        run: pnpm sst deploy --stage prod
 
       - name: Inngest Cloud sync
         run: STAGE=prod bash scripts/inngest-sync.sh
