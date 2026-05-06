@@ -26,20 +26,33 @@ export const zeroCache = new sst.aws.Service('ZeroCache', {
   cpu: '1 vCPU',
   memory: '2 GB',
   scaling: { min: 1, max: 1 },
-  // Spot is fine pre-launch — interruptions cost a client resync. Switch to
-  // 'fargate' before public launch (see plan §12).
-  capacity: 'spot',
+  // ZeroCache must NOT be on spot. Spot interruptions arrive every few
+  // minutes when capacity availability shifts; each restart forces Litestream
+  // restore + every connected browser to rehydrate its CVR. View-syncer state
+  // is too costly to drop. (The Api service stays on spot — it's stateless,
+  // clients reconnect transparently.)
+  //
+  // We omit `capacity` entirely so SST falls back to `launchType: 'FARGATE'`.
+  // Note: passing `capacity: 'fargate'` is a footgun in SST 4.13.1 — the
+  // normalizeCapacity helper only special-cases 'spot', so the string
+  // 'fargate' produces an empty capacityProviderStrategies array and ECS
+  // rejects with "Assign public IP is not supported for this launch type".
   loadBalancer: {
     rules: [{ listen: '443/https', forward: '4848/http' }],
     domain: 'sync.usesalve.com',
     health: {
       '4848/http': {
         path: '/keepalive',
-        interval: '30 seconds',
-        timeout: '5 seconds',
+        // CRITICAL: zero-cache self-drains if it doesn't receive a heartbeat
+        // (ALB health-check ping) within ~25s. If interval > 25s the
+        // dispatcher logs "last heartbeat received N seconds ago. draining."
+        // and exits with code 0, ECS replaces the task, repeat forever. 5s
+        // matches Rocicorp's recommended Fargate setting.
+        interval: '5 seconds',
+        timeout: '3 seconds',
         successCodes: '200',
         healthyThreshold: 2,
-        unhealthyThreshold: 5,
+        unhealthyThreshold: 3,
       },
     },
     // Sticky cookie affinity — required for Zero. View-syncers maintain a
