@@ -9,11 +9,19 @@ import {
   Label,
   Logo,
 } from '@salve/ui';
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, Link, redirect, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { authClient } from '@/lib/auth-client';
+import { fetchSession } from '@/lib/session-loader';
 
 export const Route = createFileRoute('/auth/sign-in')({
+  // Mirror of /app's beforeLoad: bounce already-signed-in visitors back to
+  // the app. clearSessionCache() runs on sign-out so refetch returns null
+  // and signed-out users land here as expected.
+  beforeLoad: async () => {
+    const session = await fetchSession();
+    if (session) throw redirect({ to: '/app' });
+  },
   component: SignInPage,
 });
 
