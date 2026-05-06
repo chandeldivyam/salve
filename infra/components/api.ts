@@ -1,5 +1,6 @@
 /// <reference path="../../.sst/platform/config.d.ts" />
 
+import { attachmentsBucket, rawEmailBucket } from './buckets';
 import { cluster } from './cluster';
 import { postgres } from './postgres';
 import {
@@ -62,6 +63,14 @@ export const api = new sst.aws.Service('Api', {
     inngestEventKey,
     inngestSigningKey,
     sesWebhookSecret,
+    // Bucket linking auto-grants the task role s3:GetObject/PutObject on
+    // these buckets (and exposes the bucket name via Resource.<name>.name).
+    // - rawEmailBucket: route-inbound-message Inngest fn reads raw RFC822
+    //   blobs from inbound/in/* and inbound/reply/* to parse.
+    // - attachmentsBucket: presigned upload + download for ticket
+    //   attachments via /api/files/* handlers.
+    rawEmailBucket,
+    attachmentsBucket,
   ],
   // SES permissions for the task role:
   //   - Identity management: provision-domain Inngest fn creates per-tenant
