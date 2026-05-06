@@ -4,9 +4,9 @@
 // file to exist beforehand. So we run the generator explicitly first.
 //
 // Mirrors the Vite plugin config in apps/web/vite.config.ts.
-import { Generator, getConfig } from '@tanstack/router-generator';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { Generator, getConfig } from '@tanstack/router-generator';
 
 const __filename = fileURLToPath(import.meta.url);
 const root = resolve(dirname(__filename), '..');
