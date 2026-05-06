@@ -92,6 +92,7 @@ export const api = new sst.aws.Service('Api', {
         'ses:PutEmailIdentityFeedbackAttributes',
         'ses:PutEmailIdentityConfigurationSetAttributes',
         'ses:SendEmail',
+        'ses:SendRawEmail',
         'ses:SendBulkEmail',
         'ses:GetConfigurationSet',
         'ses:GetSuppressedDestination',
