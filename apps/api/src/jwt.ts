@@ -65,6 +65,18 @@ export async function verifySalveJwt(token: string): Promise<SalveJwtClaims> {
 
 export interface CookieAttrs {
   isProduction: boolean;
+  /**
+   * Optional Domain attribute. In prod we set this to the eTLD+1 (e.g.
+   * `usesalve.com`) so the JWT cookie is shared across all subdomains —
+   * api.usesalve.com (server), app.usesalve.com (web SPA), and most
+   * importantly sync.usesalve.com (zero-cache, which must receive the
+   * cookie via WS handshake → `ZERO_QUERY_FORWARD_COOKIES` to authenticate
+   * server-mutators against /api/zero/mutate).
+   *
+   * In dev we omit it so the cookie scopes to `localhost` (Vite proxies
+   * /api/** to the Hono server, all same-origin).
+   */
+  domain?: string;
 }
 
 export function buildJwtCookieHeader(token: string, attrs: CookieAttrs): string {
@@ -75,12 +87,14 @@ export function buildJwtCookieHeader(token: string, attrs: CookieAttrs): string 
     'SameSite=Lax',
     `Max-Age=${SEVEN_DAYS_SECONDS}`,
   ];
+  if (attrs.domain) parts.push(`Domain=${attrs.domain}`);
   if (attrs.isProduction) parts.push('Secure');
   return parts.join('; ');
 }
 
 export function clearJwtCookieHeader(attrs: CookieAttrs): string {
   const parts = [`${COOKIE_NAME}=`, 'Path=/', 'HttpOnly', 'SameSite=Lax', 'Max-Age=0'];
+  if (attrs.domain) parts.push(`Domain=${attrs.domain}`);
   if (attrs.isProduction) parts.push('Secure');
   return parts.join('; ');
 }

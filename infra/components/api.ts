@@ -106,6 +106,11 @@ export const api = new sst.aws.Service('Api', {
     // better-auth
     BETTER_AUTH_URL: 'https://api.usesalve.com',
     BETTER_AUTH_TRUSTED_ORIGINS: 'https://app.usesalve.com',
+    // Shared eTLD+1 so the salve JWT cookie reaches sync.usesalve.com
+    // (zero-cache) on the WS handshake. Without this, zero-cache forwards
+    // no JWT to /api/zero/mutate and server-mutators throw "User must be
+    // logged in" — which is exactly what we just hit.
+    COOKIE_DOMAIN: 'usesalve.com',
     // Mirror AUTH_SECRET → ZERO_AUTH_SECRET via the linked secret.
     // (server.ts reads process.env.AUTH_SECRET; zero-cache reads
     // process.env.ZERO_AUTH_SECRET — same value.)
