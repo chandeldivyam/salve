@@ -27,6 +27,8 @@ export const SEARCH_MIN_QUERY_CHARS = 2;
 
 const EMPTY_RESPONSE: SearchResponse = { tickets: [], customers: [] };
 
+const apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? '';
+
 export async function searchAll(
   query: string,
   signal?: AbortSignal,
@@ -40,7 +42,7 @@ export async function searchAll(
     types: 'ticket,customer',
     limit: String(limit),
   });
-  const res = await fetch(`/api/search?${params.toString()}`, {
+  const res = await fetch(`${apiBase}/api/search?${params.toString()}`, {
     credentials: 'include',
     signal,
   });
