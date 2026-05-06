@@ -10,7 +10,6 @@
 // bulk-sender compliance (RFC 8058 one-click).
 
 import { randomUUID } from 'node:crypto';
-import { signReplyAddress } from './reply-token.js';
 
 // ---------- Subject prefix-list normalization (research §2) ----------
 
@@ -215,12 +214,14 @@ export function buildEnvelope(args: BuildEnvelopeArgs): BuiltEnvelope {
   const refsList = priorMessages.slice(-REFERENCES_CAP).map((m) => m.rfcMessageID);
   const references = refsList.length > 0 ? refsList.join(' ') : undefined;
 
-  // Reply-To: signed reply+t address.
-  const replyTo = signReplyAddress({
-    workspaceID: workspace.id,
-    ticketID: ticket.id,
-    domain: args.replyDomainOverride,
-  });
+  // Reply-To = From. The tenant's verified support address already round-trips
+  // inbound through the customer's forwarder (ForwardEmail.net → SES inbound),
+  // so we don't need a signed reply+t.<token>@reply.usesalve.com indirection.
+  // Threading falls back to In-Reply-To / References headers + the invisible
+  // body magic marker (`::tid:<ticket>:<sig>::`). Inflight tickets that
+  // already shipped with the old token-Reply-To still thread on layer 3 of
+  // route-inbound-message.ts via parseReplyAddress.
+  const replyTo = fromAddr;
 
   // List-Id per RFC 2919.
   const listId = `<${workspace.slug}.${ticket.shortID}.tickets.usesalve.com>`;
