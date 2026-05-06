@@ -26,9 +26,17 @@ export const zeroCache = new sst.aws.Service('ZeroCache', {
   cpu: '1 vCPU',
   memory: '2 GB',
   scaling: { min: 1, max: 1 },
-  // Spot is fine pre-launch — interruptions cost a client resync. Switch to
-  // 'fargate' before public launch (see plan §12).
-  capacity: 'spot',
+  // ZeroCache must NOT be on spot. Spot interruptions arrive every few
+  // minutes when capacity availability shifts; each restart forces Litestream
+  // restore + every connected browser to rehydrate its CVR. View-syncer state
+  // is too costly to drop. (The Api service stays on spot — it's stateless,
+  // clients reconnect transparently.)
+  //
+  // We omit `capacity` entirely so SST falls back to `launchType: 'FARGATE'`.
+  // Note: passing `capacity: 'fargate'` is a footgun in SST 4.13.1 — the
+  // normalizeCapacity helper only special-cases 'spot', so the string
+  // 'fargate' produces an empty capacityProviderStrategies array and ECS
+  // rejects with "Assign public IP is not supported for this launch type".
   loadBalancer: {
     rules: [{ listen: '443/https', forward: '4848/http' }],
     domain: 'sync.usesalve.com',
