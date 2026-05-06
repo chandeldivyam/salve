@@ -45,17 +45,29 @@ const ALLOWED_MIME = new Set<string>([
 const MAX_BYTES = 25 * 1024 * 1024; // 25 MB
 
 const region = process.env.S3_REGION ?? 'us-east-1';
-const endpoint = process.env.S3_ENDPOINT ?? 'http://localhost:9000';
-const accessKeyId = process.env.S3_ACCESS_KEY_ID ?? 'salve';
-const secretAccessKey = process.env.S3_SECRET_ACCESS_KEY ?? 'salvedev';
+// In prod, leave S3_ENDPOINT unset → SDK uses real AWS S3 + task-role
+// credentials. In dev (docker-compose), set S3_ENDPOINT=http://localhost:9000
+// + S3_FORCE_PATH_STYLE=true + static MinIO creds.
+const endpoint = process.env.S3_ENDPOINT || undefined;
+const accessKeyId = process.env.S3_ACCESS_KEY_ID;
+const secretAccessKey = process.env.S3_SECRET_ACCESS_KEY;
 const bucket = process.env.S3_BUCKET ?? 'salve-dev';
-const forcePathStyle = (process.env.S3_FORCE_PATH_STYLE ?? 'true') === 'true';
+const forcePathStyle = process.env.S3_FORCE_PATH_STYLE === 'true';
 
 const s3 = new S3Client({
   region,
-  endpoint,
-  forcePathStyle,
-  credentials: { accessKeyId, secretAccessKey },
+  ...(endpoint
+    ? {
+        endpoint,
+        forcePathStyle,
+        // Static creds only when targeting a custom endpoint (MinIO, etc).
+        // When endpoint is unset, the SDK falls back to the default
+        // credential provider chain — task role on ECS, etc.
+        ...(accessKeyId && secretAccessKey
+          ? { credentials: { accessKeyId, secretAccessKey } }
+          : {}),
+      }
+    : {}),
 });
 
 let bucketReady = false;

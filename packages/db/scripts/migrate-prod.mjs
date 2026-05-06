@@ -31,6 +31,12 @@ if (process.env.RESET_SCHEMA === '1') {
     await sql`DROP SCHEMA IF EXISTS public CASCADE`;
     await sql`CREATE SCHEMA public`;
     await sql`GRANT ALL ON SCHEMA public TO PUBLIC`;
+    // CRITICAL: drizzle-orm/postgres-js/migrator records applied migrations
+    // in `drizzle.__drizzle_migrations`. If we drop `public` but leave the
+    // `drizzle` schema intact, the next `migrate()` call thinks every
+    // migration is already applied and skips them — leaving public empty.
+    // Drop drizzle's tracking schema too so migrations rerun from scratch.
+    await sql`DROP SCHEMA IF EXISTS drizzle CASCADE`;
     // Drop any zero-managed schemas created by a previous zero-cache run.
     const zeroSchemas = await sql`
       SELECT schema_name FROM information_schema.schemata

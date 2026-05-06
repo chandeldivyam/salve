@@ -37,6 +37,15 @@ export const zeroCache = new sst.aws.Service('ZeroCache', {
   // normalizeCapacity helper only special-cases 'spot', so the string
   // 'fargate' produces an empty capacityProviderStrategies array and ECS
   // rejects with "Assign public IP is not supported for this launch type".
+  // ALB health checks fail tasks after ~15s (3 fails × 5s interval), but a
+  // cold zero-cache boot takes ~25-30s (Litestream restore + replica
+  // schema migration + change-streamer setup). Grace period prevents ECS
+  // from killing the task before it can pass the first health check.
+  transform: {
+    service: (args) => {
+      args.healthCheckGracePeriodSeconds = 120;
+    },
+  },
   loadBalancer: {
     rules: [{ listen: '443/https', forward: '4848/http' }],
     domain: 'sync.usesalve.com',
@@ -93,6 +102,6 @@ export const zeroCache = new sst.aws.Service('ZeroCache', {
     ZERO_QUERY_FORWARD_COOKIES: 'true',
     ZERO_MUTATE_FORWARD_COOKIES: 'true',
     // Litestream backup — value is a Pulumi output of the bucket name.
-    ZERO_LITESTREAM_BACKUP_URL: $interpolate`s3://${zeroReplicasBucket.name}/replica/v1`,
+    ZERO_LITESTREAM_BACKUP_URL: $interpolate`s3://${zeroReplicasBucket.name}/replica/v2`,
   },
 });

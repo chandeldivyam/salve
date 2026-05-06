@@ -18,7 +18,14 @@ import {
 import { type ApiScope, scopesFromPermissionStatements } from './public-api/scopes.js';
 
 const isProduction = process.env.NODE_ENV === 'production';
-const cookieAttrs: CookieAttrs = { isProduction };
+// COOKIE_DOMAIN must be the eTLD+1 in prod so the JWT cookie is shared
+// across api/app/sync subdomains. Without this, sync.usesalve.com (zero-cache)
+// can't forward the cookie back to the API on /api/zero/mutate, and every
+// server-mutator throws "User must be logged in".
+const cookieAttrs: CookieAttrs = {
+  isProduction,
+  domain: process.env.COOKIE_DOMAIN || undefined,
+};
 
 export type AppRole = SalveJwtClaims['role'];
 
