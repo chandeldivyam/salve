@@ -43,11 +43,16 @@ export const zeroCache = new sst.aws.Service('ZeroCache', {
     health: {
       '4848/http': {
         path: '/keepalive',
-        interval: '30 seconds',
-        timeout: '5 seconds',
+        // CRITICAL: zero-cache self-drains if it doesn't receive a heartbeat
+        // (ALB health-check ping) within ~25s. If interval > 25s the
+        // dispatcher logs "last heartbeat received N seconds ago. draining."
+        // and exits with code 0, ECS replaces the task, repeat forever. 5s
+        // matches Rocicorp's recommended Fargate setting.
+        interval: '5 seconds',
+        timeout: '3 seconds',
         successCodes: '200',
         healthyThreshold: 2,
-        unhealthyThreshold: 5,
+        unhealthyThreshold: 3,
       },
     },
     // Sticky cookie affinity — required for Zero. View-syncers maintain a
