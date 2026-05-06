@@ -503,6 +503,47 @@ These are the things that tend to bite at deploy time. Pinned here so we don't r
 
 ---
 
+## 11.5. Recreate-from-scratch runbook (post-`sst remove`)
+
+If we ever blow everything away — `sst remove --stage prod` or a fresh AWS account — this is the order to bring it back up.
+
+```bash
+# 1. Re-bootstrap secrets (Aurora master password, etc., regenerate; API
+#    keys come from .env). Inngest signing/event keys must be in .env or
+#    the script will skip them.
+bash scripts/sst-bootstrap-secrets.sh   # STAGE=prod by default
+
+# 2. Deploy infra. This creates VPC, Aurora, Cluster + Services, ALBs,
+#    ACM certs, Route 53 records, SES identities, etc.
+pnpm sst:deploy:prod
+#    OR push the branch to main and let .github/workflows/deploy.yml run.
+
+# 3. Migrations run automatically as a step in deploy.yml. If you ran
+#    sst deploy locally instead of via CI, run them manually:
+STAGE=prod bash scripts/run-migrate.sh
+
+# 4. Inngest Cloud sync also runs as a step in deploy.yml. Manual:
+STAGE=prod bash scripts/inngest-sync.sh
+
+# 5. Verify
+curl -sf https://api.usesalve.com/healthz
+curl -sf https://sync.usesalve.com/keepalive
+curl -sf https://app.usesalve.com/ -o /dev/null -w "%{http_code}\n"
+```
+
+What's _not_ in IaC and survives a destroy:
+- The Route 53 hosted zone for `usesalve.com` (we use `getZoneOutput`, never create it).
+- The `sst-state-*` and `sst-asset-*` S3 buckets (SST's own state backend; they persist across stage removals).
+- SES production-access status (an account-level AWS flag). If we're in sandbox you stay in sandbox.
+- Any tenant-created SES email identities (e.g., `trydocufy.com`). Those are managed at runtime by `provision-domain` and don't get destroyed by `sst remove`.
+
+What's lost on destroy:
+- All Aurora data (we accept this pre-launch — `removal: 'remove'`, `skipFinalSnapshot: true`).
+- The Litestream replica state in S3 (`zeroReplicasBucket`).
+- The raw email archive in S3 (`rawEmailBucket`).
+
+---
+
 ## 12. Launch checklist (flip these before going public)
 
 We're in **pre-launch mode** right now: every resource is destroyable so we can iterate on IaC quickly. Before opening the doors to real users, walk this list:
