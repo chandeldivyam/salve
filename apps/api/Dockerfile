@@ -57,3 +57,14 @@ ENV PORT=3001
 EXPOSE 3001
 ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["node", "dist/server.mjs"]
+
+# ----------------------------------------------------------------------------
+# Migration runner — used by infra/components/migrate.ts (sst.aws.Task).
+# Reuses the `build` stage (has dev deps including drizzle-kit). Triggered via
+# `aws ecs run-task` after a deploy; reads DATABASE_URL from env, applies any
+# pending Drizzle migrations to Aurora, exits.
+# ----------------------------------------------------------------------------
+FROM build AS migrate
+WORKDIR /repo/packages/db
+ENV NODE_ENV=production
+CMD ["node", "scripts/migrate-prod.mjs"]
