@@ -509,6 +509,8 @@ We're in **pre-launch mode** right now: every resource is destroyable so we can 
 
 - [ ] `sst.config.ts`: change `removal: 'remove'` → `input?.stage === 'prod' ? 'retain' : 'remove'`. Stops `sst remove --stage prod` from nuking data.
 - [ ] `sst.config.ts`: change `protect: false` → `input?.stage === 'prod'`. Requires explicit code change before any prod resource can be removed.
+- [ ] **Move runtime secrets from `environment` to ECS `secrets` field** in `infra/components/api.ts` and `zero-cache.ts`. Currently `AUTH_SECRET`, `INNGEST_SIGNING_KEY`, etc. land in the task definition as plaintext env vars (visible to anyone with ECS read perms). Switching to `secrets` makes ECS resolve from Secrets Manager / SSM at task start; the values never appear in the task def. Requires SST `Service` `transform.taskDefinition` or rewriting via raw Pulumi.
+- [ ] **Inngest Cloud app sync**: `scripts/inngest-sync.sh` returns `sig_verification_failed` against the prod environment. Either (a) fix the key handshake, or (b) document the manual "Connect app" flow from the Inngest dashboard. Lazy registration on first event masks this for now.
 - [ ] Aurora: enable deletion protection on the cluster (`deletionProtection: true` in the postgres component).
 - [ ] Aurora: enable point-in-time recovery + extend backup retention from 7 days → 30 days.
 - [ ] S3 buckets: confirm `Versioning: Enabled` on attachments, raw-email.
