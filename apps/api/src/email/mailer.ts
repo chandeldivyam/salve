@@ -71,6 +71,11 @@ function getSes(): SESv2Client {
 
 async function sendViaSes(env: BuiltEnvelope): Promise<SendResult> {
   const raw = serializeEnvelopeToRaw(env);
+  // ConfigurationSet is what tells SES to publish Bounce/Complaint/Delivery
+  // events to the SNS topic our webhook ingests. Without it, the entire
+  // bounce-suppression pipeline downstream (webhooks/ses.ts +
+  // provider-webhook.ts → local `suppression` table) gets nothing.
+  const configurationSet = process.env.SES_CONFIGURATION_SET || undefined;
   const cmd = new SendEmailCommand({
     Content: {
       Raw: { Data: raw },
@@ -79,6 +84,7 @@ async function sendViaSes(env: BuiltEnvelope): Promise<SendResult> {
     // regardless of the headers in the raw payload.
     FromEmailAddress: env.from,
     Destination: { ToAddresses: [env.to] },
+    ...(configurationSet ? { ConfigurationSetName: configurationSet } : {}),
   });
   const out = await getSes().send(cmd);
   return {
