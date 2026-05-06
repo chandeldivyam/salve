@@ -28,9 +28,7 @@ export const rawEmailBucket = new sst.aws.Bucket('RawEmail', {
             : { Version: '2012-10-17', Statement: [] };
         // Find the bucket ARN from the existing TLS-enforce statement; fall
         // back to a wildcard if SST's default policy ever changes shape.
-        const firstStmt = parsed.Statement[0] as
-          | { Resource?: string | string[] }
-          | undefined;
+        const firstStmt = parsed.Statement[0] as { Resource?: string | string[] } | undefined;
         const resource = Array.isArray(firstStmt?.Resource)
           ? firstStmt.Resource[0]
           : firstStmt?.Resource;

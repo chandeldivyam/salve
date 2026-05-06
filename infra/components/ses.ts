@@ -36,14 +36,11 @@ const systemIdentity = new aws.sesv2.EmailIdentity('SesSystemIdentity', {
 // 2. Custom MAIL FROM. Without this, SES uses `*.amazonses.com` as the
 //    bounce envelope, breaking SPF alignment. With this set, customers
 //    see `mail.usesalve.com` and SPF aligns.
-const mailFromAttrs = new aws.sesv2.EmailIdentityMailFromAttributes(
-  'SesSystemMailFrom',
-  {
-    emailIdentity: systemIdentity.emailIdentity,
-    mailFromDomain: MAIL_FROM,
-    behaviorOnMxFailure: 'USE_DEFAULT_VALUE',
-  },
-);
+const mailFromAttrs = new aws.sesv2.EmailIdentityMailFromAttributes('SesSystemMailFrom', {
+  emailIdentity: systemIdentity.emailIdentity,
+  mailFromDomain: MAIL_FROM,
+  behaviorOnMxFailure: 'USE_DEFAULT_VALUE',
+});
 
 // 3. Route 53 zone lookup (one call, used by all records below).
 const zone = aws.route53.getZoneOutput({ name: APEX });
