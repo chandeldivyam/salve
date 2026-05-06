@@ -40,7 +40,10 @@ RUN pnpm --filter @salve/api build
 
 FROM build AS prod
 # `pnpm deploy --prod` resolves the workspace + ships only prod deps.
-RUN pnpm --filter @salve/api deploy --prod /out
+# `--legacy` is required on pnpm 10+ when `inject-workspace-packages` is off
+# (default). Workspace deps are already inlined into dist/server.mjs by tsdown,
+# so we don't need them in node_modules — `deploy --prod` correctly excludes them.
+RUN pnpm --filter @salve/api deploy --prod --legacy /out
 
 FROM node:22-alpine AS final
 WORKDIR /app

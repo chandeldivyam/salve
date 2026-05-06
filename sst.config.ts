@@ -36,9 +36,13 @@ export default $config({
   async run() {
     await import('./infra/components/network');
     const { postgres } = await import('./infra/components/postgres');
+    await import('./infra/components/cluster');
+    await import('./infra/components/secrets');
+    const { api } = await import('./infra/components/api');
     return {
       postgresEndpoint: postgres.clusterEndpoint,
       postgresSecretArn: postgres.masterSecretArn,
+      apiUrl: api.url,
     };
   },
 });

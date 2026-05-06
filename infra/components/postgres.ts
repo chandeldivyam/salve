@@ -101,8 +101,11 @@ const masterSecretArn = cluster.masterUserSecrets.apply((s) => s[0].secretArn);
 const masterSecret = aws.secretsmanager.getSecretVersionOutput({
   secretId: masterSecretArn,
 });
-const masterPassword = masterSecret.secretString.apply(
-  (raw) => (JSON.parse(raw) as { password: string }).password,
+// Aurora auto-managed passwords are base64 (contain `/`, `+`, `=`) — URL-encode
+// before embedding in a postgres:// connection string. postgres-js parses
+// percent-encoded passwords correctly.
+const masterPassword = masterSecret.secretString.apply((raw) =>
+  encodeURIComponent((JSON.parse(raw) as { password: string }).password),
 );
 
 const databaseUrl = $interpolate`postgres://${cluster.masterUsername}:${masterPassword}@${cluster.endpoint}:${cluster.port}/${cluster.databaseName}?sslmode=require`;
