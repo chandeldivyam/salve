@@ -28,14 +28,31 @@ fi
 
 # AUTH_SECRET / ZERO_AUTH_SECRET — same value, used by Hono + Zero. Auto-generate
 # if AUTH_SECRET isn't set in the env. To rotate, unset locally and re-run.
-if [ -z "${AUTH_SECRET:-}" ]; then
-  AUTH_SECRET="$(openssl rand -hex 32)"
-  echo "AuthSecret: generated"
-else
-  echo "AuthSecret: from env"
-fi
-pnpm sst secret set AuthSecret "$AUTH_SECRET" --stage "$STAGE" >/dev/null
-echo "AuthSecret: set"
+# Idempotent generate-or-keep helper. If $env_name is set in the env, push it
+# verbatim; otherwise check if SSM already holds a value (keep it) and only
+# generate fresh if neither applies. Stops us from rotating live secrets on
+# every script run.
+ensure_generated() {
+  local secret_name="$1"
+  local env_name="$2"
+  local provided="${!env_name:-}"
+  if [ -n "$provided" ]; then
+    pnpm sst secret set "$secret_name" "$provided" --stage "$STAGE" >/dev/null
+    echo "$secret_name: from env"
+    return
+  fi
+  if pnpm sst secret list --stage "$STAGE" 2>/dev/null | grep -q "^$secret_name="; then
+    echo "$secret_name: already set, keeping"
+    return
+  fi
+  local generated
+  generated="$(openssl rand -hex 32)"
+  pnpm sst secret set "$secret_name" "$generated" --stage "$STAGE" >/dev/null
+  echo "$secret_name: generated"
+}
+
+ensure_generated AuthSecret AUTH_SECRET
+ensure_generated ZeroAdminPassword ZERO_ADMIN_PASSWORD
 
 set_if_present() {
   local secret_name="$1"

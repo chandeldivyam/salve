@@ -3,7 +3,7 @@
 import { zeroReplicasBucket } from './buckets';
 import { cluster } from './cluster';
 import { postgres } from './postgres';
-import { authSecret } from './secrets';
+import { authSecret, zeroAdminPassword } from './secrets';
 
 /**
  * Rocicorp Zero — single-node topology (view-syncer + replication-manager +
@@ -26,6 +26,8 @@ export const zeroCache = new sst.aws.Service('ZeroCache', {
   cpu: '1 vCPU',
   memory: '2 GB',
   scaling: { min: 1, max: 1 },
+  // Spot is fine pre-launch — interruptions cost a client resync. Switch to
+  // 'fargate' before public launch (see plan §12).
   capacity: 'spot',
   loadBalancer: {
     rules: [{ listen: '443/https', forward: '4848/http' }],
@@ -53,11 +55,14 @@ export const zeroCache = new sst.aws.Service('ZeroCache', {
       },
     },
   },
-  link: [authSecret, zeroReplicasBucket],
+  link: [authSecret, zeroAdminPassword, zeroReplicasBucket],
   environment: {
     AWS_REGION: 'us-east-1',
     ZERO_PORT: '4848',
-    ZERO_REPLICA_FILE: '/data/replica.db',
+    // /tmp always exists + is writeable in the image. Litestream replicates
+    // continuously to S3, so ephemeral storage is fine — on container restart
+    // we restore from S3 (or resync from upstream Postgres if S3 is empty).
+    ZERO_REPLICA_FILE: '/tmp/replica.db',
     ZERO_LOG_LEVEL: 'info',
     ZERO_LOG_FORMAT: 'json',
     // Postgres connections — single Aurora cluster, three logical pointers.
@@ -66,6 +71,8 @@ export const zeroCache = new sst.aws.Service('ZeroCache', {
     ZERO_CHANGE_DB: postgres.databaseUrl,
     // JWT verification (same secret the Hono API signs with).
     ZERO_AUTH_SECRET: authSecret.value,
+    // Admin/introspection auth — required by zero-cache 1.3+ in production.
+    ZERO_ADMIN_PASSWORD: zeroAdminPassword.value,
     // Forward queries + mutations to the Hono API. Cookie forwarding is on
     // so the JWT cookie reaches the API authenticated.
     ZERO_QUERY_URL: 'https://api.usesalve.com/api/zero/query',

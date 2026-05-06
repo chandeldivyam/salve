@@ -16,6 +16,11 @@
 
 export const authSecret = new sst.Secret('AuthSecret');
 
+// Zero 1.3+ requires an admin password to start in production mode (gates the
+// /admin/* introspection routes). Doesn't appear anywhere in app code; only
+// used by zero-cache itself.
+export const zeroAdminPassword = new sst.Secret('ZeroAdminPassword');
+
 // Inngest Cloud — Event Key (publish), Signing Key (serve verification),
 // Management API Key (CI sync). All three live in the user's local .env
 // and are pushed to SST secrets via scripts/sst-bootstrap-secrets.sh.

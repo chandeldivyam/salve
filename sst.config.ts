@@ -38,11 +38,14 @@ export default $config({
     const { postgres } = await import('./infra/components/postgres');
     await import('./infra/components/cluster');
     await import('./infra/components/secrets');
+    await import('./infra/components/buckets');
     const { api } = await import('./infra/components/api');
+    const { zeroCache } = await import('./infra/components/zero-cache');
     return {
       postgresEndpoint: postgres.clusterEndpoint,
       postgresSecretArn: postgres.masterSecretArn,
       apiUrl: api.url,
+      zeroCacheUrl: zeroCache.url,
     };
   },
 });
