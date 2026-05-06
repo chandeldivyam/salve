@@ -49,7 +49,8 @@ export const processProviderWebhook = inngest.createFunction(
     id: 'process-provider-webhook',
     name: 'Process provider webhook',
     retries: 4,
-    batchEvents: { maxSize: 50, timeout: '2s', key: 'event.data.source' },
+    // Pre-launch: capped at 5 (Inngest free plan). Bump back to 50 on Pro.
+    batchEvents: { maxSize: 5, timeout: '2s', key: 'event.data.source' },
     triggers: [{ event: PROVIDER_EVENT.WEBHOOK_RECEIVED }],
   },
   // biome-ignore lint/suspicious/noExplicitAny: Inngest batch typing is version-sensitive; each event is Zod-validated below.
