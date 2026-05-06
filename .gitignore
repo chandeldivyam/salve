@@ -25,6 +25,8 @@ sync-replica.db-*
 # SST
 .sst
 .open-next
+sst-env.d.ts
+**/sst-env.d.ts
 
 # Editor
 .vscode/*
@@ -47,5 +49,6 @@ store/
 .biome
 tmp/
 
-# Local docs / research notes
-docs/
+# Local docs / research notes — contents gitignored by default; allowlist tracked planning docs.
+docs/*
+!docs/cicd-plan.md

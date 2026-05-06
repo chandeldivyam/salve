@@ -25,11 +25,17 @@
     "db:migrate": "pnpm --filter @salve/db db:migrate",
     "db:push": "pnpm --filter @salve/db db:push",
     "db:studio": "pnpm --filter @salve/db db:studio",
-    "db:seed:scale": "pnpm --filter @salve/db db:seed:scale"
+    "db:seed:scale": "pnpm --filter @salve/db db:seed:scale",
+    "sst:deploy:staging": "sst deploy --stage staging",
+    "sst:deploy:prod": "sst deploy --stage prod",
+    "sst:remove:staging": "sst remove --stage staging",
+    "sst:diff:prod": "sst diff --stage prod",
+    "sst:diff:staging": "sst diff --stage staging"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.13",
     "@types/node": "25.6.0",
+    "sst": "^4.13.1",
     "turbo": "2.9.6",
     "typescript": "6.0.3"
   },
