@@ -43,6 +43,7 @@ export default $config({
     const { zeroCache } = await import('./infra/components/zero-cache');
     const { web } = await import('./infra/components/web');
     const { migrate } = await import('./infra/components/migrate');
+    const { githubDeployRole } = await import('./infra/components/github-oidc');
     return {
       postgresEndpoint: postgres.clusterEndpoint,
       postgresSecretArn: postgres.masterSecretArn,
@@ -50,6 +51,7 @@ export default $config({
       zeroCacheUrl: zeroCache.url,
       webUrl: web.url,
       migrateTaskArn: migrate.taskDefinition,
+      githubDeployRoleArn: githubDeployRole.arn,
     };
   },
 });

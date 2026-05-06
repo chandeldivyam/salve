@@ -1,0 +1,55 @@
+name: Staging (on-demand)
+
+# Manually triggered workflow that spins up or tears down a staging stage.
+# Use for risky changes (big migrations, SES rule changes, IaC refactors):
+# spin up, exercise, tear down. No standing dev stage — saves ~$130/mo.
+#
+# Reuses the same AWS_DEPLOY_ROLE as prod (the role's trust policy allows
+# any branch under chandeldivyam/salve). Skips the manual-approval gate
+# because GH `workflow_dispatch` is already maintainer-only.
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: deploy | remove
+        required: true
+        type: choice
+        options: [deploy, remove]
+        default: deploy
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  staging:
+    name: sst ${{ inputs.action }} staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: sst ${{ inputs.action }} staging
+        run: pnpm sst ${{ inputs.action }} --stage staging
