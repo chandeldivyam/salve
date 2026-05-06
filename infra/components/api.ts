@@ -139,6 +139,11 @@ export const api = new sst.aws.Service('Api', {
     SES_SNS_AUTO_CONFIRM: '1',
     SES_CONFIGURATION_SET: ses.configSetName,
     SES_SYSTEM_IDENTITY: ses.systemIdentityName,
+    // S3 bucket for ticket attachments. files.ts presign/get handlers read
+    // S3_BUCKET; in prod we leave S3_ENDPOINT/S3_FORCE_PATH_STYLE/S3_*_KEY
+    // unset so the SDK targets real AWS S3 with task-role creds.
+    S3_BUCKET: attachmentsBucket.name,
+    S3_REGION: 'us-east-1',
     // OAuth
     GOOGLE_CLIENT_ID: googleClientId.value,
     GOOGLE_CLIENT_SECRET: googleClientSecret.value,
