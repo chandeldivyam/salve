@@ -12,7 +12,7 @@
  * See docs/cicd-plan.md for the full topology.
  */
 export default $config({
-  app(input) {
+  app(_input) {
     return {
       name: 'salve',
       // PRE-LAUNCH MODE — both flags are deliberately off so we can iterate fast
@@ -34,9 +34,11 @@ export default $config({
     };
   },
   async run() {
-    const { smoke } = await import('./infra/components/smoke');
+    await import('./infra/components/network');
+    const { postgres } = await import('./infra/components/postgres');
     return {
-      smokeBucket: smoke.name,
+      postgresEndpoint: postgres.clusterEndpoint,
+      postgresSecretArn: postgres.masterSecretArn,
     };
   },
 });
