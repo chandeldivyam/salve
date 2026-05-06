@@ -26,6 +26,10 @@ export const api = new sst.aws.Service('Api', {
   image: {
     context: '.',
     dockerfile: 'apps/api/Dockerfile',
+    // PR 7 added a `migrate` stage at the bottom of the Dockerfile. Without
+    // an explicit target, docker-build defaults to the LAST stage, so the
+    // API was accidentally running the migrate script as its CMD.
+    target: 'final',
   },
   cpu: '0.5 vCPU',
   memory: '1 GB',

@@ -54,9 +54,11 @@ export const deliverMessage = inngest.createFunction(
     id: 'deliver-message',
     name: 'Deliver message',
     retries: 4,
+    // Pre-launch: capped at 5 to match Inngest free plan. Bump back to
+    // { workspaceID: 50, "ses": 200 } when we move to Pro (see plan §12).
     concurrency: [
-      { scope: 'fn', key: 'event.data.workspaceID', limit: 50 },
-      { scope: 'account', key: '"ses"', limit: 200 },
+      { scope: 'fn', key: 'event.data.workspaceID', limit: 5 },
+      { scope: 'account', key: '"ses"', limit: 5 },
     ],
     triggers: [{ event: DELIVERY_EVENT.MESSAGE_REQUESTED }],
   },

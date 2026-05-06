@@ -154,7 +154,8 @@ export const routeInboundMessage = inngest.createFunction(
     id: 'route-inbound-message',
     name: 'Route inbound message',
     retries: 4,
-    concurrency: [{ scope: 'fn', key: 'event.data.channelID', limit: 20 }],
+    // Pre-launch: capped at 5 (Inngest free plan). Bump back to 20 on Pro.
+    concurrency: [{ scope: 'fn', key: 'event.data.channelID', limit: 5 }],
     triggers: [{ event: INBOUND_EVENT.MESSAGE_RECEIVED }],
   },
   // biome-ignore lint/suspicious/noExplicitAny: Inngest 4 event typing is validated locally with Zod.
