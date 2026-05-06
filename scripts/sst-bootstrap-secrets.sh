@@ -53,6 +53,9 @@ ensure_generated() {
 
 ensure_generated AuthSecret AUTH_SECRET
 ensure_generated ZeroAdminPassword ZERO_ADMIN_PASSWORD
+# SES inbound webhook + bridge Lambda share this secret. The /api/inbound/
+# email/ses handler trusts requests bearing it as `x-salve-webhook-secret`.
+ensure_generated SesWebhookSecret SES_WEBHOOK_SECRET
 
 set_if_present() {
   local secret_name="$1"
@@ -71,6 +74,6 @@ set_if_present InngestSigningKey INNGEST_SIGNING_KEY
 set_if_present InngestApiKey     INNGEST_API_KEY
 set_if_present GoogleClientId    GOOGLE_CLIENT_ID
 set_if_present GoogleClientSecret GOOGLE_CLIENT_SECRET
-set_if_present SesWebhookSecret  SES_WEBHOOK_SECRET
+# SesWebhookSecret handled by ensure_generated above.
 
 echo "Done."

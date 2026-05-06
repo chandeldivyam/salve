@@ -147,6 +147,21 @@ importers:
         specifier: 6.0.3
         version: 6.0.3
 
+  apps/inngest-bridge:
+    devDependencies:
+      '@types/aws-lambda':
+        specifier: 8.10.161
+        version: 8.10.161
+      '@types/node':
+        specifier: 25.6.0
+        version: 25.6.0
+      tsdown:
+        specifier: 0.21.10
+        version: 0.21.10(typescript@6.0.3)
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+
   apps/mcp:
     dependencies:
       '@modelcontextprotocol/sdk':
