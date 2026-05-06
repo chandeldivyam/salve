@@ -1,0 +1,51 @@
+name: CI
+
+# Triggers:
+#   - PRs into main (gated by GH's "Require approval for outside collaborators"
+#     setting — set via `gh api .../actions/permissions/fork-pr-contributor-approval`).
+#   - Pushes to main (catches the case where someone bypasses PRs).
+#
+# What this does NOT do: deploy. No secrets touched. Safe to run on
+# unaudited contributor code.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Cancel in-progress runs on the same PR/branch when a new commit lands.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Lint + type-check + build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Biome lint
+        run: pnpm run check
+
+      - name: Type-check
+        run: pnpm run type-check
+
+      - name: Build
+        run: pnpm run build
+
+      - name: File-size check
+        run: pnpm run check:file-sizes

@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port 5173",
-    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "build": "node scripts/generate-routes.mjs && tsc -p tsconfig.json --noEmit && vite build",
     "preview": "vite preview --port 5173",
-    "type-check": "tsc -p tsconfig.json --noEmit",
+    "type-check": "node scripts/generate-routes.mjs && tsc -p tsconfig.json --noEmit",
     "format": "biome format --write .",
     "check": "biome check ."
   },
@@ -42,6 +42,7 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.2.4",
+    "@tanstack/router-generator": "1.166.37",
     "@tanstack/router-plugin": "1.167.29",
     "@types/js-cookie": "3.0.6",
     "@types/react": "19.2.14",
