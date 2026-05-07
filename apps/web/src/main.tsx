@@ -17,16 +17,22 @@ applyTheme();
 // nested routes whose load takes long enough to show. The full-screen
 // `<BrandSplash>` is opted into only at the auth gate (routes/app.tsx);
 // in-app navigations (clicking a ticket, switching tabs) must NEVER
-// full-screen splash. With `defaultPendingMs: 200` most clicks render
-// the next view before any pending UI shows at all — Zero's local cache
-// means the data is already there when the click lands.
+// full-screen splash.
+//
+// `defaultPreload: 'intent'` prefetches each route's chunk (we have
+// `autoCodeSplitting` on in vite.config.ts) on link hover/focus, so by
+// the time the click lands the JS is in memory and the transition is
+// instant. `defaultPendingMs: 500` then keeps the splash hidden for
+// fast hits — only genuinely slow loads ever paint a pending UI.
 const router = createRouter({
   routeTree,
   defaultPendingComponent: RoutePendingFeedback,
   defaultErrorComponent: RouteErrorFeedback,
   defaultNotFoundComponent: RouteNotFoundFeedback,
-  defaultPendingMs: 200,
-  defaultPendingMinMs: 400,
+  defaultPreload: 'intent',
+  defaultPreloadStaleTime: 30_000,
+  defaultPendingMs: 500,
+  defaultPendingMinMs: 200,
 });
 
 declare module '@tanstack/react-router' {
