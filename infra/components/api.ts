@@ -10,6 +10,8 @@ import {
   inngestApiKey,
   inngestEventKey,
   inngestSigningKey,
+  mailgunApiKey,
+  mailgunWebhookSigningKey,
   sesWebhookSecret,
 } from './secrets';
 import { ses } from './ses';
@@ -62,6 +64,8 @@ export const api = new sst.aws.Service('Api', {
     inngestApiKey,
     inngestEventKey,
     inngestSigningKey,
+    mailgunApiKey,
+    mailgunWebhookSigningKey,
     sesWebhookSecret,
     // Bucket linking auto-grants the task role s3:GetObject/PutObject on
     // these buckets (and exposes the bucket name via Resource.<name>.name).
@@ -130,7 +134,8 @@ export const api = new sst.aws.Service('Api', {
     INNGEST_EVENT_KEY: inngestEventKey.value,
     INNGEST_SIGNING_KEY: inngestSigningKey.value,
     INNGEST_SERVE_ORIGIN: 'https://api.usesalve.com',
-    // Email
+    // Email — keep SES live until the Mailgun branch is smoke-tested in prod.
+    // Flip this to 'mailgun' (re-deploy) once the smoke scripts pass.
     MAILER_BACKEND: 'ses',
     REPLY_DOMAIN: 'reply.usesalve.com',
     INBOUND_EMAIL_DOMAIN: 'in.usesalve.com',
@@ -139,11 +144,24 @@ export const api = new sst.aws.Service('Api', {
     SES_SNS_AUTO_CONFIRM: '1',
     SES_CONFIGURATION_SET: ses.configSetName,
     SES_SYSTEM_IDENTITY: ses.systemIdentityName,
+    // Mailgun. The API server reads these whenever MAILER_BACKEND=mailgun
+    // OR when an outbound caller passes an explicit mailgunDomain (the
+    // smoke-send script). Empty defaults are safe — the linked secrets
+    // arrive only if pnpm sst secret set ... was run for the stage.
+    MAILGUN_API_KEY: mailgunApiKey.value,
+    MAILGUN_WEBHOOK_SIGNING_KEY: mailgunWebhookSigningKey.value,
+    MAILGUN_API_BASE: 'https://api.mailgun.net',
+    MAILGUN_SYSTEM_DOMAIN: 'mg.usesalve.com',
     // S3 bucket for ticket attachments. files.ts presign/get handlers read
     // S3_BUCKET; in prod we leave S3_ENDPOINT/S3_FORCE_PATH_STYLE/S3_*_KEY
     // unset so the SDK targets real AWS S3 with task-role creds.
     S3_BUCKET: attachmentsBucket.name,
     S3_REGION: 'us-east-1',
+    // Mailgun inbound writes the raw RFC 5322 to S3 ourselves (SES inbound
+    // writes via the receipt rule's s3Action; Mailgun forwards the body in
+    // the webhook so the API does the PutObject). Same bucket as SES uses
+    // for inbound, different prefix (inbound/mailgun/...).
+    RAW_EMAIL_BUCKET: rawEmailBucket.name,
     // OAuth
     GOOGLE_CLIENT_ID: googleClientId.value,
     GOOGLE_CLIENT_SECRET: googleClientSecret.value,

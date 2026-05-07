@@ -76,4 +76,9 @@ set_if_present GoogleClientId    GOOGLE_CLIENT_ID
 set_if_present GoogleClientSecret GOOGLE_CLIENT_SECRET
 # SesWebhookSecret handled by ensure_generated above.
 
+# Mailgun. Two distinct keys — both come from Mailgun → Settings → API
+# Security. The HTTP webhook signing key is *not* the API key.
+set_if_present MailgunApiKey            MAILGUN_API_KEY
+set_if_present MailgunWebhookSigningKey MAILGUN_WEBHOOK_SIGNING_KEY
+
 echo "Done."

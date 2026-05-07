@@ -35,3 +35,14 @@ export const googleClientSecret = new sst.Secret('GoogleClientSecret', '');
 
 // SES inbound webhook signature — wired up at PR 10. Stub for now.
 export const sesWebhookSecret = new sst.Secret('SesWebhookSecret', '');
+
+// Mailgun (used when MAILER_BACKEND=mailgun). Two distinct secrets:
+//   - API key: outbound sends + Domains/Routes API
+//   - Webhook signing key: HMAC verification of inbound (Routes forward) and
+//     event webhooks. Different from the API key — find under
+//     Mailgun → Settings → API Security → "HTTP webhook signing key".
+// Defaults are empty strings so the stack can deploy with MAILER_BACKEND=ses
+// without these being set; the API only consults them when the backend
+// switches to mailgun.
+export const mailgunApiKey = new sst.Secret('MailgunApiKey', '');
+export const mailgunWebhookSigningKey = new sst.Secret('MailgunWebhookSigningKey', '');
