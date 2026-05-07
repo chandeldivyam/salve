@@ -9,7 +9,16 @@ interface WebhookEventRow {
   id: string;
   workspace_id: string | null;
   channel_id: string | null;
+  source: string;
   payload: unknown;
+}
+
+interface MailgunEventData {
+  event?: string;
+  severity?: string;
+  recipient?: string;
+  message?: { headers?: { 'message-id'?: string } };
+  'delivery-status'?: { code?: number; description?: string; message?: string };
 }
 
 interface SesNotification {
@@ -70,6 +79,17 @@ export const processProviderWebhook = inngest.createFunction(
     const updates: StatusUpdate[] = await step.run('apply-provider-events', async () => {
       const out: StatusUpdate[] = [];
       for (const row of rows) {
+        if (row.source === 'mailgun') {
+          const eventData = unwrapMailgunEventData(row.payload);
+          const providerMessageID = eventData?.message?.headers?.['message-id']?.replace(
+            /^<|>$/g,
+            '',
+          );
+          if (!eventData || !providerMessageID) continue;
+          const applied = await applyMailgunEvent(getClient(), row, providerMessageID, eventData);
+          if (applied) out.push(...applied);
+          continue;
+        }
         const notification = unwrapSesNotification(row.payload);
         if (!notification) continue;
         const providerMessageID = notification.mail?.messageId;
@@ -143,11 +163,127 @@ export const processProviderWebhook = inngest.createFunction(
 async function loadWebhookEvents(sql: Sql, ids: string[]): Promise<WebhookEventRow[]> {
   if (ids.length === 0) return [];
   return sql<WebhookEventRow[]>`
-    SELECT id, workspace_id, channel_id, payload
+    SELECT id, workspace_id, channel_id, source, payload
     FROM webhook_event
     WHERE id = ANY(${ids})
       AND processed_at IS NULL
   `;
+}
+
+function unwrapMailgunEventData(raw: unknown): MailgunEventData | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const eventData = (raw as { 'event-data'?: unknown })['event-data'];
+  if (!eventData || typeof eventData !== 'object') return null;
+  return eventData as MailgunEventData;
+}
+
+async function applyMailgunEvent(
+  sql: Sql,
+  row: WebhookEventRow,
+  providerMessageID: string,
+  eventData: MailgunEventData,
+): Promise<StatusUpdate[] | null> {
+  const matches = await sql<
+    Array<{ id: string; workspace_id: string; channel_id: string; provider_message_id: string }>
+  >`
+    SELECT id, workspace_id, channel_id, provider_message_id
+    FROM outbound_message
+    WHERE provider_message_id = ${providerMessageID}
+    LIMIT 1
+  `;
+  const outbound = matches[0];
+  if (!outbound) return null;
+
+  const workspaceID = outbound.workspace_id;
+  const channelID = outbound.channel_id;
+  const meta = { provider: 'mailgun', eventData };
+  const event = (eventData.event ?? '').toLowerCase();
+  const recipient = eventData.recipient;
+  const code = eventData['delivery-status']?.description ?? eventData['delivery-status']?.message;
+
+  if (event === 'delivered') {
+    await sql`
+      UPDATE outbound_message
+      SET status = 'delivered',
+          delivered_at = now(),
+          provider_meta = COALESCE(provider_meta, '{}'::jsonb) || ${JSON.stringify(asJson(meta))}::jsonb,
+          updated_at = now()
+      WHERE id = ${outbound.id}
+    `;
+    return [{ kind: 'delivered', workspaceID, channelID, providerMessageID }];
+  }
+
+  if (event === 'failed') {
+    // Mailgun's `severity` field maps directly: 'permanent' = hard bounce,
+    // 'temporary' = soft bounce. Soft bounces don't write to suppression.
+    const hard = (eventData.severity ?? '').toLowerCase() === 'permanent';
+    await sql`
+      UPDATE outbound_message
+      SET status = 'bounced',
+          provider_meta = COALESCE(provider_meta, '{}'::jsonb) || ${JSON.stringify(asJson(meta))}::jsonb,
+          updated_at = now()
+      WHERE id = ${outbound.id}
+    `;
+    if (hard && recipient) {
+      await upsertSuppression(sql, {
+        workspaceID,
+        channelID,
+        target: recipient,
+        reason: 'hard_bounce',
+      });
+    }
+    return [
+      {
+        kind: 'bounced',
+        workspaceID,
+        channelID,
+        providerMessageID,
+        recipient,
+        hard,
+        code,
+      },
+    ];
+  }
+
+  if (event === 'complained') {
+    await sql`
+      UPDATE outbound_message
+      SET status = 'complained',
+          provider_meta = COALESCE(provider_meta, '{}'::jsonb) || ${JSON.stringify(asJson(meta))}::jsonb,
+          updated_at = now()
+      WHERE id = ${outbound.id}
+    `;
+    if (recipient) {
+      await upsertSuppression(sql, {
+        workspaceID,
+        channelID,
+        target: recipient,
+        reason: 'complaint',
+      });
+    }
+    return [{ kind: 'complained', workspaceID, channelID, providerMessageID, recipient }];
+  }
+
+  if (event === 'unsubscribed' && recipient) {
+    await upsertSuppression(sql, {
+      workspaceID,
+      channelID,
+      target: recipient,
+      reason: 'unsubscribe',
+    });
+    // Treat unsubscribe like a complaint for downstream telemetry — same
+    // outcome (don't send to this address again).
+    return [{ kind: 'complained', workspaceID, channelID, providerMessageID, recipient }];
+  }
+
+  // Unknown / accepted / opened / clicked — no state change. Mark the row
+  // so we don't reprocess.
+  await sql`
+    UPDATE webhook_event
+    SET payload = ${JSON.stringify(asJson({ ...(row.payload as Record<string, unknown>), ignoredEvent: event }))}::jsonb
+    WHERE id = ${row.id}
+  `;
+  return null;
 }
 
 function unwrapSesNotification(raw: unknown): SesNotification | null {

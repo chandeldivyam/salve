@@ -11,7 +11,11 @@ import { serve as inngestServe } from 'inngest/hono';
 import { auth } from './auth.js';
 import { handleCustomerEventIngest } from './customer-events.js';
 import { handleGetSigned, handlePresign } from './files.js';
-import { handleDevInboundEmail, handleSesInboundEmail } from './inbound/email.js';
+import {
+  handleDevInboundEmail,
+  handleMailgunInboundEmail,
+  handleSesInboundEmail,
+} from './inbound/email.js';
 import { inngest } from './inngest/client.js';
 import {
   bounceRateWatchdog,
@@ -46,6 +50,7 @@ import {
   handleEmailDomainVerifyDev,
   handleEmailRoutingRuleUpsert,
 } from './settings/email-domains.js';
+import { handleMailgunWebhook } from './webhooks/mailgun.js';
 import { handleSesWebhook } from './webhooks/ses.js';
 import { getZql } from './zero-upstream.js';
 
@@ -209,7 +214,12 @@ app.route('/v1/settings', settingsRouter);
 
 app.post('/api/inbound/email/dev', handleDevInboundEmail);
 app.post('/api/inbound/email/ses', handleSesInboundEmail);
+// `/mime` suffix is required: it tells Mailgun's Routes forward() action to
+// include the full RFC 5322 `body-mime` field. Without it we'd only get the
+// pre-parsed parts and lose attachment fidelity.
+app.post('/api/inbound/email/mailgun/mime', handleMailgunInboundEmail);
 app.post('/api/webhooks/ses', handleSesWebhook);
+app.post('/api/webhooks/mailgun', handleMailgunWebhook);
 
 // Inngest serve endpoint. The Inngest dev server (docker-compose) introspects
 // `/api/inngest` to discover registered functions; a POST to this URL
