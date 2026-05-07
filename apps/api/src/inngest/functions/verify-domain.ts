@@ -2,6 +2,7 @@ import { resolveMx, resolveTxt } from 'node:dns/promises';
 import { GetEmailIdentityCommand, SESv2Client } from '@aws-sdk/client-sesv2';
 import { getClient } from '@salve/db';
 import type postgres from 'postgres';
+import { verifyMailgunDomainNow } from '../../email/mailgun-domains.js';
 import { inngest } from '../client.js';
 import { DOMAIN_EVENT, domainVerificationRequestedDataSchema } from '../events.js';
 
@@ -92,6 +93,30 @@ async function loadPendingDomains(sql: Sql): Promise<DomainRow[]> {
 async function checkDomain(domain: DomainRow): Promise<{ dnsStatus: string; dmarcStatus: string }> {
   const backend =
     process.env.MAILER_BACKEND ?? (process.env.NODE_ENV === 'production' ? 'ses' : 'mailpit');
+
+  const dmarcStatus = await hasDmarcRecord(domain.domain).then((ok) =>
+    ok ? 'present' : 'missing',
+  );
+
+  if (backend === 'mailgun') {
+    // PUT /v4/domains/{name}/verify forces Mailgun to re-poll the records.
+    // It returns the same shape as GET — `domain.state === 'active'` is the
+    // single signal that DKIM + SPF are passing. Mailgun does not require a
+    // tenant-side MAIL FROM MX (it owns the return path through its own
+    // bounce host), so we skip the resolveMx check entirely.
+    let active = false;
+    try {
+      const res = await verifyMailgunDomainNow(domain.domain);
+      active = res.domain?.state === 'active';
+    } catch (error) {
+      console.error('[verify-domain] mailgun verify failed', { domain: domain.domain, error });
+    }
+    return {
+      dnsStatus: active ? 'verified' : 'pending',
+      dmarcStatus,
+    };
+  }
+
   let sesVerified = backend !== 'ses';
   if (backend === 'ses') {
     const identity = await getSes().send(
@@ -99,10 +124,6 @@ async function checkDomain(domain: DomainRow): Promise<{ dnsStatus: string; dmar
     );
     sesVerified = identity.VerificationStatus === 'SUCCESS';
   }
-
-  const dmarcStatus = await hasDmarcRecord(domain.domain).then((ok) =>
-    ok ? 'present' : 'missing',
-  );
   const mailFromStatus = await hasMailFromMx(domain.domain, domain.mail_from_subdomain ?? 'mail');
   return {
     dnsStatus: sesVerified && mailFromStatus ? 'verified' : 'pending',

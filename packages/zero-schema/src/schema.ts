@@ -370,7 +370,11 @@ const sendingDomain = table('sendingDomain')
     workspaceID: string().from('workspace_id'),
     domain: string(),
     sesIdentityArn: string().from('ses_identity_arn').optional(),
-    dkimTokens: json<Array<{ name: string; value: string }>>().from('dkim_tokens').optional(),
+    // `recordType` is set by the Mailgun provisioner (mix of TXT/CNAME); SES
+    // rows omit it and the UI defaults to CNAME (SES DKIM is always CNAME).
+    dkimTokens: json<Array<{ name: string; value: string; recordType?: string }>>()
+      .from('dkim_tokens')
+      .optional(),
     mailFromSubdomain: string().from('mail_from_subdomain'),
     dnsStatus: enumeration<'pending' | 'verified' | 'failed' | 'suspended'>().from('dns_status'),
     dmarcStatus: enumeration<'pending' | 'present' | 'missing' | 'failing'>().from('dmarc_status'),

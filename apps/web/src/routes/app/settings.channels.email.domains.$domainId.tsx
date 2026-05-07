@@ -208,18 +208,26 @@ function DnsRecordList({
   );
 }
 
-function buildDnsRecords(d: DomainDetailRow): Array<{
+type DnsRecordRow = {
   kind: string;
   host: string;
   type: 'CNAME' | 'TXT' | 'MX';
   value: string;
-}> {
-  const records: Array<{
-    kind: string;
-    host: string;
-    type: 'CNAME' | 'TXT' | 'MX';
-    value: string;
-  }> = [];
+};
+
+function providerOf(d: DomainDetailRow): 'ses' | 'mailgun' {
+  // `provider_meta.provider` is set by provision-domain.ts at provisioning
+  // time. Older rows (pre-Mailgun) lack the field → default to SES.
+  const meta = d.providerMeta as { provider?: string } | null | undefined;
+  return meta?.provider === 'mailgun' ? 'mailgun' : 'ses';
+}
+
+function buildDnsRecords(d: DomainDetailRow): DnsRecordRow[] {
+  return providerOf(d) === 'mailgun' ? buildMailgunRecords(d) : buildSesRecords(d);
+}
+
+function buildSesRecords(d: DomainDetailRow): DnsRecordRow[] {
+  const records: DnsRecordRow[] = [];
   for (const t of d.dkimTokens ?? []) {
     records.push({ kind: 'DKIM', host: t.name, type: 'CNAME', value: t.value });
   }
@@ -242,4 +250,30 @@ function buildDnsRecords(d: DomainDetailRow): Array<{
     value: `v=DMARC1; p=none; rua=mailto:dmarc-reports@${d.domain}`,
   });
   return records;
+}
+
+function buildMailgunRecords(d: DomainDetailRow): DnsRecordRow[] {
+  // Mailgun returns SPF + DKIM in `sending_dns_records` already shaped — we
+  // mirror them straight into dkim_tokens with `recordType` set. No MAIL
+  // FROM MX is needed (Mailgun owns the return path) so this list is
+  // strictly DKIM CNAMEs + 1 SPF TXT, plus our own DMARC monitor row.
+  const records: DnsRecordRow[] = [];
+  for (const t of d.dkimTokens ?? []) {
+    const type = mapRecordType(t.recordType);
+    const kind = type === 'TXT' ? 'SPF' : 'DKIM';
+    records.push({ kind, host: t.name, type, value: t.value });
+  }
+  records.push({
+    kind: 'DMARC',
+    host: `_dmarc.${d.domain}`,
+    type: 'TXT',
+    value: `v=DMARC1; p=none; rua=mailto:dmarc-reports@${d.domain}`,
+  });
+  return records;
+}
+
+function mapRecordType(value: string | undefined): 'CNAME' | 'TXT' | 'MX' {
+  const upper = (value ?? '').toUpperCase();
+  if (upper === 'TXT' || upper === 'MX') return upper;
+  return 'CNAME';
 }
