@@ -1,18 +1,21 @@
-// Phase 3a — mailer adapter. Two backends: Mailpit (dev) and SES (prod-stub).
+// Phase 3a — mailer adapter. Three backends: Mailpit (dev), SES, Mailgun.
 //
 // Picked by env:
 //   - MAILER_BACKEND=mailpit  → nodemailer SMTP localhost:1025 (Mailpit, no auth)
 //   - MAILER_BACKEND=ses      → @aws-sdk/client-sesv2 SendEmailCommand raw path
+//   - MAILER_BACKEND=mailgun  → POST /v3/{domain}/messages.mime (basic auth: api:KEY)
 //   - unset                   → 'mailpit' if NODE_ENV !== 'production', else 'ses'
 //
-// Both backends serialize via `serializeEnvelopeToRaw` so the wire format is
-// identical — the headers Mailpit shows are the same headers SES will inject.
+// All three backends serialize via `serializeEnvelopeToRaw` so the wire format
+// is identical — the headers Mailpit shows are the same headers SES/Mailgun
+// will inject.
 
 import { SESv2Client, SendEmailCommand } from '@aws-sdk/client-sesv2';
 import nodemailer, { type Transporter } from 'nodemailer';
 import { type BuiltEnvelope, serializeEnvelopeToRaw } from './envelope.js';
+import { getMailgunSystemDomain, sendMimeViaMailgun } from './mailgun.js';
 
-export type MailerBackend = 'mailpit' | 'ses';
+export type MailerBackend = 'mailpit' | 'ses' | 'mailgun';
 
 export interface SendResult {
   providerMessageID: string;
@@ -22,6 +25,7 @@ export interface SendResult {
 export function getMailerBackend(): MailerBackend {
   const explicit = process.env.MAILER_BACKEND;
   if (explicit === 'ses') return 'ses';
+  if (explicit === 'mailgun') return 'mailgun';
   if (explicit === 'mailpit') return 'mailpit';
   return process.env.NODE_ENV === 'production' ? 'ses' : 'mailpit';
 }
@@ -93,10 +97,73 @@ async function sendViaSes(env: BuiltEnvelope): Promise<SendResult> {
   };
 }
 
+// ---------- Mailgun (prod via HTTP messages.mime) ----------
+
+async function sendViaMailgun(env: BuiltEnvelope): Promise<SendResult> {
+  const raw = serializeEnvelopeToRaw(env);
+  // Routing-domain rule: for ticket replies the From is `support@<tenant>` so
+  // we route via the tenant's own verified Mailgun domain. For system mail
+  // (where the From is on `usesalve.com` apex but we can't add the apex to
+  // Mailgun without breaking SES), callers go through `sendRawBuffer` and
+  // pass `mailgunDomain: MAILGUN_SYSTEM_DOMAIN` explicitly.
+  const fromDomain = env.from.split('@')[1];
+  if (!fromDomain) throw new Error('mailer: malformed from address');
+  return sendMimeViaMailgun({
+    domain: fromDomain,
+    to: env.to,
+    raw,
+    fallbackMessageID: env.rfcMessageID,
+  });
+}
+
 // ---------- Public API ----------
 
 export async function sendRawEmail(env: BuiltEnvelope): Promise<SendResult> {
   const backend = getMailerBackend();
   if (backend === 'ses') return sendViaSes(env);
+  if (backend === 'mailgun') return sendViaMailgun(env);
   return sendViaMailpit(env);
+}
+
+/**
+ * Low-level primitive: send a pre-serialized RFC 5322 buffer through the
+ * configured backend. Useful for transactional mail (invitations, magic
+ * links) where the per-ticket `BuiltEnvelope` machinery is overkill.
+ *
+ * `mailgunDomain` overrides the Mailgun routing-domain (defaults to
+ * `MAILGUN_SYSTEM_DOMAIN`). Ignored for SES / Mailpit backends.
+ */
+export async function sendRawBuffer(args: {
+  from: string;
+  to: string;
+  raw: Buffer;
+  fallbackMessageID?: string;
+  mailgunDomain?: string;
+}): Promise<SendResult> {
+  const backend = getMailerBackend();
+  if (backend === 'ses') {
+    const cmd = new SendEmailCommand({
+      Content: { Raw: { Data: args.raw } },
+      FromEmailAddress: args.from,
+      Destination: { ToAddresses: [args.to] },
+    });
+    const out = await getSes().send(cmd);
+    return { providerMessageID: out.MessageId ?? args.fallbackMessageID ?? '', backend: 'ses' };
+  }
+  if (backend === 'mailgun') {
+    return sendMimeViaMailgun({
+      domain: args.mailgunDomain ?? getMailgunSystemDomain(),
+      to: args.to,
+      raw: args.raw,
+      fallbackMessageID: args.fallbackMessageID,
+    });
+  }
+  const result = await getSmtp().sendMail({
+    envelope: { from: args.from, to: args.to },
+    raw: args.raw,
+  });
+  return {
+    providerMessageID: result.messageId ?? args.fallbackMessageID ?? '',
+    backend: 'mailpit',
+  };
 }

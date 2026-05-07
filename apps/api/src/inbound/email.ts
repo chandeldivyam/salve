@@ -1,9 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getClient } from '@salve/db';
 import type { Context } from 'hono';
 import { type AddressObject, simpleParser } from 'mailparser';
 import type postgres from 'postgres';
 import { z } from 'zod';
+import { verifyMailgunSig } from '../email/mailgun.js';
 import { parseReplyAddress } from '../email/reply-token.js';
 import { inngest } from '../inngest/client.js';
 import { INBOUND_EVENT } from '../inngest/events.js';
@@ -289,6 +291,165 @@ export async function handleSesInboundEmail(c: Context): Promise<Response> {
     }
     throw err;
   }
+}
+
+/**
+ * Mailgun Routes inbound webhook (forward action with `/mime` URL suffix).
+ *
+ * Wire format:
+ *   - multipart/form-data when the email has attachments; x-www-form-urlencoded
+ *     otherwise. `c.req.formData()` handles both.
+ *   - `body-mime` carries the full raw RFC 5322 message (only present because
+ *     the route's forward URL ends in `/mime` — without that suffix Mailgun
+ *     POSTs pre-parsed parts and we lose attachment fidelity).
+ *   - `signature`, `timestamp`, `token` are top-level form fields used for
+ *     HMAC-SHA256 verification with MAILGUN_WEBHOOK_SIGNING_KEY.
+ *
+ * SES writes the raw blob to S3 itself; Mailgun does not, so we PutObject
+ * here. In dev (no real S3 + no Mailgun MX) we'll never hit this path —
+ * `MAILER_BACKEND=mailpit` short-circuits dev mail through SMTP.
+ */
+export async function handleMailgunInboundEmail(c: Context): Promise<Response> {
+  const form = await c.req.raw.formData().catch(() => null);
+  if (!form) return c.json({ error: 'invalid-form' }, 400);
+
+  const sigParts = {
+    timestamp: String(form.get('timestamp') ?? ''),
+    token: String(form.get('token') ?? ''),
+    signature: String(form.get('signature') ?? ''),
+  };
+  if (!verifyMailgunSig(sigParts)) {
+    return c.json({ error: 'unauthorized' }, 401);
+  }
+
+  const bodyMime = String(form.get('body-mime') ?? '');
+  if (!bodyMime.trim()) {
+    return c.json({ error: 'missing-body-mime' }, 400);
+  }
+
+  const recipient = String(form.get('recipient') ?? '') || undefined;
+  const sender = String(form.get('sender') ?? '') || undefined;
+
+  // Hand the full RFC 5322 to S3 then queue. simpleParser inside
+  // queueInboundEmail will re-parse to derive headers/recipients.
+  const sql = getClient();
+  const rawBlobS3Key = await persistRawEmailBlob(bodyMime).catch((err) => {
+    console.error('[mailgun-inbound] S3 persist failed', err);
+    return `inline://mailgun/${randomUUID()}.eml`;
+  });
+
+  try {
+    // Resolve channel via recipient hints — same path SES uses. We don't
+    // pre-know the workspace; resolveInboundChannel determines it from the
+    // recipient address (`workspace_id` lives on `email_address`).
+    const recipientHints = [recipient, sender].filter((v): v is string => Boolean(v));
+    const resolved = await resolveInboundChannel(sql, {
+      destinationAddress: recipient,
+      recipientHints,
+    });
+    if (!resolved) {
+      // Mailgun retries on non-2xx, so we 202 + ignored to suppress retries
+      // for traffic we can't route (matches SES handler's behaviour).
+      return c.json({ ok: true, queued: false, ignored: 'unresolved-channel' }, 202);
+    }
+
+    const parsed = await simpleParser(bodyMime, { keepCidLinks: true });
+    const headerMap = headerMapFromParsed(parsed);
+    const providerMessageID =
+      parsed.messageId ?? `sha256:${createHash('sha256').update(bodyMime).digest('hex')}`;
+
+    const rawID = randomUUID();
+    const inserted = await insertInboundRaw(sql, {
+      id: rawID,
+      workspaceID: resolved.workspaceID,
+      channelID: resolved.channelID,
+      providerMessageID,
+      rawBlobS3Key,
+      rawSizeBytes: Buffer.byteLength(bodyMime),
+      headers: {
+        ...headerMap,
+        salve: {
+          source: 'mailgun',
+          recipient,
+          sender,
+          mailgun: {
+            timestamp: sigParts.timestamp,
+            token: sigParts.token,
+          },
+        },
+      },
+      envelopeTo: recipient ?? null,
+      destinationAddress: resolved.destinationAddress,
+      senderAddress: parsed.from?.value[0]?.address?.toLowerCase() ?? sender?.toLowerCase() ?? null,
+      subject: parsed.subject ?? null,
+      authenticationResults: authResultsFromHeaders(headerMap),
+      providerMeta: { source: 'mailgun', recipient, sender },
+    });
+
+    await emitInboundReceived({
+      rawID: inserted.rawID,
+      workspaceID: resolved.workspaceID,
+      channelID: resolved.channelID,
+      providerMessageID,
+    });
+
+    return c.json(
+      {
+        ok: true,
+        endpoint: '/api/inbound/email/mailgun/mime',
+        event: INBOUND_EVENT.MESSAGE_RECEIVED,
+        rawID: inserted.rawID,
+        channelID: resolved.channelID,
+        providerMessageID,
+        duplicate: inserted.duplicate,
+      },
+      202,
+    );
+  } catch (err) {
+    if (isMissingInboundSchema(err)) {
+      return c.json({ error: 'missing-inbound-schema' }, 503);
+    }
+    throw err;
+  }
+}
+
+let _rawEmailS3: S3Client | undefined;
+function getRawEmailS3(): S3Client {
+  if (!_rawEmailS3) {
+    const region = process.env.S3_REGION ?? process.env.AWS_REGION ?? 'us-east-1';
+    const endpoint = process.env.S3_ENDPOINT || undefined;
+    const accessKeyId = process.env.S3_ACCESS_KEY_ID;
+    const secretAccessKey = process.env.S3_SECRET_ACCESS_KEY;
+    const forcePathStyle = process.env.S3_FORCE_PATH_STYLE === 'true';
+    _rawEmailS3 = new S3Client({
+      region,
+      ...(endpoint
+        ? {
+            endpoint,
+            forcePathStyle,
+            ...(accessKeyId && secretAccessKey
+              ? { credentials: { accessKeyId, secretAccessKey } }
+              : {}),
+          }
+        : {}),
+    });
+  }
+  return _rawEmailS3;
+}
+
+async function persistRawEmailBlob(bodyMime: string): Promise<string> {
+  const bucket = process.env.RAW_EMAIL_BUCKET || process.env.S3_BUCKET;
+  if (!bucket) throw new Error('persistRawEmailBlob: no bucket configured');
+  const key = `inbound/mailgun/${new Date().toISOString().slice(0, 10)}/${randomUUID()}.eml`;
+  await getRawEmailS3().send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      Body: bodyMime,
+      ContentType: 'message/rfc822',
+    }),
+  );
+  return `s3://${bucket}/${key}`;
 }
 
 async function readDevInboundRequest(

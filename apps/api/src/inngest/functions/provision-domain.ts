@@ -6,6 +6,13 @@ import {
 } from '@aws-sdk/client-sesv2';
 import { getClient } from '@salve/db';
 import type postgres from 'postgres';
+import {
+  createMailgunDomain,
+  getMailgunDomain,
+  isAlreadyExistsError,
+  type MailgunDnsRecord,
+  type MailgunDomainResponse,
+} from '../../email/mailgun-domains.js';
 import { inngest } from '../client.js';
 import { DOMAIN_EVENT, domainProvisionRequestedDataSchema } from '../events.js';
 
@@ -26,9 +33,10 @@ function getSes(): SESv2Client {
   return ses;
 }
 
-function mailerBackend(): 'mailpit' | 'ses' {
+function mailerBackend(): 'mailpit' | 'ses' | 'mailgun' {
   const explicit = process.env.MAILER_BACKEND;
   if (explicit === 'ses') return 'ses';
+  if (explicit === 'mailgun') return 'mailgun';
   if (explicit === 'mailpit') return 'mailpit';
   return process.env.NODE_ENV === 'production' ? 'ses' : 'mailpit';
 }
@@ -61,11 +69,9 @@ export const provisionDomain = inngest.createFunction(
     );
 
     try {
-      const dkimTokens = await step.run('provision-identity', async () =>
-        provisionIdentity(domain),
-      );
+      const result = await step.run('provision-identity', async () => provisionIdentity(domain));
       await step.run('mark-provisioned', async () =>
-        markProvisioned(getClient(), domain.id, dkimTokens),
+        markProvisioned(getClient(), domain.id, result),
       );
       await step.sendEvent('request-verification', {
         id: `dom-verify-req-${domain.id}-${Date.now()}`,
@@ -75,7 +81,7 @@ export const provisionDomain = inngest.createFunction(
           sendingDomainID: domain.id,
         },
       });
-      return { provisioned: true, dkimTokens: dkimTokens.length };
+      return { provisioned: true, dkimTokens: result.dkimTokens.length, provider: result.provider };
     } catch (error) {
       await step.run('mark-failed', async () => markProvisionFailed(getClient(), domain.id, error));
       throw error;
@@ -98,11 +104,24 @@ async function loadDomain(
   return rows[0] ?? null;
 }
 
-async function provisionIdentity(
-  domain: SendingDomainRow,
-): Promise<Array<{ name: string; value: string }>> {
-  if (mailerBackend() !== 'ses') return stubDkimTokens(domain.domain);
+export type DkimRecord = { name: string; value: string; recordType?: string };
+export type ProvisionProvider = 'ses' | 'mailgun' | 'stub';
 
+interface ProvisionResult {
+  provider: ProvisionProvider;
+  dkimTokens: DkimRecord[];
+  /** Raw provider snapshot, written to provider_meta for later debugging. */
+  raw?: Record<string, unknown>;
+}
+
+async function provisionIdentity(domain: SendingDomainRow): Promise<ProvisionResult> {
+  const backend = mailerBackend();
+  if (backend === 'mailgun') return provisionViaMailgun(domain);
+  if (backend === 'ses') return provisionViaSes(domain);
+  return { provider: 'stub', dkimTokens: stubDkimTokens(domain.domain) };
+}
+
+async function provisionViaSes(domain: SendingDomainRow): Promise<ProvisionResult> {
   const client = getSes();
   try {
     const created = await client.send(
@@ -112,15 +131,51 @@ async function provisionIdentity(
       }),
     );
     await putMailFrom(client, domain);
-    return tokenRecords(domain.domain, created.DkimAttributes?.Tokens ?? []);
+    return {
+      provider: 'ses',
+      dkimTokens: tokenRecords(domain.domain, created.DkimAttributes?.Tokens ?? []),
+    };
   } catch (error) {
     if (!isAlreadyExists(error)) throw error;
     const existing = await client.send(
       new GetEmailIdentityCommand({ EmailIdentity: domain.domain }),
     );
     await putMailFrom(client, domain);
-    return tokenRecords(domain.domain, existing.DkimAttributes?.Tokens ?? []);
+    return {
+      provider: 'ses',
+      dkimTokens: tokenRecords(domain.domain, existing.DkimAttributes?.Tokens ?? []),
+    };
   }
+}
+
+async function provisionViaMailgun(domain: SendingDomainRow): Promise<ProvisionResult> {
+  let response: MailgunDomainResponse;
+  try {
+    response = await createMailgunDomain(domain.domain);
+  } catch (error) {
+    // Mailgun returns 400 (not 409) when the domain already exists in this
+    // account. Treat the same as SES `AlreadyExistsException`: fetch the
+    // existing record and use its DNS list.
+    if (!isAlreadyExistsError(error)) throw error;
+    response = await getMailgunDomain(domain.domain);
+  }
+  return {
+    provider: 'mailgun',
+    dkimTokens: mapMailgunSendingRecords(response.sending_dns_records ?? []),
+    raw: { mailgunDomain: response.domain, sendingDnsRecords: response.sending_dns_records },
+  };
+}
+
+function mapMailgunSendingRecords(records: readonly MailgunDnsRecord[]): DkimRecord[] {
+  // Strip Mailgun-specific tracking CNAMEs from the tenant-facing list — those
+  // are optional (open/click tracking) and clutter the DNS instructions.
+  return records
+    .filter((r) => !/^email\./i.test(r.name))
+    .map((r) => ({
+      name: r.name,
+      value: r.value,
+      recordType: r.record_type?.toUpperCase(),
+    }));
 }
 
 async function putMailFrom(client: SESv2Client, domain: SendingDomainRow): Promise<void> {
@@ -159,16 +214,18 @@ async function updateProvisionStatus(
   `;
 }
 
-async function markProvisioned(
-  sql: Sql,
-  id: string,
-  dkimTokens: Array<{ name: string; value: string }>,
-): Promise<void> {
+async function markProvisioned(sql: Sql, id: string, result: ProvisionResult): Promise<void> {
+  // The `provider` field on provider_meta is what the UI keys off to choose
+  // which DNS instructions to render (Mailgun vs SES) — without it, a domain
+  // provisioned through Mailgun would show SES-shaped MAIL FROM/SPF rows
+  // alongside CNAMEs that don't exist.
+  const meta: Record<string, unknown> = { provisionError: null, provider: result.provider };
+  if (result.raw) Object.assign(meta, result.raw);
   await sql`
     UPDATE sending_domain
-    SET dkim_tokens = ${JSON.stringify(dkimTokens)}::jsonb,
+    SET dkim_tokens = ${JSON.stringify(result.dkimTokens)}::jsonb,
         provision_status = 'provisioned',
-        provider_meta = provider_meta || ${JSON.stringify({ provisionError: null })}::jsonb,
+        provider_meta = COALESCE(provider_meta, '{}'::jsonb) || ${JSON.stringify(meta)}::jsonb,
         updated_at = now()
     WHERE id = ${id}
   `;
