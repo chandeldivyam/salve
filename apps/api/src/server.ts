@@ -47,6 +47,7 @@ import { createServerMutators, type PostCommitTask } from './server-mutators.js'
 import {
   handleEmailAddressAdd,
   handleEmailDomainAdd,
+  handleEmailDomainVerify,
   handleEmailDomainVerifyDev,
   handleEmailRoutingRuleUpsert,
 } from './settings/email-domains.js';
@@ -190,6 +191,15 @@ app.post(
   '/api/settings/channels/email/domains/:id/verify-dev',
   requireWorkspace,
   handleEmailDomainVerifyDev,
+);
+// Production-safe verify trigger: dispatches `domain/verification.requested`
+// to Inngest so the verify-domain function checks Mailgun/SES on demand
+// instead of waiting for the 30-min cron.
+app.post('/api/settings/email/domains/:id/verify', requireWorkspace, handleEmailDomainVerify);
+app.post(
+  '/api/settings/channels/email/domains/:id/verify',
+  requireWorkspace,
+  handleEmailDomainVerify,
 );
 
 // Phase A — temporary token write endpoints. Reads go via Zero
