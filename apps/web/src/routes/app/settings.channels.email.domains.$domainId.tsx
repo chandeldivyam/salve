@@ -71,23 +71,54 @@ function DomainDetail() {
     }
   }
 
+  async function onVerify() {
+    setBusy(true);
+    try {
+      await postEmpty([
+        `/api/settings/channels/email/domains/${domainId}/verify`,
+        `/api/settings/email/domains/${domainId}/verify`,
+      ]);
+      // Dispatching is async — the verify-domain Inngest fn updates dnsStatus
+      // a few seconds later. The Zero subscription on this page picks up the
+      // change automatically; we just nudge the user.
+      showSuccess('Verification queued', 'DNS records are being checked now.');
+    } catch (err) {
+      showError(err, 'Could not start verification.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const records = buildDnsRecords(d);
   const isVerified = d.dnsStatus === 'verified';
   const isProvisioning = d.provisionStatus === 'pending' || d.provisionStatus === 'provisioning';
   const provisionFailed = d.provisionStatus === 'failed';
 
+  // Three states for the verify action:
+  //   1. Already verified         → static success badge
+  //   2. Provisioning in flight   → disabled, the next event flips state
+  //   3. Provisioned but pending  → active "Verify now" that dispatches the
+  //      Inngest verify event. Dev mode adds a sibling button that bypasses
+  //      DNS lookups for local testing.
   const verifyButton = isVerified ? (
     <Button size="sm" variant="outline" disabled>
       <Check className="h-3.5 w-3.5" /> Verified
     </Button>
-  ) : import.meta.env.DEV && !isProvisioning && !provisionFailed ? (
-    <Button size="sm" onClick={onVerifyDev} disabled={busy}>
-      {busy ? 'Verifying…' : 'Verify DNS (dev)'}
-    </Button>
-  ) : (
+  ) : isProvisioning || provisionFailed ? (
     <Button size="sm" variant="outline" disabled>
       Verifying via DNS…
     </Button>
+  ) : (
+    <div className="flex items-center gap-2">
+      {import.meta.env.DEV ? (
+        <Button size="sm" variant="outline" onClick={onVerifyDev} disabled={busy}>
+          {busy ? '…' : 'Verify (dev)'}
+        </Button>
+      ) : null}
+      <Button size="sm" onClick={onVerify} disabled={busy}>
+        {busy ? 'Checking…' : 'Verify now'}
+      </Button>
+    </div>
   );
 
   return (

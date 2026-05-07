@@ -3,6 +3,8 @@ import { getClient } from '@salve/db';
 import type { Context } from 'hono';
 import type postgres from 'postgres';
 import { z } from 'zod';
+import { inngest } from '../inngest/client.js';
+import { DOMAIN_EVENT } from '../inngest/events.js';
 import { authOf } from '../middleware.js';
 import { runServerMutation } from '../public-api/mutator-runner.js';
 
@@ -292,6 +294,43 @@ async function findEmailChannel(
     LIMIT 1
   `;
   return rows[0]?.id ?? null;
+}
+
+/**
+ * Trigger an immediate verification check against the configured provider
+ * (Mailgun's PUT /v4/domains/{name}/verify when MAILER_BACKEND=mailgun, or
+ * SES GetEmailIdentity otherwise). Without this, the user has to wait for
+ * the verify-domain cron to fire (every 30 min) before fresh DNS picks up.
+ *
+ * Idempotent: re-running while already verified is a no-op (the Inngest fn
+ * just re-checks and writes the same status). Returns 202 with the dispatched
+ * event id so the UI can poll dnsStatus afterwards.
+ */
+export async function handleEmailDomainVerify(c: Context): Promise<Response> {
+  const auth = authOf(c);
+  if (!auth.workspaceID) return c.json({ error: 'no-workspace' }, 403);
+  const id = c.req.param('id');
+  if (!id) return c.json({ error: 'missing-id' }, 400);
+
+  // Confirm the domain belongs to this workspace before dispatching anything
+  // — otherwise the endpoint becomes a cross-tenant probe surface.
+  const rows = await getClient()<Array<{ id: string }>>`
+    SELECT id
+    FROM sending_domain
+    WHERE id = ${id}
+      AND workspace_id = ${auth.workspaceID}
+    LIMIT 1
+  `;
+  if (rows.length === 0) return c.json({ error: 'not-found' }, 404);
+
+  const eventID = `dom-verify-req-${id}-${Date.now()}`;
+  await inngest.send({
+    id: eventID,
+    name: DOMAIN_EVENT.VERIFICATION_REQUESTED,
+    data: { workspaceID: auth.workspaceID, sendingDomainID: id },
+  });
+
+  return c.json({ id, queued: true, eventID }, 202);
 }
 
 export async function handleEmailDomainVerifyDev(c: Context): Promise<Response> {

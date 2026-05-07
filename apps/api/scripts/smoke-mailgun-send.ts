@@ -6,7 +6,10 @@
  *
  * Run from the repo root with the live .env loaded:
  *
- *   pnpm tsx --env-file=.env apps/api/scripts/smoke-mailgun-send.ts <to-email>
+ *   pnpm tsx --env-file=.env apps/api/scripts/smoke-mailgun-send.ts <to-email> [sending-domain]
+ *
+ * `sending-domain` defaults to MAILGUN_SYSTEM_DOMAIN. Override to test a
+ * tenant-provisioned domain end-to-end (e.g. mailgun-test.usesalve.com).
  *
  * Asserts:
  *   - MAILGUN_API_KEY + MAILGUN_SYSTEM_DOMAIN are set
@@ -45,8 +48,9 @@ function buildRawEnvelope(args: { from: string; to: string; messageId: string })
 
 async function main() {
   const to = process.argv[2];
+  const overrideDomain = process.argv[3];
   if (!to) {
-    console.error('Usage: tsx smoke-mailgun-send.ts <recipient-email>');
+    console.error('Usage: tsx smoke-mailgun-send.ts <recipient-email> [sending-domain]');
     process.exit(2);
   }
   const apiKey = process.env.MAILGUN_API_KEY;
@@ -54,15 +58,16 @@ async function main() {
   if (!apiKey) throw new Error('MAILGUN_API_KEY not set');
   if (!systemDomain) throw new Error('MAILGUN_SYSTEM_DOMAIN not set');
 
-  const messageId = `${randomUUID()}@${systemDomain}`;
-  const from = `noreply@${systemDomain}`;
+  const sendingDomain = overrideDomain || systemDomain;
+  const messageId = `${randomUUID()}@${sendingDomain}`;
+  const from = `noreply@${sendingDomain}`;
   const raw = buildRawEnvelope({ from, to, messageId });
 
-  console.log(`[smoke] sending via ${systemDomain} → ${to}`);
+  console.log(`[smoke] sending via ${sendingDomain} → ${to}`);
   console.log(`[smoke] Message-ID: <${messageId}>`);
 
   const result = await sendMimeViaMailgun({
-    domain: systemDomain,
+    domain: sendingDomain,
     to,
     raw,
     fallbackMessageID: messageId,
