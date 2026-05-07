@@ -134,9 +134,10 @@ export const api = new sst.aws.Service('Api', {
     INNGEST_EVENT_KEY: inngestEventKey.value,
     INNGEST_SIGNING_KEY: inngestSigningKey.value,
     INNGEST_SERVE_ORIGIN: 'https://api.usesalve.com',
-    // Email — keep SES live until the Mailgun branch is smoke-tested in prod.
-    // Flip this to 'mailgun' (re-deploy) once the smoke scripts pass.
-    MAILER_BACKEND: 'ses',
+    // Email — Mailgun is the active provider while AWS SES production-access
+    // is pending. The SES code paths are untouched: flip back to 'ses' here
+    // (no other code change) once SES is approved.
+    MAILER_BACKEND: 'mailgun',
     REPLY_DOMAIN: 'reply.usesalve.com',
     INBOUND_EMAIL_DOMAIN: 'in.usesalve.com',
     MAIL_FROM_SUBDOMAIN: 'mail',
