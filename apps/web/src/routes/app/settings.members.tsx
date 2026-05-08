@@ -20,7 +20,7 @@ import {
   Label,
   LoadingButton,
 } from '@salve/ui';
-import { queries, type WorkspaceMemberRow } from '@salve/zero-schema';
+import { queries, type WorkspaceInvitationRow, type WorkspaceMemberRow } from '@salve/zero-schema';
 import { createFileRoute, useRouteContext } from '@tanstack/react-router';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { MoreHorizontal, UserPlus, Users } from 'lucide-react';
@@ -38,55 +38,19 @@ export const Route = createFileRoute('/app/settings/members')({
   errorComponent: RouteErrorFeedback,
 });
 
-interface Invitation {
-  id: string;
-  email: string;
-  role: string;
-  status: string;
-  createdAt: string | number | Date;
-  organizationId: string;
-}
-
 function MembersPage() {
   const { session } = useRouteContext({ from: '/app' }) as { session: SessionData };
   const orgId = session.session.activeOrganizationId ?? '';
   const currentUserId = session.user.id;
 
   const [members, membersStatus] = useQuery(queries.workspaceMembers(), CACHE_NAV);
+  const [invitations] = useQuery(queries.workspaceInvitations(), CACHE_NAV);
 
   const currentMember = members.find((m) => m.userId === currentUserId);
   const currentRole = currentMember?.role;
   const canManage = currentRole === 'owner' || currentRole === 'admin';
 
-  const [invitations, setInvitations] = useState<Invitation[]>([]);
-  const [invitationsLoaded, setInvitationsLoaded] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
-
-  function loadInvitations() {
-    if (!orgId || !canManage) {
-      setInvitationsLoaded(true);
-      return;
-    }
-    setInvitationsLoaded(false);
-    authClient.organization
-      .listInvitations({ query: { organizationId: orgId } })
-      .then((res) => {
-        const list = (res.data as Invitation[] | null | undefined) ?? [];
-        setInvitations(list.filter((inv) => inv.status === 'pending'));
-        setInvitationsLoaded(true);
-      })
-      .catch(() => setInvitationsLoaded(true));
-  }
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: loadInvitations is stable per render
-  useEffect(() => {
-    loadInvitations();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orgId, canManage]);
-
-  function refresh() {
-    loadInvitations();
-  }
 
   const membersReady = membersStatus?.type === 'complete';
   const humanMembers = members.filter(
@@ -126,25 +90,17 @@ function MembersPage() {
                   currentUserId={currentUserId}
                   currentRole={currentRole}
                   orgId={orgId}
-                  onChanged={refresh}
                 />
               ))
             )}
           </ListSection>
 
           {canManage ? (
-            <ListSection
-              title="Pending invitations"
-              count={invitationsLoaded ? invitations.length : undefined}
-            >
-              {!invitationsLoaded ? (
-                <MemberSkeleton count={2} />
-              ) : invitations.length === 0 ? (
+            <ListSection title="Pending invitations" count={invitations.length}>
+              {invitations.length === 0 ? (
                 <p className="py-3 text-[13px] text-fg-tertiary">No pending invitations.</p>
               ) : (
-                invitations.map((inv) => (
-                  <InvitationRow key={inv.id} inv={inv} orgId={orgId} onChanged={refresh} />
-                ))
+                invitations.map((inv) => <InvitationRow key={inv.id} inv={inv} orgId={orgId} />)
               )}
             </ListSection>
           ) : null}
@@ -152,12 +108,7 @@ function MembersPage() {
       </SettingsBody>
 
       {canManage ? (
-        <InviteDialog
-          open={inviteOpen}
-          onClose={() => setInviteOpen(false)}
-          orgId={orgId}
-          onInvited={refresh}
-        />
+        <InviteDialog open={inviteOpen} onClose={() => setInviteOpen(false)} orgId={orgId} />
       ) : null}
     </>
   );
@@ -168,13 +119,11 @@ function MemberRow({
   currentUserId,
   currentRole,
   orgId,
-  onChanged,
 }: {
   member: WorkspaceMemberRow;
   currentUserId: string;
   currentRole: string | undefined;
   orgId: string;
-  onChanged: () => void;
 }) {
   const canManage = currentRole === 'owner' || currentRole === 'admin';
   const isOwner = member.role === 'owner';
@@ -191,7 +140,6 @@ function MemberRow({
       });
       if (res.error) throw new Error(res.error.message ?? "Couldn't update role.");
       showSuccess('Role updated.');
-      onChanged();
     } catch (err) {
       showError(err, "Couldn't update role.");
     }
@@ -205,7 +153,6 @@ function MemberRow({
       });
       if (res.error) throw new Error(res.error.message ?? "Couldn't remove member.");
       showSuccess('Member removed.');
-      onChanged();
     } catch (err) {
       showError(err, "Couldn't remove member.");
     }
@@ -260,28 +207,24 @@ function MemberRow({
   );
 }
 
-function InvitationRow({
-  inv,
-  orgId,
-  onChanged,
-}: {
-  inv: Invitation;
-  orgId: string;
-  onChanged: () => void;
-}) {
+function InvitationRow({ inv, orgId }: { inv: WorkspaceInvitationRow; orgId: string }) {
   const [busy, setBusy] = useState(false);
 
   async function resend() {
     setBusy(true);
     try {
+      // better-auth rejects a duplicate `inviteMember` with
+      // `USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION` unless `resend: true`
+      // is passed explicitly — that branch cancels the old token and emails a
+      // fresh one. Plain re-call would error every time.
       const res = await authClient.organization.inviteMember({
         organizationId: orgId,
         email: inv.email,
         role: inv.role as 'member' | 'admin',
+        resend: true,
       });
       if (res.error) throw new Error(res.error.message ?? "Couldn't resend.");
       showSuccess('Invitation resent.');
-      onChanged();
     } catch (err) {
       showError(err, "Couldn't resend invitation.");
     } finally {
@@ -295,7 +238,6 @@ function InvitationRow({
       const res = await authClient.organization.cancelInvitation({ invitationId: inv.id });
       if (res.error) throw new Error(res.error.message ?? "Couldn't revoke.");
       showSuccess('Invitation revoked.');
-      onChanged();
     } catch (err) {
       showError(err, "Couldn't revoke invitation.");
     } finally {
@@ -363,12 +305,10 @@ function InviteDialog({
   open,
   onClose,
   orgId,
-  onInvited,
 }: {
   open: boolean;
   onClose: () => void;
   orgId: string;
-  onInvited: () => void;
 }) {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<'member' | 'admin'>('member');
@@ -404,7 +344,6 @@ function InviteDialog({
         return;
       }
       showSuccess('Invitation sent.');
-      onInvited();
       onClose();
     } catch (err) {
       showError(err, "Couldn't send invitation.");

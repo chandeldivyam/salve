@@ -148,6 +148,7 @@ app.post('/api/auth/switch-workspace', requireUser, async (c) => {
       : 'agent';
   const token = await issueSalveJwt({
     userID: ctxAuth.userID,
+    email: ctxAuth.email,
     workspaceID,
     role,
   });
@@ -286,6 +287,7 @@ async function authDataFromRequest(c: { req: { raw: Request } }): Promise<AuthDa
     const claims = await verifySalveJwt(token);
     return {
       sub: claims.sub,
+      email: claims.email,
       workspaceID: claims.workspaceID,
       role: claims.role,
       principalKind: 'user',

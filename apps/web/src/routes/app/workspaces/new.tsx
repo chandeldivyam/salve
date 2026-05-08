@@ -1,4 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useQuery } from '@rocicorp/zero/react';
 import {
   Button,
   Card,
@@ -12,15 +13,19 @@ import {
   FieldLabel,
   Input,
   LoadingButton,
+  Logo,
   useFieldContext,
 } from '@salve/ui';
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
+import { queries } from '@salve/zero-schema';
+import { createFileRoute, Link, useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { authClient, switchWorkspace } from '@/lib/auth-client';
 import { showSuccess, toUserErrorMessage } from '@/lib/feedback';
+import type { SessionData } from '@/lib/session-loader';
 import { clearSessionCache } from '@/lib/session-loader';
+import { CACHE_NAV } from '@/lib/zero-cache';
 
 export const Route = createFileRoute('/app/workspaces/new')({
   component: NewWorkspacePage,
@@ -48,18 +53,15 @@ type WorkspaceFormValues = z.infer<typeof workspaceSchema>;
 
 function NewWorkspacePage() {
   const navigate = useNavigate();
+  const { hasActiveOrg } = useRouteContext({ from: '/app' }) as {
+    session: SessionData;
+    hasActiveOrg: boolean;
+  };
   const [serverError, setServerError] = useState<string | null>(null);
-  const [pendingCount, setPendingCount] = useState<number | null>(null);
 
-  useEffect(() => {
-    async function checkInvitations() {
-      const res = await authClient.organization.listUserInvitations();
-      const all = Array.isArray(res.data) ? res.data : [];
-      const count = all.filter((inv) => (inv as { status?: string }).status === 'pending').length;
-      setPendingCount(count);
-    }
-    void checkInvitations();
-  }, []);
+  const [invitations] = useQuery(queries.userInvitations(), CACHE_NAV);
+  const hasPendingInvites = invitations.length > 0;
+
   const {
     register,
     handleSubmit,
@@ -102,66 +104,91 @@ function NewWorkspacePage() {
     await navigate({ to: '/app/settings/setup' });
   }
 
+  const inviteBanner = hasPendingInvites ? (
+    <div className="mb-4 flex items-center justify-between rounded-lg border border-border bg-bg-elevated px-4 py-3">
+      <p className="text-[13px] text-fg-primary">
+        You have {invitations.length} pending invitation{invitations.length === 1 ? '' : 's'}.
+      </p>
+      <Button variant="outline" size="sm" asChild>
+        <Link to="/app/workspaces/join">View invitations</Link>
+      </Button>
+    </div>
+  ) : null;
+
+  const formNode = (
+    <form onSubmit={handleSubmit(onSubmit)} noValidate className="grid gap-4">
+      <FieldGroup>
+        <Field hasError={Boolean(errors.name)}>
+          <FieldLabel>Workspace name</FieldLabel>
+          <NameInput
+            registration={register('name')}
+            hasError={Boolean(errors.name)}
+            placeholder="Acme Support"
+          />
+          <FieldError>{errors.name?.message}</FieldError>
+        </Field>
+        <Field hasError={Boolean(errors.slug)}>
+          <FieldLabel>URL slug</FieldLabel>
+          <Controller
+            name="slug"
+            control={control}
+            render={({ field }) => (
+              <SlugInput
+                value={field.value}
+                onBlur={field.onBlur}
+                onChange={(value) => field.onChange(slugify(value))}
+                hasError={Boolean(errors.slug)}
+              />
+            )}
+          />
+          <FieldError>{errors.slug?.message}</FieldError>
+        </Field>
+      </FieldGroup>
+      {serverError ? (
+        <p role="alert" className="text-sm text-danger-soft-foreground">
+          {serverError}
+        </p>
+      ) : null}
+      <LoadingButton type="submit" className="w-full" loading={isSubmitting}>
+        {isSubmitting ? 'Creating workspace…' : 'Create workspace'}
+      </LoadingButton>
+    </form>
+  );
+
+  // Standalone (no active workspace) — full-page auth-style layout with logo.
+  if (!hasActiveOrg) {
+    return (
+      <div className="flex min-h-dvh flex-col items-center justify-center p-6">
+        <div className="mb-8 flex flex-col items-center">
+          <Logo className="h-8 w-8" />
+        </div>
+        <div className="w-full max-w-[480px]">
+          {inviteBanner}
+          <Card className="w-full">
+            <CardHeader>
+              <CardTitle as="h1">Create a workspace</CardTitle>
+              <CardDescription>
+                A workspace is your team's slice of Salve. You'll be its owner.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>{formNode}</CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  // Inside the shell (user already has a workspace, creating another).
   return (
     <div className="flex min-h-0 flex-1 items-center justify-center bg-background p-6">
       <div className="w-full max-w-md">
-        {pendingCount !== null && pendingCount > 0 ? (
-          <div className="mb-4 flex items-center justify-between rounded-lg border border-border bg-muted/50 px-4 py-3">
-            <p className="text-sm text-foreground">
-              You have {pendingCount} pending invitation{pendingCount === 1 ? '' : 's'}. Join an
-              existing workspace instead.
-            </p>
-            <Button variant="outline" size="sm" asChild>
-              <Link to="/app/workspaces/join">View invitations</Link>
-            </Button>
-          </div>
-        ) : null}
+        {inviteBanner}
         <Card className="w-full">
           <CardHeader>
-            <CardTitle as="h1">Create a workspace</CardTitle>
-            <CardDescription>
-              A workspace is your team's slice of Salve. You'll be its owner.
-            </CardDescription>
+            <CardTitle as="h1">New workspace</CardTitle>
+            <CardDescription>Create another workspace under your account.</CardDescription>
           </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit(onSubmit)} noValidate className="grid gap-4">
-              <FieldGroup>
-                <Field hasError={Boolean(errors.name)}>
-                  <FieldLabel>Workspace name</FieldLabel>
-                  <NameInput
-                    registration={register('name')}
-                    hasError={Boolean(errors.name)}
-                    placeholder="Acme Support"
-                  />
-                  <FieldError>{errors.name?.message}</FieldError>
-                </Field>
-                <Field hasError={Boolean(errors.slug)}>
-                  <FieldLabel>URL slug</FieldLabel>
-                  <Controller
-                    name="slug"
-                    control={control}
-                    render={({ field }) => (
-                      <SlugInput
-                        value={field.value}
-                        onBlur={field.onBlur}
-                        onChange={(value) => field.onChange(slugify(value))}
-                        hasError={Boolean(errors.slug)}
-                      />
-                    )}
-                  />
-                  <FieldError>{errors.slug?.message}</FieldError>
-                </Field>
-              </FieldGroup>
-              {serverError ? (
-                <p role="alert" className="text-sm text-danger-soft-foreground">
-                  {serverError}
-                </p>
-              ) : null}
-              <LoadingButton type="submit" className="w-full" loading={isSubmitting}>
-                {isSubmitting ? 'Creating workspace…' : 'Create workspace'}
-              </LoadingButton>
-            </form>
-          </CardContent>
+          <CardContent>{formNode}</CardContent>
         </Card>
       </div>
     </div>

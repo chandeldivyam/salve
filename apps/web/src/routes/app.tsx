@@ -9,7 +9,7 @@ import { ZeroProvider } from '@rocicorp/zero/react';
 import { mutators } from '@salve/mutators';
 import { TooltipProvider } from '@salve/ui';
 import { schema } from '@salve/zero-schema/schema';
-import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
+import { createFileRoute, Outlet, redirect, useLocation } from '@tanstack/react-router';
 import { useEffect, useMemo } from 'react';
 import { RouteErrorFeedback, RouteNotFoundFeedback } from '@/components/route-feedback';
 import { WorkbenchShell } from '@/components/workbench/shell';
@@ -22,6 +22,8 @@ import {
 } from '@/lib/session-loader';
 import { useZero, ZERO_CACHE_URL } from '@/lib/zero';
 import { preloadWorkspace } from '@/lib/zero-preload';
+
+const ONBOARDING_ROUTES = ['/app/workspaces/new', '/app/workspaces/join'] as const;
 
 export const Route = createFileRoute('/app')({
   beforeLoad: async ({ location }) => {
@@ -70,7 +72,7 @@ export const Route = createFileRoute('/app')({
         throw redirect({ to: '/app/workspaces/new' });
       }
     }
-    return { session, orgs };
+    return { session, orgs, hasActiveOrg: !!session.session.activeOrganizationId };
   },
   // No `pendingComponent` override here. The cold-start window is covered
   // by the inline splash in `index.html`; warm SPA navigations resolve from
@@ -84,7 +86,12 @@ export const Route = createFileRoute('/app')({
 });
 
 function AppLayout() {
-  const { session } = Route.useRouteContext() as { session: SessionData };
+  const { session, hasActiveOrg } = Route.useRouteContext() as {
+    session: SessionData;
+    hasActiveOrg: boolean;
+  };
+  const location = useLocation();
+  const isOnboardingRoute = ONBOARDING_ROUTES.some((r) => location.pathname.startsWith(r));
 
   // Zero needs at minimum a userID; pass `'anon'` for users without one (e.g.
   // mid-sign-out). `cacheURL` points at zero-cache-dev in dev. The `context`
@@ -100,23 +107,32 @@ function AppLayout() {
       mutators,
       context: {
         sub: session.user.id,
+        email: session.user.email,
         workspaceID: session.session.activeOrganizationId ?? null,
         role: null as 'owner' | 'admin' | 'agent' | null,
       },
     }),
-    [session.user.id, session.session.activeOrganizationId],
+    [session.user.id, session.user.email, session.session.activeOrganizationId],
   );
 
-  // WorkbenchShell lives here (not in each leaf layout) so it mounts ONCE
-  // for the lifetime of the /app subtree. The auth/Zero boundary stays
-  // intact; tabs and command search are a UI layer over normal routes.
+  // When the user has no active workspace and is on an onboarding route,
+  // skip the WorkbenchShell entirely — the nav items don't work without a
+  // workspace and the full chrome looks broken on a blank screen.
+  const skipShell = !hasActiveOrg && isOnboardingRoute;
+
   return (
     <ZeroProvider {...zeroOpts}>
       <TooltipProvider delayDuration={150}>
         <WorkspacePreloader />
-        <WorkbenchShell session={session}>
-          <Outlet />
-        </WorkbenchShell>
+        {skipShell ? (
+          <div className="flex min-h-dvh flex-col bg-background text-foreground">
+            <Outlet />
+          </div>
+        ) : (
+          <WorkbenchShell session={session}>
+            <Outlet />
+          </WorkbenchShell>
+        )}
       </TooltipProvider>
     </ZeroProvider>
   );
