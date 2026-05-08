@@ -12,6 +12,9 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  Field,
+  FieldError,
+  FieldLabel,
   Input,
 } from '@salve/ui';
 import { createFileRoute } from '@tanstack/react-router';
@@ -203,20 +206,22 @@ function GroupCard({
           className="h-2 w-2 shrink-0 rounded-full"
           style={{ backgroundColor: normalizeHexColor(group.color) }}
         />
-        <InlineLabel
-          value={group.label}
-          onSave={async (label) => {
-            if (!label.trim() || label === group.label) return;
-            await z.mutate(
-              supportMetadataMutators.tagGroup.update({
-                id: group.id,
-                label: label.trim(),
-                color: group.color,
-                sortOrder: group.sortOrder,
-              }),
-            );
-          }}
-        />
+        <h3 className="contents">
+          <InlineLabel
+            value={group.label}
+            onSave={async (label) => {
+              if (!label.trim() || label === group.label) return;
+              await z.mutate(
+                supportMetadataMutators.tagGroup.update({
+                  id: group.id,
+                  label: label.trim(),
+                  color: group.color,
+                  sortOrder: group.sortOrder,
+                }),
+              );
+            }}
+          />
+        </h3>
         <span className="ml-auto tabular-nums text-[11px] text-fg-quaternary">{tags.length}</span>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -452,16 +457,18 @@ function CreateGroupSheet({
       }
     >
       <form id="create-group-form" onSubmit={submit} noValidate className="flex flex-col gap-3">
-        <FormRow label="Label">
+        <Field hasError={Boolean(error?.toLowerCase().includes('label'))}>
+          <FieldLabel>Label</FieldLabel>
           <Input
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             placeholder="Billing"
             autoFocus
-            aria-invalid={Boolean(error?.toLowerCase().includes('label'))}
           />
-        </FormRow>
-        <FormRow label="Color">
+          <FieldError>{error?.toLowerCase().includes('label') ? error : null}</FieldError>
+        </Field>
+        <Field>
+          <FieldLabel>Color</FieldLabel>
           <div className="grid grid-cols-[44px_minmax(0,1fr)] gap-2">
             <input
               type="color"
@@ -472,8 +479,8 @@ function CreateGroupSheet({
             />
             <Input value={color} onChange={(e) => setColor(e.target.value)} className="font-mono" />
           </div>
-        </FormRow>
-        {error ? <p className="text-[12px] text-danger">{error}</p> : null}
+          <FieldError>{error && !error.toLowerCase().includes('label') ? error : null}</FieldError>
+        </Field>
       </form>
     </SettingsSheet>
   );
@@ -530,28 +537,33 @@ function EditGroupSheet({
         </>
       }
     >
-      <FormRow label="Label">
-        <Input value={label} onChange={(e) => setLabel(e.target.value)} />
-      </FormRow>
-      <FormRow label="Color">
-        <div className="grid grid-cols-[44px_minmax(0,1fr)] gap-2">
-          <input
-            type="color"
-            value={color}
-            onChange={(e) => setColor(e.target.value)}
-            className="h-8 w-11 rounded-md border border-line-default bg-surface p-1"
+      <div className="flex flex-col gap-3">
+        <Field>
+          <FieldLabel>Label</FieldLabel>
+          <Input value={label} onChange={(e) => setLabel(e.target.value)} />
+        </Field>
+        <Field>
+          <FieldLabel>Color</FieldLabel>
+          <div className="grid grid-cols-[44px_minmax(0,1fr)] gap-2">
+            <input
+              type="color"
+              value={color}
+              onChange={(e) => setColor(e.target.value)}
+              className="h-8 w-11 rounded-md border border-line-default bg-surface p-1"
+            />
+            <Input value={color} onChange={(e) => setColor(e.target.value)} className="font-mono" />
+          </div>
+        </Field>
+        <Field>
+          <FieldLabel>Sort order</FieldLabel>
+          <Input
+            type="number"
+            value={sortOrder}
+            onChange={(e) => setSortOrder(e.target.value)}
+            className="w-24"
           />
-          <Input value={color} onChange={(e) => setColor(e.target.value)} className="font-mono" />
-        </div>
-      </FormRow>
-      <FormRow label="Sort order">
-        <Input
-          type="number"
-          value={sortOrder}
-          onChange={(e) => setSortOrder(e.target.value)}
-          className="w-24"
-        />
-      </FormRow>
+        </Field>
+      </div>
     </SettingsSheet>
   );
 }
@@ -623,26 +635,30 @@ function CreateTagSheet({
       }
     >
       <form id="create-tag-form" onSubmit={submit} noValidate className="flex flex-col gap-3">
-        <FormRow label="Label">
+        <Field hasError={Boolean(error?.toLowerCase().includes('label'))}>
+          <FieldLabel>Label</FieldLabel>
           <Input
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             placeholder="Refund"
             autoFocus
           />
-        </FormRow>
-        <FormRow label="Group">
+          <FieldError>{error?.toLowerCase().includes('label') ? error : null}</FieldError>
+        </Field>
+        <Field>
+          <FieldLabel>Group</FieldLabel>
           <GroupSelect groups={groups} value={groupID} onChange={setGroupID} />
-        </FormRow>
-        <FormRow label="Color (optional)">
+        </Field>
+        <Field hasError={Boolean(error && !error.toLowerCase().includes('label'))}>
+          <FieldLabel>Color (optional)</FieldLabel>
           <Input
             value={color}
             onChange={(e) => setColor(e.target.value)}
             placeholder="Inherits from group"
             className="font-mono"
           />
-        </FormRow>
-        {error ? <p className="text-[12px] text-danger">{error}</p> : null}
+          <FieldError>{error && !error.toLowerCase().includes('label') ? error : null}</FieldError>
+        </Field>
       </form>
     </SettingsSheet>
   );
@@ -705,38 +721,35 @@ function EditTagSheet({
         </>
       }
     >
-      <FormRow label="Label">
-        <Input value={label} onChange={(e) => setLabel(e.target.value)} />
-      </FormRow>
-      <FormRow label="Group">
-        <GroupSelect groups={groups} value={groupID} onChange={setGroupID} />
-      </FormRow>
-      <FormRow label="Color (optional)">
-        <Input
-          value={color}
-          onChange={(e) => setColor(e.target.value)}
-          placeholder="Inherits from group"
-          className="font-mono"
-        />
-      </FormRow>
-      <FormRow label="Sort order">
-        <Input
-          type="number"
-          value={sortOrder}
-          onChange={(e) => setSortOrder(e.target.value)}
-          className="w-24"
-        />
-      </FormRow>
+      <div className="flex flex-col gap-3">
+        <Field>
+          <FieldLabel>Label</FieldLabel>
+          <Input value={label} onChange={(e) => setLabel(e.target.value)} />
+        </Field>
+        <Field>
+          <FieldLabel>Group</FieldLabel>
+          <GroupSelect groups={groups} value={groupID} onChange={setGroupID} />
+        </Field>
+        <Field>
+          <FieldLabel>Color (optional)</FieldLabel>
+          <Input
+            value={color}
+            onChange={(e) => setColor(e.target.value)}
+            placeholder="Inherits from group"
+            className="font-mono"
+          />
+        </Field>
+        <Field>
+          <FieldLabel>Sort order</FieldLabel>
+          <Input
+            type="number"
+            value={sortOrder}
+            onChange={(e) => setSortOrder(e.target.value)}
+            className="w-24"
+          />
+        </Field>
+      </div>
     </SettingsSheet>
-  );
-}
-
-function FormRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <span className="text-[12px] font-medium text-fg-primary">{label}</span>
-      {children}
-    </div>
   );
 }
 

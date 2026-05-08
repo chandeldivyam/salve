@@ -636,6 +636,45 @@ export const queries = defineQueries({
   }),
 
   /**
+   * Pending invitations for the caller's workspace. Scoped by
+   * `organizationId = auth.workspaceID` (same manual pattern as
+   * `workspaceMembers` — invitation has no `workspaceID` alias so we skip
+   * `applyWorkspaceScope` and do the where clause directly).
+   */
+  workspaceInvitations: defineQuery(emptyArg, ({ ctx: auth }) => {
+    const base = builder.invitation;
+    if (!auth?.workspaceID) {
+      return alwaysFalse(base).related('inviter');
+    }
+    return base
+      .where('organizationId', '=', auth.workspaceID)
+      .where('status', '=', 'pending')
+      .related('inviter')
+      .orderBy('createdAt', 'desc')
+      .orderBy('id', 'desc');
+  }),
+
+  /**
+   * Pending invitations addressed to the current user's email, across all
+   * workspaces. Used for the "you've been invited" banner and the join page.
+   * Short-circuits to empty when `auth.email` is absent (e.g. service accounts).
+   */
+  userInvitations: defineQuery(emptyArg, ({ ctx: auth }) => {
+    const base = builder.invitation;
+    const email = auth?.email;
+    if (!email) {
+      return alwaysFalse(base).related('organization').related('inviter');
+    }
+    return base
+      .where('email', '=', email)
+      .where('status', '=', 'pending')
+      .related('organization')
+      .related('inviter')
+      .orderBy('createdAt', 'desc')
+      .orderBy('id', 'desc');
+  }),
+
+  /**
    * Personal access tokens belonging to the caller. Returns only the user's
    * own tokens — `principalKind='user' AND principalId=auth.sub` — so an
    * agent never sees another agent's tokens, even though all keys live in
@@ -1051,3 +1090,9 @@ export type OutboundMessageRow = QueryResultType<typeof queries.outboundMessages
 
 /** Raw inbound archive row tied to a processed ticket. */
 export type InboundMessageRow = QueryResultType<typeof queries.inboundMessagesByTicket>[number];
+
+/** Pending invitation row for the caller's workspace, with inviter user joined. */
+export type WorkspaceInvitationRow = QueryResultType<typeof queries.workspaceInvitations>[number];
+
+/** Pending invitation row for the current user, with organization and inviter joined. */
+export type UserInvitationRow = QueryResultType<typeof queries.userInvitations>[number];

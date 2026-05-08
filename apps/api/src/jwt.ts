@@ -13,6 +13,7 @@ const SEVEN_DAYS_SECONDS = 60 * 60 * 24 * 7;
 
 export interface SalveJwtClaims {
   sub: string;
+  email: string | null;
   workspaceID: string | null;
   role: 'owner' | 'admin' | 'agent' | null;
   iat: number;
@@ -21,6 +22,7 @@ export interface SalveJwtClaims {
 
 export interface IssueJwtInput {
   userID: string;
+  email: string | null;
   workspaceID: string | null;
   role: SalveJwtClaims['role'];
 }
@@ -37,6 +39,7 @@ export async function issueSalveJwt(input: IssueJwtInput): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
   const exp = now + SEVEN_DAYS_SECONDS;
   return await new SignJWT({
+    email: input.email,
     workspaceID: input.workspaceID,
     role: input.role,
   })
@@ -56,6 +59,7 @@ export async function verifySalveJwt(token: string): Promise<SalveJwtClaims> {
   }
   return {
     sub: payload.sub,
+    email: (payload.email as string | null | undefined) ?? null,
     workspaceID: (payload.workspaceID as string | null | undefined) ?? null,
     role: (payload.role as SalveJwtClaims['role']) ?? null,
     iat: typeof payload.iat === 'number' ? payload.iat : 0,

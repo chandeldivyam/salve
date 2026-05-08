@@ -9,27 +9,70 @@ import { ZeroProvider } from '@rocicorp/zero/react';
 import { mutators } from '@salve/mutators';
 import { TooltipProvider } from '@salve/ui';
 import { schema } from '@salve/zero-schema/schema';
-import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
+import { createFileRoute, Outlet, redirect, useLocation } from '@tanstack/react-router';
 import { useEffect, useMemo } from 'react';
 import { RouteErrorFeedback, RouteNotFoundFeedback } from '@/components/route-feedback';
 import { WorkbenchShell } from '@/components/workbench/shell';
-import { fetchSession, listOrganizations, type SessionData } from '@/lib/session-loader';
+import { switchWorkspace } from '@/lib/auth-client';
+import {
+  clearSessionCache,
+  fetchSession,
+  listOrganizations,
+  type SessionData,
+} from '@/lib/session-loader';
 import { useZero, ZERO_CACHE_URL } from '@/lib/zero';
 import { preloadWorkspace } from '@/lib/zero-preload';
 
+const ONBOARDING_ROUTES = ['/app/workspaces/new', '/app/workspaces/join'] as const;
+
 export const Route = createFileRoute('/app')({
-  beforeLoad: async () => {
+  beforeLoad: async ({ location }) => {
     // Fetch session + org list in parallel. Both are cached at module
     // level (lib/session-loader) so subsequent navigations resolve
     // synchronously and the workbench shell can render without a
     // useEffect-driven flicker. The org list is a hard prerequisite for
     // the workspace switcher; failing the fetch is non-fatal (we just show
     // no orgs).
-    const [session] = await Promise.all([fetchSession(), listOrganizations()]);
+    const [session, orgs] = await Promise.all([fetchSession(), listOrganizations()]);
     if (!session) {
       throw redirect({ to: '/auth/sign-in' });
     }
-    return { session };
+    if (session.user.emailVerified === false) {
+      throw redirect({
+        to: '/auth/verify-email',
+        search: { status: 'pending', email: session.user.email },
+      });
+    }
+    // Workspace guard.
+    //   - No orgs at all → onboarding at /app/workspaces/new.
+    //   - Has orgs but none active → auto-pick the first one (re-issues the
+    //     salve JWT) so the user never lands on a blank "no workspace" state
+    //     just because their session row temporarily lost
+    //     `activeOrganizationId` (e.g. right after `organization.create`,
+    //     after a workspace deletion, or after accepting an invitation
+    //     server-side).
+    const dest = location.pathname;
+    const isWorkspacesRoute = dest.startsWith('/app/workspaces/');
+    if (!session.session.activeOrganizationId) {
+      const first = orgs[0];
+      if (first) {
+        try {
+          await switchWorkspace(first.id);
+          clearSessionCache();
+          // Re-enter beforeLoad with the active org now set.
+          throw redirect({ to: dest === '/app/workspaces/new' ? '/app' : dest });
+        } catch (err) {
+          // If the auto-switch threw a router redirect, propagate it as-is.
+          if (err && typeof err === 'object' && 'isRedirect' in err) throw err;
+          // Otherwise fall through to onboarding — better to show the create
+          // form than silently strand the user on a blank screen.
+        }
+      }
+      if (!isWorkspacesRoute) {
+        throw redirect({ to: '/app/workspaces/new' });
+      }
+    }
+    return { session, orgs, hasActiveOrg: !!session.session.activeOrganizationId };
   },
   // No `pendingComponent` override here. The cold-start window is covered
   // by the inline splash in `index.html`; warm SPA navigations resolve from
@@ -43,7 +86,12 @@ export const Route = createFileRoute('/app')({
 });
 
 function AppLayout() {
-  const { session } = Route.useRouteContext() as { session: SessionData };
+  const { session, hasActiveOrg } = Route.useRouteContext() as {
+    session: SessionData;
+    hasActiveOrg: boolean;
+  };
+  const location = useLocation();
+  const isOnboardingRoute = ONBOARDING_ROUTES.some((r) => location.pathname.startsWith(r));
 
   // Zero needs at minimum a userID; pass `'anon'` for users without one (e.g.
   // mid-sign-out). `cacheURL` points at zero-cache-dev in dev. The `context`
@@ -59,23 +107,32 @@ function AppLayout() {
       mutators,
       context: {
         sub: session.user.id,
+        email: session.user.email,
         workspaceID: session.session.activeOrganizationId ?? null,
         role: null as 'owner' | 'admin' | 'agent' | null,
       },
     }),
-    [session.user.id, session.session.activeOrganizationId],
+    [session.user.id, session.user.email, session.session.activeOrganizationId],
   );
 
-  // WorkbenchShell lives here (not in each leaf layout) so it mounts ONCE
-  // for the lifetime of the /app subtree. The auth/Zero boundary stays
-  // intact; tabs and command search are a UI layer over normal routes.
+  // When the user has no active workspace and is on an onboarding route,
+  // skip the WorkbenchShell entirely — the nav items don't work without a
+  // workspace and the full chrome looks broken on a blank screen.
+  const skipShell = !hasActiveOrg && isOnboardingRoute;
+
   return (
     <ZeroProvider {...zeroOpts}>
       <TooltipProvider delayDuration={150}>
         <WorkspacePreloader />
-        <WorkbenchShell session={session}>
-          <Outlet />
-        </WorkbenchShell>
+        {skipShell ? (
+          <div className="flex min-h-dvh flex-col bg-background text-foreground">
+            <Outlet />
+          </div>
+        ) : (
+          <WorkbenchShell session={session}>
+            <Outlet />
+          </WorkbenchShell>
+        )}
       </TooltipProvider>
     </ZeroProvider>
   );

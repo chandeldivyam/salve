@@ -3,6 +3,11 @@
 // FormSection: editing one entity's fields. 720px max width, label-on-top.
 // ListSection: collections. Header row (count + filters + CTA), then dense rows.
 // EmptyState: centered icon/title/description/CTA.
+//
+// Width policy:
+//   narrow (720px) — single-entity edit form, list of small items. Default.
+//   wide (1100px)  — side-by-side panels, multi-column tables, anything where
+//                    720px forces awkward wrapping (e.g. api-tokens).
 
 import { cn } from '@salve/ui';
 import type { LucideIcon } from 'lucide-react';

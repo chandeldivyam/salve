@@ -243,12 +243,10 @@ const LABEL_FOR: Record<
 const ACTION_DISABLED: Partial<Record<SetupItemSnapshot['id'], boolean>> = {
   workspace: true,
   firstMessage: true,
-  invite: true,
 };
 
 const ACTION_CAPTION: Partial<Record<SetupItemSnapshot['id'], string>> = {
   firstMessage: 'Coming next phase',
-  invite: 'Coming next phase',
 };
 
 function resolveActionTo(
@@ -264,6 +262,8 @@ function resolveActionTo(
       return { to: '/app/settings/channels/email/routing' };
     case 'dnsVerified':
       return dnsTarget ? { to: `/app/settings/channels/email/domains/${dnsTarget}` } : null;
+    case 'invite':
+      return { to: '/app/settings/members' };
     default:
       return null;
   }

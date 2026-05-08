@@ -10,7 +10,7 @@ export const ZERO_SCHEMA_NAME = 'salve' as const;
 // Phase 40: view, view_member, builtin_view_member tables and relationships.
 // Phase A: apikey table (with principal_kind/principal_id), member.createdAt.
 // Phase E0: sending_domain.provision_status.
-export const ZERO_SCHEMA_VERSION = 10 as const;
+export const ZERO_SCHEMA_VERSION = 11 as const;
 
 export {
   ALL_TICKET_MESSAGE_LIMIT,
@@ -85,7 +85,9 @@ export {
   type TagRow,
   type TicketCountRow,
   type TicketDetailRow,
+  type UserInvitationRow,
   type ViewTicketRow,
+  type WorkspaceInvitationRow,
   type WorkspaceMemberRow,
 } from './queries.js';
 export {
@@ -107,6 +109,7 @@ export {
   type EmailChannel,
   type InboundMessageRaw,
   type InboundRoutingRule,
+  type Invitation,
   type Member,
   type Message,
   type Organization,

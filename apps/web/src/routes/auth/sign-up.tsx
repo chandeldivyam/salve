@@ -61,13 +61,21 @@ function SignUpPage() {
     if (Object.keys(errs).length > 0) return;
 
     setLoading(true);
-    const res = await authClient.signUp.email({ email, password, name });
+    const res = await authClient.signUp.email({
+      email,
+      password,
+      name,
+      callbackURL: `${window.location.origin}/auth/verify-email?status=verified`,
+    });
     setLoading(false);
     if (res.error) {
       setServerError(res.error.message ?? 'Sign-up failed.');
       return;
     }
-    await navigate({ to: '/app/workspaces/new' });
+    await navigate({
+      to: '/auth/verify-email',
+      search: { status: 'pending', email },
+    });
   }
 
   return (

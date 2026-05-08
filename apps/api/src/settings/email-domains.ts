@@ -403,6 +403,7 @@ async function findRoutingRule(
 function authDataFromContext(auth: ReturnType<typeof authOf>) {
   return {
     sub: auth.userID,
+    email: auth.email,
     workspaceID: auth.workspaceID,
     role: auth.role,
     principalKind: auth.principalKind,

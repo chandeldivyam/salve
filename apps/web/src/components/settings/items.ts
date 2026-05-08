@@ -12,9 +12,11 @@ import {
   ListChecks,
   Mail,
   Route as RouteIcon,
+  Settings,
   Settings2,
   ShieldOff,
   Tags,
+  Users,
 } from 'lucide-react';
 import type { SettingsSidebarGroup } from './sidebar';
 
@@ -25,7 +27,10 @@ export function buildSettingsSidebarGroups({
   setupVisible: boolean;
   setupBadge?: string;
 }): SettingsSidebarGroup[] {
-  const workspaceItems = [];
+  const workspaceItems: SettingsSidebarGroup['items'] = [
+    { to: '/app/settings/general', label: 'General', icon: Settings },
+    { to: '/app/settings/members', label: 'Members', icon: Users },
+  ];
   if (setupVisible) {
     workspaceItems.push({
       to: '/app/settings/setup',

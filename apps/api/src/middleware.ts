@@ -234,6 +234,7 @@ export const authMiddleware: MiddlewareHandler = async (c, next) => {
   if (finalCtx) {
     const token = await issueSalveJwt({
       userID: finalCtx.userID,
+      email: finalCtx.email,
       workspaceID: finalCtx.workspaceID,
       role: finalCtx.role,
     });

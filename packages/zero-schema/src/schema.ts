@@ -44,6 +44,19 @@ const member = table('member')
   })
   .primaryKey('id');
 
+const invitation = table('invitation')
+  .columns({
+    id: string(),
+    organizationId: string(),
+    email: string(),
+    role: string(),
+    status: string(),
+    expiresAt: number().optional(),
+    createdAt: number(),
+    inviterId: string(),
+  })
+  .primaryKey('id');
+
 // Better Auth managed table. We expose the UI-safe columns only — the `key`
 // hash, raw permissions JSON, and metadata JSON stay server-side. The
 // `referenceId` column (set by the api-key plugin's `references: 'organization'`
@@ -587,6 +600,11 @@ const organizationRelationships = relationships(organization, ({ many }) => ({
     sourceField: ['id'],
     destField: ['organizationId'],
     destSchema: member,
+  }),
+  invitations: many({
+    sourceField: ['id'],
+    destField: ['organizationId'],
+    destSchema: invitation,
   }),
   tickets: many({
     sourceField: ['id'],
@@ -1181,6 +1199,19 @@ const builtinViewMemberRelationships = relationships(builtinViewMember, ({ one }
   }),
 }));
 
+const invitationRelationships = relationships(invitation, ({ one }) => ({
+  organization: one({
+    sourceField: ['organizationId'],
+    destField: ['id'],
+    destSchema: organization,
+  }),
+  inviter: one({
+    sourceField: ['inviterId'],
+    destField: ['id'],
+    destSchema: user,
+  }),
+}));
+
 const apiKeyRelationships = relationships(apiKey, ({ one }) => ({
   // For service_account keys, principalId is the synthetic member's id; the
   // member's user mirror carries the human-readable name. For PAT keys,
@@ -1201,6 +1232,7 @@ export const schema = createSchema({
     user,
     organization,
     member,
+    invitation,
     apiKey,
     customer,
     ticket,
@@ -1233,6 +1265,7 @@ export const schema = createSchema({
     userRelationships,
     organizationRelationships,
     memberRelationships,
+    invitationRelationships,
     apiKeyRelationships,
     customerRelationships,
     ticketRelationships,
@@ -1271,6 +1304,7 @@ export type Schema = typeof schema;
 export type User = Row<typeof schema.tables.user>;
 export type Organization = Row<typeof schema.tables.organization>;
 export type Member = Row<typeof schema.tables.member>;
+export type Invitation = Row<typeof schema.tables.invitation>;
 export type ApiKey = Row<typeof schema.tables.apikey>;
 export type Customer = Row<typeof schema.tables.customer>;
 export type Ticket = Row<typeof schema.tables.ticket>;
@@ -1301,6 +1335,7 @@ export type BuiltinViewMember = Row<typeof schema.tables.builtinViewMember>;
 
 export type AuthData = {
   sub: string;
+  email?: string | null;
   workspaceID: string | null;
   role: 'owner' | 'admin' | 'agent' | null;
   principalKind?: 'user' | 'service_account';
