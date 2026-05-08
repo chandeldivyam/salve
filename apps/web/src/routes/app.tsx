@@ -13,23 +13,64 @@ import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
 import { useEffect, useMemo } from 'react';
 import { RouteErrorFeedback, RouteNotFoundFeedback } from '@/components/route-feedback';
 import { WorkbenchShell } from '@/components/workbench/shell';
-import { fetchSession, listOrganizations, type SessionData } from '@/lib/session-loader';
+import { switchWorkspace } from '@/lib/auth-client';
+import {
+  clearSessionCache,
+  fetchSession,
+  listOrganizations,
+  type SessionData,
+} from '@/lib/session-loader';
 import { useZero, ZERO_CACHE_URL } from '@/lib/zero';
 import { preloadWorkspace } from '@/lib/zero-preload';
 
 export const Route = createFileRoute('/app')({
-  beforeLoad: async () => {
+  beforeLoad: async ({ location }) => {
     // Fetch session + org list in parallel. Both are cached at module
     // level (lib/session-loader) so subsequent navigations resolve
     // synchronously and the workbench shell can render without a
     // useEffect-driven flicker. The org list is a hard prerequisite for
     // the workspace switcher; failing the fetch is non-fatal (we just show
     // no orgs).
-    const [session] = await Promise.all([fetchSession(), listOrganizations()]);
+    const [session, orgs] = await Promise.all([fetchSession(), listOrganizations()]);
     if (!session) {
       throw redirect({ to: '/auth/sign-in' });
     }
-    return { session };
+    if (session.user.emailVerified === false) {
+      throw redirect({
+        to: '/auth/verify-email',
+        search: { status: 'pending', email: session.user.email },
+      });
+    }
+    // Workspace guard.
+    //   - No orgs at all → onboarding at /app/workspaces/new.
+    //   - Has orgs but none active → auto-pick the first one (re-issues the
+    //     salve JWT) so the user never lands on a blank "no workspace" state
+    //     just because their session row temporarily lost
+    //     `activeOrganizationId` (e.g. right after `organization.create`,
+    //     after a workspace deletion, or after accepting an invitation
+    //     server-side).
+    const dest = location.pathname;
+    const isWorkspacesRoute = dest.startsWith('/app/workspaces/');
+    if (!session.session.activeOrganizationId) {
+      const first = orgs[0];
+      if (first) {
+        try {
+          await switchWorkspace(first.id);
+          clearSessionCache();
+          // Re-enter beforeLoad with the active org now set.
+          throw redirect({ to: dest === '/app/workspaces/new' ? '/app' : dest });
+        } catch (err) {
+          // If the auto-switch threw a router redirect, propagate it as-is.
+          if (err && typeof err === 'object' && 'isRedirect' in err) throw err;
+          // Otherwise fall through to onboarding — better to show the create
+          // form than silently strand the user on a blank screen.
+        }
+      }
+      if (!isWorkspacesRoute) {
+        throw redirect({ to: '/app/workspaces/new' });
+      }
+    }
+    return { session, orgs };
   },
   // No `pendingComponent` override here. The cold-start window is covered
   // by the inline splash in `index.html`; warm SPA navigations resolve from

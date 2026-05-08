@@ -11,10 +11,16 @@ import {
 } from '@salve/ui';
 import { createFileRoute, Link, redirect, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
+import * as z from 'zod';
 import { authClient } from '@/lib/auth-client';
 import { fetchSession } from '@/lib/session-loader';
 
+const searchSchema = z.object({
+  next: z.string().optional().catch(undefined),
+});
+
 export const Route = createFileRoute('/auth/sign-in')({
+  validateSearch: (s) => searchSchema.parse(s),
   // Mirror of /app's beforeLoad: bounce already-signed-in visitors back to
   // the app. clearSessionCache() runs on sign-out so refetch returns null
   // and signed-out users land here as expected.
@@ -34,6 +40,7 @@ interface FieldErrors {
 
 function SignInPage() {
   const navigate = useNavigate();
+  const { next } = Route.useSearch();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -60,10 +67,23 @@ function SignInPage() {
     const res = await authClient.signIn.email({ email, password });
     setLoading(false);
     if (res.error) {
+      if (res.error.message === 'Email not verified') {
+        // Trigger a resend and take the user to the verification holding page.
+        void authClient.sendVerificationEmail({
+          email,
+          callbackURL: `${window.location.origin}/auth/verify-email?status=verified`,
+        });
+        await navigate({
+          to: '/auth/verify-email',
+          search: { status: 'pending', email },
+        });
+        return;
+      }
       setServerError(res.error.message ?? 'Sign-in failed.');
       return;
     }
-    await navigate({ to: '/app' });
+    const destination = next?.startsWith('/') ? next : '/app';
+    await navigate({ to: destination });
   }
 
   return (

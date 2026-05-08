@@ -93,6 +93,13 @@
   --danger-soft-foreground: oklch(0.48 0.13 25);
   --danger-border: oklch(0.87 0.075 25);
 
+  /* Primary CTA button tokens — light mode: dark fill on light canvas */
+  --btn-primary-bg: oklch(0.32 0.02 270);
+  --btn-primary-fg: oklch(0.985 0.002 320);
+  --btn-primary-hover-bg: oklch(0.22 0.02 270);
+  --btn-primary-active-bg: oklch(0.16 0.02 270);
+  --btn-primary-border: oklch(0.22 0.02 270);
+
   /* Z-layer scale — Linear's named scale, no ad-hoc z-index */
   --z-header: 100;
   --z-overlay: 500;
@@ -189,6 +196,13 @@
   --danger-soft-foreground: oklch(0.84 0.11 25);
   --danger-border: oklch(0.47 0.1 25);
 
+  /* Primary CTA button tokens — dark mode: near-white fill on dark canvas */
+  --btn-primary-bg: oklch(0.97 0.003 270);
+  --btn-primary-fg: oklch(0.18 0.005 270);
+  --btn-primary-hover-bg: oklch(0.90 0.003 270);
+  --btn-primary-active-bg: oklch(0.84 0.005 270);
+  --btn-primary-border: transparent;
+
   /* Shadows (dark) — stronger, but elevation still mostly via surface ladder */
   --shadow-low: 0 1px 2px rgb(0 0 0 / 0.2), 0 1px 1px rgb(0 0 0 / 0.16);
   --shadow-medium: 0 2px 4px rgb(0 0 0 / 0.2), 0 4px 12px rgb(0 0 0 / 0.24);
@@ -233,6 +247,12 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-tooltip: var(--tooltip);
   --color-tooltip-foreground: var(--tooltip-foreground);
+
+  --color-btn-primary: var(--btn-primary-bg);
+  --color-btn-primary-foreground: var(--btn-primary-fg);
+  --color-btn-primary-hover: var(--btn-primary-hover-bg);
+  --color-btn-primary-active: var(--btn-primary-active-bg);
+  --color-btn-primary-border: var(--btn-primary-border);
 
   --color-brand-50: var(--brand-50);
   --color-brand-100: var(--brand-100);

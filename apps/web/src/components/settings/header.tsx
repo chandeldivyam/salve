@@ -24,7 +24,9 @@ export function SettingsHeader({
       )}
     >
       <div className="min-w-0">
-        <h1 className="text-[15px] font-semibold tracking-[-0.011em] text-fg-primary">{title}</h1>
+        <h1 className="truncate text-[15px] font-semibold tracking-[-0.011em] text-fg-primary">
+          {title}
+        </h1>
         {description ? (
           <p className="mt-1 max-w-[60ch] text-[13px] text-fg-tertiary">{description}</p>
         ) : null}
