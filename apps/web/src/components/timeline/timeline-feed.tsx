@@ -19,6 +19,9 @@ import {
   SheetDescription,
   SheetHeader,
   SheetTitle,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
 } from '@salve/ui';
 import {
   ALL_TICKET_MESSAGE_LIMIT,
@@ -38,6 +41,7 @@ import {
   AlertTriangle,
   ArrowDown,
   ChevronDown,
+  ChevronUp,
   Equal,
   ExternalLink,
   MoreHorizontal,
@@ -46,7 +50,7 @@ import {
   UserMinus,
   UserPlus,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Composer, type ComposerSendArgs } from '@/components/composer';
 import { CustomFieldsBlock } from '@/components/conversation/custom-fields-block';
 import { TagsField } from '@/components/conversation/tags-field';
@@ -238,24 +242,37 @@ function SingleTicketTimeline({ ticketID }: { ticketID: string }) {
     [inboxList, ticketID],
   );
 
-  useShortcut(['j'], () => {
+  const inboxListLen = (inboxList as ReadonlyArray<TimelineTicket>).length;
+  const canGoNext = anchorIndex >= 0 && anchorIndex < inboxListLen - 1;
+  const canGoPrev = anchorIndex > 0;
+  const goNext = useCallback(() => {
     const list = inboxList as ReadonlyArray<TimelineTicket>;
     if (list.length === 0) return;
     const next = anchorIndex < 0 ? 0 : Math.min(list.length - 1, anchorIndex + 1);
     const target = list[next];
     if (target && target.id !== ticketID) {
-      navigate({ to: '/app/inbox/t/$ticketId', params: { ticketId: target.id } });
+      navigate({
+        to: '/app/inbox/t/$ticketId',
+        params: { ticketId: target.id },
+        search: (prev) => prev,
+      });
     }
-  });
-  useShortcut(['k'], () => {
+  }, [anchorIndex, inboxList, navigate, ticketID]);
+  const goPrev = useCallback(() => {
     const list = inboxList as ReadonlyArray<TimelineTicket>;
     if (list.length === 0) return;
     const previous = anchorIndex < 0 ? 0 : Math.max(0, anchorIndex - 1);
     const target = list[previous];
     if (target && target.id !== ticketID) {
-      navigate({ to: '/app/inbox/t/$ticketId', params: { ticketId: target.id } });
+      navigate({
+        to: '/app/inbox/t/$ticketId',
+        params: { ticketId: target.id },
+        search: (prev) => prev,
+      });
     }
-  });
+  }, [anchorIndex, inboxList, navigate, ticketID]);
+  useShortcut(['j'], goNext);
+  useShortcut(['k'], goPrev);
 
   useEffect(() => {
     if (!ticket) return;
@@ -362,6 +379,10 @@ function SingleTicketTimeline({ ticketID }: { ticketID: string }) {
         onPriorityChange={setPriority}
         onAssigneeChange={setAssignee}
         onOpenProfile={() => setProfileOpen(true)}
+        onGoPrev={goPrev}
+        onGoNext={goNext}
+        canGoPrev={canGoPrev}
+        canGoNext={canGoNext}
       />
       <div className="flex min-h-0 flex-1">
         <main className="relative min-w-0 flex-1 overflow-y-auto">
@@ -882,6 +903,10 @@ function TimelineHeader({
   onPriorityChange,
   onAssigneeChange,
   onOpenProfile,
+  onGoPrev,
+  onGoNext,
+  canGoPrev,
+  canGoNext,
 }: {
   ticket: TimelineTicket;
   members: ReadonlyArray<WorkspaceMemberRow>;
@@ -890,6 +915,10 @@ function TimelineHeader({
   onPriorityChange: (priority: TimelineTicketPriority) => void;
   onAssigneeChange: (userID: string | null) => void;
   onOpenProfile: () => void;
+  onGoPrev: () => void;
+  onGoNext: () => void;
+  canGoPrev: boolean;
+  canGoNext: boolean;
 }) {
   const customer = ticket.customer ?? null;
   const customerLabel = customerName(customer);
@@ -927,6 +956,50 @@ function TimelineHeader({
           <PanelRightOpen className="h-3.5 w-3.5" />
           Customer
         </Button>
+        <div className="flex shrink-0 items-center gap-0.5">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label="Previous ticket"
+                onClick={onGoPrev}
+                disabled={!canGoPrev}
+                className="grid h-7 w-7 place-items-center rounded-md text-fg-tertiary hover:bg-bg-elevated hover:text-fg-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40"
+              >
+                <ChevronUp className="h-4 w-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <span className="flex items-center gap-1.5">
+                Navigate up
+                <kbd className="rounded bg-tooltip-foreground/15 px-1 py-px font-mono text-[10px] uppercase">
+                  K
+                </kbd>
+              </span>
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label="Next ticket"
+                onClick={onGoNext}
+                disabled={!canGoNext}
+                className="grid h-7 w-7 place-items-center rounded-md text-fg-tertiary hover:bg-bg-elevated hover:text-fg-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40"
+              >
+                <ChevronDown className="h-4 w-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <span className="flex items-center gap-1.5">
+                Navigate down
+                <kbd className="rounded bg-tooltip-foreground/15 px-1 py-px font-mono text-[10px] uppercase">
+                  J
+                </kbd>
+              </span>
+            </TooltipContent>
+          </Tooltip>
+        </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
