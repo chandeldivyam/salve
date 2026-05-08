@@ -156,7 +156,7 @@ export function MessageBubble({ message, isSelf, delivery, inboundAuth }: Messag
             {actions}
           </div>
           <div
-            className="prose prose-sm max-w-none text-[13px] leading-relaxed text-warning-soft-foreground"
+            className="prose prose-sm max-w-none break-words text-[13px] leading-relaxed text-warning-soft-foreground [overflow-wrap:anywhere]"
             // biome-ignore lint/security/noDangerouslySetInnerHtml: composer Tiptap output is rendered by the existing message UI.
             dangerouslySetInnerHTML={{ __html: message.bodyHtml }}
           />
@@ -185,14 +185,14 @@ export function MessageBubble({ message, isSelf, delivery, inboundAuth }: Messag
           </Avatar>
           <div
             className={cn(
-              'max-w-[75%] rounded-2xl px-4 py-2.5 text-[13px]',
+              'min-w-0 max-w-[75%] rounded-2xl px-4 py-2.5 text-[13px]',
               isAgent
                 ? 'bg-brand-soft text-brand-soft-foreground ring-1 ring-brand-border'
                 : 'bg-bg-panel text-fg-primary ring-1 ring-line-default',
             )}
           >
             <div
-              className="prose prose-sm max-w-none leading-relaxed"
+              className="prose prose-sm max-w-none break-words leading-relaxed [overflow-wrap:anywhere]"
               // biome-ignore lint/security/noDangerouslySetInnerHtml: composer Tiptap output is rendered by the existing message UI.
               dangerouslySetInnerHTML={{ __html: message.bodyHtml }}
             />

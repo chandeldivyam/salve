@@ -1,7 +1,8 @@
 import { Avatar, AvatarFallback, Badge, Button, cn, initialsFromName } from '@salve/ui';
 import { ChevronDown, ChevronRight, MessageSquare, RotateCcw } from 'lucide-react';
-import type { ReactNode } from 'react';
+import type { KeyboardEvent, ReactNode } from 'react';
 import { NoteCard } from '@/components/customer/note-card';
+import { WorkbenchLink } from '@/components/workbench/workbench-link';
 import { MessageBubble } from './message-bubble';
 import { groupTicketActivities, TicketActivityRow } from './ticket-activity-row';
 import {
@@ -80,13 +81,23 @@ export function ConversationItem({
         ticket.status === 'closed' && 'bg-bg-elevated/40',
       )}
     >
-      <button
-        type="button"
+      <div
+        role={onToggle ? 'button' : undefined}
+        tabIndex={onToggle ? 0 : undefined}
         onClick={onToggle}
-        disabled={!onToggle}
+        onKeyDown={
+          onToggle
+            ? (event: KeyboardEvent<HTMLDivElement>) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  onToggle();
+                }
+              }
+            : undefined
+        }
         className={cn(
           'flex w-full items-center gap-3 px-3 py-2 text-left',
-          onToggle && 'hover:bg-bg-elevated',
+          onToggle && 'cursor-pointer hover:bg-bg-elevated',
         )}
       >
         <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-fg-tertiary">
@@ -101,9 +112,15 @@ export function ConversationItem({
               className={cn('h-2 w-2 shrink-0 rounded-full', statusDotClass(ticket.status))}
               aria-hidden="true"
             />
-            <span className="shrink-0 text-[12px] tabular-nums text-fg-tertiary">
+            <WorkbenchLink
+              href={`/app/inbox/t/${ticket.id}`}
+              source="ticket-row"
+              onClick={(event) => event.stopPropagation()}
+              title={`Open ${ticketNumber(ticket)}`}
+              className="shrink-0 rounded text-[12px] tabular-nums text-fg-tertiary hover:text-fg-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
               {ticketNumber(ticket)}
-            </span>
+            </WorkbenchLink>
             <h2 className="truncate text-[13px] font-medium text-fg-primary">{ticket.title}</h2>
             <Badge variant={statusBadgeVariant(ticket.status)} className="hidden sm:inline-flex">
               {statusLabel(ticket.status)}
@@ -118,7 +135,7 @@ export function ConversationItem({
           <span className="tabular-nums">{messages.length}</span>
           <span className="tabular-nums">{relativeTime(ticket.updatedAt)}</span>
         </div>
-      </button>
+      </div>
 
       {expanded ? (
         <div className="border-t border-line-quiet px-3 pb-3">
@@ -126,7 +143,9 @@ export function ConversationItem({
           {ticket.description ? (
             <div className="my-3 rounded-lg bg-bg-elevated px-3 py-2 text-[13px] text-fg-secondary">
               <p className="mb-1 text-[11px] font-medium text-fg-tertiary">Original description</p>
-              <p className="whitespace-pre-wrap leading-relaxed">{ticket.description}</p>
+              <p className="whitespace-pre-wrap break-words leading-relaxed [overflow-wrap:anywhere]">
+                {ticket.description}
+              </p>
             </div>
           ) : null}
           {showEarlier ? <div className="pt-2">{showEarlier}</div> : null}
