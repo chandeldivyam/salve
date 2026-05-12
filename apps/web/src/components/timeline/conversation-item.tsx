@@ -81,6 +81,11 @@ export function ConversationItem({
         ticket.status === 'closed' && 'bg-bg-elevated/40',
       )}
     >
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: When onToggle is set we
+          attach role='button', tabIndex, and a keyboard handler so the element IS
+          interactive in the screen-reader/keyboard sense; when it's undefined the
+          div is purely static (no onClick/onKeyDown either). The rule fires on the
+          plain tag name without seeing that gating. */}
       <div
         role={onToggle ? 'button' : undefined}
         tabIndex={onToggle ? 0 : undefined}
