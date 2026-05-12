@@ -25,6 +25,7 @@ import {
   MAX_INBOX_LIMIT,
   MAX_LIST_LIMIT,
   MAX_LIST_LIMIT_QUERY,
+  MIGRATION_RUN_LIMIT,
   SETTINGS_CATALOGUE_LIMIT,
   TICKET_ANCHOR_LIMIT,
   VIEW_LIST_LIMIT,
@@ -59,7 +60,10 @@ type WorkspaceScopedTable =
   | 'view'
   | 'viewMember'
   | 'builtinViewMember'
-  | 'apikey';
+  | 'apikey'
+  | 'migrationRun'
+  | 'migrationWebhookSubscription'
+  | 'migrationExternalIdMap';
 
 // `Query<table, schema, any>` mirrors zbugs's `IssueQuery` — `any` is required
 // in the helper's TReturn so the `.one()`/list cases unify.
@@ -979,6 +983,47 @@ export const queries = defineQueries({
         .limit(cap)
     );
   }),
+
+  /**
+   * Atlas migration runs for the active workspace, newest first. Bounded;
+   * the settings page only ever shows recent history.
+   */
+  atlasMigrationRuns: defineQuery(emptyArg, ({ ctx: auth }) =>
+    applyWorkspaceScope(builder.migrationRun, auth)
+      .where('source', '=', 'atlas')
+      .related('webhookSubscriptions')
+      .orderBy('startedAt', 'desc')
+      .orderBy('id', 'desc')
+      .limit(MIGRATION_RUN_LIMIT),
+  ),
+
+  /**
+   * Atlas webhook subscriptions for the active workspace. We never expose
+   * `signing_secret` (lives in secrets schema, not replicated) — the rows
+   * here are the UI-safe projection.
+   */
+  atlasWebhookSubscriptions: defineQuery(emptyArg, ({ ctx: auth }) =>
+    applyWorkspaceScope(builder.migrationWebhookSubscription, auth)
+      .where('source', '=', 'atlas')
+      .orderBy('event', 'asc'),
+  ),
+
+  /**
+   * Lookup: does the given ticket originate from an external migration source?
+   * Used by the timeline to swap the public-reply composer for a read-only
+   * banner (server-mutators already drops outbound delivery for these tickets
+   * — the UI mirror prevents agents from typing a reply that quietly never
+   * leaves Salve).
+   *
+   * Returns 0 or 1 rows. Source-agnostic by intent: any future non-Atlas
+   * migration source inherits the same read-only semantics.
+   */
+  importedTicketSource: defineQuery(idArg, ({ args: { id }, ctx: auth }) =>
+    applyWorkspaceScope(builder.migrationExternalIdMap, auth)
+      .where('entityType', '=', 'ticket')
+      .where('targetID', '=', id)
+      .limit(1),
+  ),
 });
 
 export type Queries = typeof queries;
@@ -1096,3 +1141,11 @@ export type WorkspaceInvitationRow = QueryResultType<typeof queries.workspaceInv
 
 /** Pending invitation row for the current user, with organization and inviter joined. */
 export type UserInvitationRow = QueryResultType<typeof queries.userInvitations>[number];
+
+/** Atlas migration run row with subscription relateds. */
+export type AtlasMigrationRunRow = QueryResultType<typeof queries.atlasMigrationRuns>[number];
+
+/** Atlas webhook subscription row (signing_secret never reaches the client). */
+export type AtlasWebhookSubscriptionRow = QueryResultType<
+  typeof queries.atlasWebhookSubscriptions
+>[number];

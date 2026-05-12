@@ -207,6 +207,12 @@ function SingleTicketTimeline({ ticketID }: { ticketID: string }) {
   );
   const [outboundRows] = useQuery(queries.outboundMessagesByTicket({ id: ticketID }), CACHE_NAV);
   const [sendableEmailAddresses] = useQuery(queries.sendableEmailAddresses(), CACHE_FOREVER);
+  // Read-only mirror gate: if the ticket has an EIM row, server-mutators
+  // already drops outbound delivery (server-mutators.ts read-only gate).
+  // Surface that as a banner + suppressed composer so agents don't think a
+  // reply was sent. Source-agnostic — any migration source qualifies.
+  const [importedSourceRows] = useQuery(queries.importedTicketSource({ id: ticketID }), CACHE_NAV);
+  const importedFromSource = importedSourceRows[0]?.source ?? null;
   const [inboundMessageRows] = useQuery(
     queries.inboundMessagesByTicket({ id: ticketID }),
     CACHE_NAV,
@@ -429,16 +435,20 @@ function SingleTicketTimeline({ ticketID }: { ticketID: string }) {
               }
               onReopen={() => setStatus('open')}
               composer={
-                <Composer
-                  ticketID={ticketID}
-                  userID={currentUserID}
-                  workspaceID={workspaceID}
-                  emailAddresses={[
-                    ...(sendableEmailAddresses as ReadonlyArray<TimelineEmailAddress>),
-                  ]}
-                  preferredEmailAddressID={preferredEmailAddressID}
-                  onSend={onSend}
-                />
+                importedFromSource ? (
+                  <ReadOnlyMirrorBanner source={importedFromSource} />
+                ) : (
+                  <Composer
+                    ticketID={ticketID}
+                    userID={currentUserID}
+                    workspaceID={workspaceID}
+                    emailAddresses={[
+                      ...(sendableEmailAddresses as ReadonlyArray<TimelineEmailAddress>),
+                    ]}
+                    preferredEmailAddressID={preferredEmailAddressID}
+                    onSend={onSend}
+                  />
+                )
               }
             />
 
@@ -715,6 +725,12 @@ function ExpandedCustomerTimelineConversation({
     queries.inboundMessagesByTicket({ id: ticket.id }),
     CACHE_NAV,
   );
+  // Same read-only mirror gate as SingleTicketTimeline — see that comment.
+  const [importedSourceRowsExpanded] = useQuery(
+    queries.importedTicketSource({ id: ticket.id }),
+    CACHE_NAV,
+  );
+  const importedFromSourceExpanded = importedSourceRowsExpanded[0]?.source ?? null;
   const [showAllInThread, setShowAllInThread] = useState(false);
   const [allMessageRows] = useQuery(
     queries.ticketMessagesAll({ ticketID: ticket.id, limit: ALL_TICKET_MESSAGE_LIMIT }),
@@ -779,16 +795,43 @@ function ExpandedCustomerTimelineConversation({
       onReopen={() => z.mutate(mutators.ticket.reopen({ id: fullTicket.id }))}
       onToggle={onToggle}
       composer={
-        <Composer
-          ticketID={fullTicket.id}
-          userID={currentUserID}
-          workspaceID={workspaceID}
-          emailAddresses={[...(sendableEmailAddresses as ReadonlyArray<TimelineEmailAddress>)]}
-          preferredEmailAddressID={preferredEmailAddressID}
-          onSend={onSend}
-        />
+        importedFromSourceExpanded ? (
+          <ReadOnlyMirrorBanner source={importedFromSourceExpanded} />
+        ) : (
+          <Composer
+            ticketID={fullTicket.id}
+            userID={currentUserID}
+            workspaceID={workspaceID}
+            emailAddresses={[...(sendableEmailAddresses as ReadonlyArray<TimelineEmailAddress>)]}
+            preferredEmailAddressID={preferredEmailAddressID}
+            onSend={onSend}
+          />
+        )
       }
     />
+  );
+}
+
+/**
+ * Replaces the public-reply composer for tickets imported from a migration
+ * source. Server-mutators already drops outbound delivery for these tickets
+ * (server-mutators.ts mirror gate); this banner makes that visible to the
+ * agent so they don't compose a "reply" that quietly never reaches the
+ * customer. Internal notes still work via the separate `noteComposer` slot.
+ */
+function ReadOnlyMirrorBanner({ source }: { source: string }) {
+  const label = source === 'atlas' ? 'Atlas' : source;
+  return (
+    <div className="flex items-start gap-2 rounded-md border border-line-default bg-bg-elevated/40 px-3 py-2.5 text-[12px] text-fg-tertiary">
+      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning-foreground" />
+      <div className="flex-1">
+        <p className="font-medium text-fg-primary">Mirrored from {label} — read-only</p>
+        <p className="mt-0.5 text-fg-tertiary">
+          This ticket originated in {label}. Replies to the customer must be sent there; messages
+          composed in Salve would not be delivered. Internal notes are still allowed.
+        </p>
+      </div>
+    </div>
   );
 }
 

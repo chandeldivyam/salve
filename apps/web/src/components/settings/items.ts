@@ -6,6 +6,7 @@
 // Customer until we have enough categories to justify two sidebar entries.
 
 import {
+  ArrowRightLeft,
   Inbox,
   Key,
   LayoutDashboard,
@@ -82,6 +83,17 @@ export function buildSettingsSidebarGroups({
       items: [
         { to: '/app/settings/tags', label: 'Tags', icon: Tags },
         { to: '/app/settings/custom-fields', label: 'Custom fields', icon: Settings2 },
+      ],
+    },
+    {
+      label: 'Migrations',
+      items: [
+        {
+          to: '/app/settings/migrations/atlas',
+          label: 'Atlas',
+          icon: ArrowRightLeft,
+          match: (p: string) => p.startsWith('/app/settings/migrations/atlas'),
+        },
       ],
     },
     {
