@@ -10,7 +10,6 @@ import { mutators } from '@salve/mutators';
 import { Button, Input } from '@salve/ui';
 import {
   type Filter,
-  INBOX_INITIAL_PAGE,
   INBOX_PAGE_GROWTH,
   type ViewTicketRow as InboxRowData,
   MAX_INBOX_LIMIT,
@@ -33,6 +32,7 @@ import { useHoverTargetRoot, useHoverTargetStore } from '@/lib/commands/hover-ta
 import { useKeyBinding } from '@/lib/commands/use-key-binding';
 import { builtinViewByID, DEFAULT_VIEW_ID } from '@/lib/inbox/builtin-views';
 import { clientFilterPredicate } from '@/lib/inbox/custom-field-filter';
+import { readSavedInboxState, writeSavedInboxState } from '@/lib/inbox/scroll-state';
 import { decodeFilters, encodeFilters, filtersEqual } from '@/lib/inbox/url-filters';
 import { useViewCommands } from '@/lib/inbox/use-view-commands';
 import { useInboxSelectionStore } from '@/lib/inbox-selection';
@@ -45,52 +45,6 @@ import { InboxListSkeleton } from './skeletons';
 interface InboxListProps {
   selectedTicketID: string | null;
   currentUserID: string;
-}
-
-interface SavedInboxState {
-  offset: number;
-  pageLimit: number;
-}
-
-const SCROLL_KEY_PREFIX = 'salve.inbox.state.';
-
-function scrollKeyFor(workspaceID: string | null, viewID: string) {
-  return `${SCROLL_KEY_PREFIX}${workspaceID ?? 'no-workspace'}.${viewID}`;
-}
-
-function readSavedInboxState(workspaceID: string | null, viewID: string): SavedInboxState {
-  const fallback: SavedInboxState = { offset: 0, pageLimit: INBOX_INITIAL_PAGE };
-  if (typeof window === 'undefined') return fallback;
-  const raw = window.sessionStorage.getItem(scrollKeyFor(workspaceID, viewID));
-  if (!raw) return fallback;
-  try {
-    const parsed = JSON.parse(raw) as Partial<SavedInboxState>;
-    const offset =
-      Number.isFinite(parsed.offset) && (parsed.offset ?? 0) > 0 ? Number(parsed.offset) : 0;
-    // Restore pageLimit *only* when we also have a scroll offset to restore.
-    // Without this, switching back to an inbox view replays whatever
-    // pageLimit the user had grown the window to — even though the
-    // virtualizer is at row 0 and could happily start from
-    // `INBOX_INITIAL_PAGE`. A 2000-row materialization on every cold load
-    // is exactly what made the inbox feel like "all tickets at once".
-    // The grow-on-scroll effect still bumps the limit back up the moment
-    // the user scrolls past `LOAD_MORE_THRESHOLD`.
-    const savedLimit =
-      Number.isFinite(parsed.pageLimit) &&
-      (parsed.pageLimit ?? 0) >= INBOX_INITIAL_PAGE &&
-      (parsed.pageLimit ?? 0) <= MAX_INBOX_LIMIT
-        ? Number(parsed.pageLimit)
-        : INBOX_INITIAL_PAGE;
-    const limit = offset > 0 ? savedLimit : INBOX_INITIAL_PAGE;
-    return { offset, pageLimit: limit };
-  } catch {
-    return fallback;
-  }
-}
-
-function writeSavedInboxState(workspaceID: string | null, viewID: string, state: SavedInboxState) {
-  if (typeof window === 'undefined') return;
-  window.sessionStorage.setItem(scrollKeyFor(workspaceID, viewID), JSON.stringify(state));
 }
 
 type ViewWithMembers = View & {
@@ -357,16 +311,42 @@ export function InboxList({ selectedTicketID, currentUserID }: InboxListProps) {
   const moveCursor = useCallback(
     (delta: 1 | -1) => {
       if (filtered.length === 0) return;
+      const setTo = (idx: number) => {
+        const ticket = filtered[idx];
+        if (!ticket) return;
+        useHoverTargetStore.getState().setKeyboardTarget({
+          kind: 'ticket',
+          id: ticket.id,
+          label: ticket.shortID > 0 ? `#${ticket.shortID}` : ticket.title,
+        });
+        virtualizer.scrollToIndex(idx, { align: 'auto' });
+      };
+      // "Snap then move": if the current cursor isn't in the viewport
+      // (the user mouse-scrolled away from it), the first j/k just
+      // snaps the cursor onto the first row visible at the top of the
+      // viewport — no movement. The next press moves from there.
+      // Matches Gmail / Linear / Superhuman behavior; eliminates the
+      // "j opens row 2 from the top after I scrolled to row 200" bug.
+      const scrollEl = parentRef.current;
+      if (scrollEl) {
+        const scrollTop = scrollEl.scrollTop;
+        const viewportHeight = scrollEl.clientHeight;
+        // Inclusive viewport-visible bounds. Ceil/floor so we count
+        // only rows that are *fully* visible — partials at the edge
+        // shouldn't anchor the cursor.
+        const firstVisible = Math.ceil(scrollTop / INBOX_ROW_HEIGHT);
+        const lastVisible = Math.floor((scrollTop + viewportHeight) / INBOX_ROW_HEIGHT) - 1;
+        const cursorVisible =
+          cursorIndex >= 0 && cursorIndex >= firstVisible && cursorIndex <= lastVisible;
+        if (!cursorVisible && viewportHeight > 0) {
+          const snapTarget = Math.max(0, Math.min(filtered.length - 1, firstVisible));
+          setTo(snapTarget);
+          return;
+        }
+      }
       const start = cursorIndex < 0 ? 0 : cursorIndex;
       const next = Math.max(0, Math.min(filtered.length - 1, start + delta));
-      const ticket = filtered[next];
-      if (!ticket) return;
-      useHoverTargetStore.getState().setKeyboardTarget({
-        kind: 'ticket',
-        id: ticket.id,
-        label: ticket.shortID > 0 ? `#${ticket.shortID}` : ticket.title,
-      });
-      virtualizer.scrollToIndex(next, { align: 'auto' });
+      setTo(next);
     },
     [cursorIndex, filtered, virtualizer],
   );

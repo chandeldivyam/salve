@@ -30,6 +30,8 @@ import {
   CUSTOMER_TICKET_LIMIT,
   type Filter,
   INBOX_INITIAL_PAGE,
+  INBOX_PAGE_GROWTH,
+  MAX_INBOX_LIMIT,
   queries,
   type ViewQuery,
   type ViewSort,
@@ -50,8 +52,8 @@ import {
   UserMinus,
   UserPlus,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Composer, type ComposerSendArgs } from '@/components/composer';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ComposerSendArgs } from '@/components/composer';
 import { CustomFieldsBlock } from '@/components/conversation/custom-fields-block';
 import { TagsField } from '@/components/conversation/tags-field';
 import { NoteCard } from '@/components/customer/note-card';
@@ -62,8 +64,13 @@ import { TicketDetailSkeleton } from '@/components/skeletons';
 import { WorkbenchLink } from '@/components/workbench/workbench-link';
 import { useCommandRegistry } from '@/lib/commands/registry';
 import { BUILTIN_VIEWS, builtinViewByID, DEFAULT_VIEW_ID } from '@/lib/inbox/builtin-views';
+import { readSavedInboxState } from '@/lib/inbox/scroll-state';
 import { decodeFilters } from '@/lib/inbox/url-filters';
-import { TIMELINE_NEWER_VISIBLE, TIMELINE_OLDER_VISIBLE } from '@/lib/list-constants';
+import {
+  LOAD_MORE_THRESHOLD,
+  TIMELINE_NEWER_VISIBLE,
+  TIMELINE_OLDER_VISIBLE,
+} from '@/lib/list-constants';
 import type { SessionData } from '@/lib/session-loader';
 import { useShortcut } from '@/lib/shortcuts';
 import { useWorkbenchStore } from '@/lib/workbench';
@@ -114,6 +121,14 @@ type TimelineQueryCatalog = typeof queries & {
 
 const timelineQueries = queries as TimelineQueryCatalog;
 
+// Composer pulls in Tiptap + ProseMirror (~250kB gzipped). Lazy-load it
+// so the ticket-detail chunk drops to just the read-path UI. Reply is a
+// secondary action — by the time the user clicks "Reply" or focuses the
+// composer area, the chunk is already cached. We also kick off the
+// import on idle inside `SingleTicketTimeline` so it's warm before the
+// first interaction.
+const Composer = lazy(() => import('@/components/composer').then((m) => ({ default: m.Composer })));
+
 const STATUS_OPTIONS: Array<{ id: TimelineTicketStatus; label: string }> = [
   { id: 'open', label: 'Open' },
   { id: 'in_progress', label: 'In progress' },
@@ -162,13 +177,12 @@ function SingleTicketTimeline({ ticketID }: { ticketID: string }) {
   // opening a parallel `inboxOpen` subscription (the legacy code did
   // that and it was the source of overlap the audit flagged).
   const inboxSearch = useSearch({ strict: false }) as { view?: string; f?: string };
+  const viewID = inboxSearch.view ?? DEFAULT_VIEW_ID;
   const navInboxQuery: {
     viewID: string;
     viewQuery: ViewQuery;
     sort: ViewSort;
-    limit: number;
   } = useMemo(() => {
-    const viewID = inboxSearch.view ?? DEFAULT_VIEW_ID;
     const builtin = builtinViewByID(viewID) ?? BUILTIN_VIEWS[0];
     const driftFilters = decodeFilters(inboxSearch.f);
     const filters: Filter[] =
@@ -177,9 +191,28 @@ function SingleTicketTimeline({ ticketID }: { ticketID: string }) {
       viewID,
       viewQuery: { filters, matchAll: true },
       sort: (builtin?.sort as ViewSort) ?? { field: 'updatedAt', direction: 'desc' },
-      limit: INBOX_INITIAL_PAGE,
     };
-  }, [inboxSearch.view, inboxSearch.f]);
+  }, [viewID, inboxSearch.f]);
+  // Nav-list pagination. The inbox list grows its `pageLimit` as the
+  // user scrolls (inbox-list.tsx) and persists that limit to
+  // sessionStorage per view. Seed the ticket-detail nav with the same
+  // limit so the user can j/k past row 200 if they had already
+  // scrolled further. Without this, prev/next gray out the moment the
+  // current ticket is row ≥200 in the inbox view.
+  const [navLimit, setNavLimit] = useState(() =>
+    Math.max(INBOX_INITIAL_PAGE, readSavedInboxState(workspaceID, viewID).pageLimit),
+  );
+  // Reset the nav window when the *view* changes — different views
+  // have independent persisted limits, and growth from view A
+  // shouldn't bleed into view B. Tracked via a ref so we don't reset
+  // on unrelated re-renders (e.g. switching ticket within the same view).
+  const lastNavViewKey = useRef(`${workspaceID ?? ''}|${viewID}`);
+  useEffect(() => {
+    const key = `${workspaceID ?? ''}|${viewID}`;
+    if (key === lastNavViewKey.current) return;
+    lastNavViewKey.current = key;
+    setNavLimit(Math.max(INBOX_INITIAL_PAGE, readSavedInboxState(workspaceID, viewID).pageLimit));
+  }, [workspaceID, viewID]);
   const [inboxList] = useQuery(
     queries.ticketsForView({
       viewID: navInboxQuery.viewID,
@@ -189,21 +222,26 @@ function SingleTicketTimeline({ ticketID }: { ticketID: string }) {
         search?: string;
       },
       sort: navInboxQuery.sort,
-      limit: navInboxQuery.limit,
+      limit: navLimit,
     }),
     CACHE_FOREVER,
   );
+  // Gate customer-side queries on a real customerID. Before the anchor
+  // ticket resolves we don't know which customer to subscribe to; firing
+  // with `customerID === ''` opens wasted Zero subscriptions on the cold-
+  // load critical path and can race the ticket query.
+  const hasCustomerID = customerID !== '';
   const [customerTicketRows] = useQuery(
     queries.customerTicketSummaries({ customerID, limit: CUSTOMER_TICKET_LIMIT }),
-    CACHE_TICKET_DETAIL,
+    { ...CACHE_TICKET_DETAIL, enabled: hasCustomerID },
   );
   const [customerNoteRows] = useQuery(
     queries.customerNotes({ customerID, limit: CUSTOMER_NOTE_LIMIT }),
-    CACHE_TICKET_DETAIL,
+    { ...CACHE_TICKET_DETAIL, enabled: hasCustomerID },
   );
   const [customerEventRows] = useQuery(
     queries.customerEvents({ customerID, limit: CUSTOMER_EVENT_LIMIT }),
-    CACHE_TICKET_DETAIL,
+    { ...CACHE_TICKET_DETAIL, enabled: hasCustomerID },
   );
   const [outboundRows] = useQuery(queries.outboundMessagesByTicket({ id: ticketID }), CACHE_NAV);
   const [sendableEmailAddresses] = useQuery(queries.sendableEmailAddresses(), CACHE_FOREVER);
@@ -249,6 +287,26 @@ function SingleTicketTimeline({ ticketID }: { ticketID: string }) {
   );
 
   const inboxListLen = (inboxList as ReadonlyArray<TimelineTicket>).length;
+  // Grow the nav window when the user nears its end, or when the
+  // current ticket isn't yet in the window at all. Two trigger cases:
+  //   1. anchor is within LOAD_MORE_THRESHOLD of the last loaded row →
+  //      pre-fetch the next page so j keeps working without a hitch.
+  //   2. anchor is missing (-1) entirely → grow until we find it or
+  //      hit MAX_INBOX_LIMIT. Covers deep-linked tickets and the case
+  //      where the user scrolled past the persisted limit before
+  //      clicking.
+  // Only grow when the list is actually at its current cap; if the
+  // returned row count is shorter than the limit, the view simply has
+  // fewer matching tickets and growing won't help.
+  useEffect(() => {
+    if (navLimit >= MAX_INBOX_LIMIT) return;
+    if (inboxListLen < navLimit) return;
+    const nearEnd = anchorIndex >= 0 && inboxListLen - anchorIndex - 1 <= LOAD_MORE_THRESHOLD;
+    const anchorMissing = anchorIndex < 0;
+    if (!nearEnd && !anchorMissing) return;
+    setNavLimit((curr) => Math.min(MAX_INBOX_LIMIT, curr + INBOX_PAGE_GROWTH));
+  }, [anchorIndex, inboxListLen, navLimit]);
+
   const canGoNext = anchorIndex >= 0 && anchorIndex < inboxListLen - 1;
   const canGoPrev = anchorIndex > 0;
   const goNext = useCallback(() => {
@@ -279,6 +337,26 @@ function SingleTicketTimeline({ ticketID }: { ticketID: string }) {
   }, [anchorIndex, inboxList, navigate, ticketID]);
   useShortcut(['j'], goNext);
   useShortcut(['k'], goPrev);
+
+  // Warm the Composer chunk on idle once the route is mounted. The
+  // Suspense fallback below covers the slow-network case, but on a
+  // typical session the chunk is already cached by the time the user
+  // moves to the reply area.
+  useEffect(() => {
+    if (importedFromSource) return;
+    const win = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    if (typeof win.requestIdleCallback === 'function') {
+      const handle = win.requestIdleCallback(() => void import('@/components/composer'), {
+        timeout: 2000,
+      });
+      return () => win.cancelIdleCallback?.(handle);
+    }
+    const t = window.setTimeout(() => void import('@/components/composer'), 250);
+    return () => clearTimeout(t);
+  }, [importedFromSource]);
 
   useEffect(() => {
     if (!ticket) return;
@@ -376,7 +454,11 @@ function SingleTicketTimeline({ ticketID }: { ticketID: string }) {
     .slice(0, 3);
 
   return (
-    <div className="flex h-full flex-1 flex-col bg-bg-canvas">
+    // `min-w-0` lets this column shrink inside its flex parent so the
+    // header's `truncate` actually clips long titles instead of
+    // pushing the whole layout off-screen. Without it, the h1 reports
+    // its full intrinsic width up the flex chain.
+    <div className="flex h-full min-w-0 flex-1 flex-col bg-bg-canvas">
       <TimelineHeader
         ticket={ticket}
         members={members as ReadonlyArray<WorkspaceMemberRow>}
@@ -438,16 +520,18 @@ function SingleTicketTimeline({ ticketID }: { ticketID: string }) {
                 importedFromSource ? (
                   <ReadOnlyMirrorBanner source={importedFromSource} />
                 ) : (
-                  <Composer
-                    ticketID={ticketID}
-                    userID={currentUserID}
-                    workspaceID={workspaceID}
-                    emailAddresses={[
-                      ...(sendableEmailAddresses as ReadonlyArray<TimelineEmailAddress>),
-                    ]}
-                    preferredEmailAddressID={preferredEmailAddressID}
-                    onSend={onSend}
-                  />
+                  <Suspense fallback={<ComposerPlaceholder />}>
+                    <Composer
+                      ticketID={ticketID}
+                      userID={currentUserID}
+                      workspaceID={workspaceID}
+                      emailAddresses={[
+                        ...(sendableEmailAddresses as ReadonlyArray<TimelineEmailAddress>),
+                      ]}
+                      preferredEmailAddressID={preferredEmailAddressID}
+                      onSend={onSend}
+                    />
+                  </Suspense>
                 )
               }
             />
@@ -574,7 +658,7 @@ function CustomerTimeline({ customerID }: { customerID: string }) {
   }
 
   return (
-    <div className="flex h-full flex-1 flex-col bg-bg-canvas">
+    <div className="flex h-full min-w-0 flex-1 flex-col bg-bg-canvas">
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-line-default bg-bg-panel px-4 py-3 lg:px-6">
         <div className="min-w-0">
           <p className="text-[11px] text-fg-tertiary">Customer</p>
@@ -819,6 +903,20 @@ function ExpandedCustomerTimelineConversation({
  * agent so they don't compose a "reply" that quietly never reaches the
  * customer. Internal notes still work via the separate `noteComposer` slot.
  */
+// Placeholder shown while the lazy Composer chunk is loading. Sized to
+// roughly match the real composer's footprint so the layout doesn't
+// jump when it hydrates. On a warm cache this never renders — React
+// resolves the lazy module synchronously when already in the bundle
+// graph.
+function ComposerPlaceholder() {
+  return (
+    <div
+      aria-hidden="true"
+      className="h-[120px] rounded-md border border-line-default bg-bg-elevated/40"
+    />
+  );
+}
+
 function ReadOnlyMirrorBanner({ source }: { source: string }) {
   const label = source === 'atlas' ? 'Atlas' : source;
   return (
@@ -1085,7 +1183,10 @@ function TimelineHeader({
         </DropdownMenu>
       </div>
 
-      <h1 className="truncate text-[18px] font-semibold text-fg-primary" title={ticket.title}>
+      <h1
+        className="block min-w-0 truncate text-[18px] font-semibold text-fg-primary"
+        title={ticket.title}
+      >
         {ticket.title}
       </h1>
 

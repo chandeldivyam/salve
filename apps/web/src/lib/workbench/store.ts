@@ -48,7 +48,12 @@ interface WorkbenchStore extends WorkbenchPersistedState {
     href: string,
     source?: TabOpenSource,
   ) => WorkbenchTab;
-  forkTab: (workspaceID: string | null, href: string, source?: TabOpenSource) => WorkbenchTab;
+  forkTab: (
+    workspaceID: string | null,
+    href: string,
+    source?: TabOpenSource,
+    opts?: { activate?: boolean },
+  ) => WorkbenchTab;
   activateTab: (workspaceID: string | null, tabID: string) => void;
   closeTab: (workspaceID: string | null, tabID: string) => void;
   closeLeft: (workspaceID: string | null, tabID: string) => void;
@@ -282,7 +287,8 @@ export const useWorkbenchStore = create<WorkbenchStore>((set, get) => ({
     return opened;
   },
 
-  forkTab: (workspaceID, href) => {
+  forkTab: (workspaceID, href, _source, opts) => {
+    const activate = opts?.activate !== false;
     const key = workspaceKey(workspaceID);
     const match = resolveWorkbenchHref(href);
     let opened = tabFromMatch(key, match, true);
@@ -290,13 +296,19 @@ export const useWorkbenchStore = create<WorkbenchStore>((set, get) => ({
       const current = ensureWorkspaceState(state, key);
       const tabs = current.tabsByWorkspace[key] ?? [];
       opened = { ...opened, tabKey: `${match.tabKey}:fork:${opened.id}` };
+      // Background fork (cmd+click / middle-click): insert the tab but
+      // don't change which tab is active — the user stays on whatever
+      // they were viewing. Matches Chrome's open-in-background behavior.
+      const nextActive = activate
+        ? { ...current.activeTabIdByWorkspace, [key]: opened.id }
+        : current.activeTabIdByWorkspace;
       return {
         ...current,
         tabsByWorkspace: {
           ...current.tabsByWorkspace,
           [key]: capTabs(sortTabs([...tabs, opened])),
         },
-        activeTabIdByWorkspace: { ...current.activeTabIdByWorkspace, [key]: opened.id },
+        activeTabIdByWorkspace: nextActive,
       };
     });
     persistCurrent();
