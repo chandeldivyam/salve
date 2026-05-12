@@ -23,6 +23,33 @@ export const PROVIDER_EVENT = {
   WEBHOOK_RECEIVED: 'provider/webhook.received',
 } as const;
 
+export const MIGRATION_EVENT = {
+  ATLAS_START: 'migration/atlas.start',
+  ATLAS_CONVERSATION: 'migration/atlas.conversation',
+  ATLAS_WEBHOOK_RECEIVED: 'migration/atlas.webhook.received',
+} as const;
+
+// IMPORTANT: Atlas credentials (apiKey, baseUrl) are NOT in these event
+// payloads. Inngest persists event history with full payloads; secrets in
+// payloads = secrets in their dashboard forever. Functions re-read them from
+// migration_run inside step.run instead. See atlas-start.ts and
+// atlas-conversation.ts.
+export const migrationAtlasStartDataSchema = z.object({
+  runId: z.string().min(1),
+  workspaceID: z.string().min(1),
+});
+
+export const migrationAtlasConversationDataSchema = z.object({
+  runId: z.string().min(1),
+  workspaceID: z.string().min(1),
+  conversationId: z.string().min(1),
+});
+
+export const migrationAtlasWebhookReceivedDataSchema = z.object({
+  inboxId: z.string().min(1),
+  workspaceID: z.string().min(1),
+});
+
 export const deliveryMessageRequestedDataSchema = z.object({
   workspaceID: z.string().min(1),
   channelID: z.string().min(1),
@@ -119,4 +146,9 @@ export const inngestEventSchemas = {
   }),
   [INBOUND_EVENT.MESSAGE_RECEIVED]: z.object({ data: inboundMessageReceivedDataSchema }),
   [PROVIDER_EVENT.WEBHOOK_RECEIVED]: z.object({ data: providerWebhookReceivedDataSchema }),
+  [MIGRATION_EVENT.ATLAS_START]: z.object({ data: migrationAtlasStartDataSchema }),
+  [MIGRATION_EVENT.ATLAS_CONVERSATION]: z.object({ data: migrationAtlasConversationDataSchema }),
+  [MIGRATION_EVENT.ATLAS_WEBHOOK_RECEIVED]: z.object({
+    data: migrationAtlasWebhookReceivedDataSchema,
+  }),
 } as const;

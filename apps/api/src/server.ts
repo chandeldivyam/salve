@@ -21,6 +21,9 @@ import {
   bounceRateWatchdog,
   deliverMessage,
   deliverMessageRecovery,
+  migrationAtlasConversation,
+  migrationAtlasStart,
+  migrationAtlasWebhookReceived,
   processProviderWebhook,
   provisionDomain,
   pruneIdempotencyRecords,
@@ -29,6 +32,13 @@ import {
 } from './inngest/functions/index.js';
 import { buildJwtCookieHeader, issueSalveJwt, readJwtCookie, verifySalveJwt } from './jwt.js';
 import { authMiddleware, authOf, requireUser, requireWorkspace } from './middleware.js';
+import { handleGetAtlasMigration, handleStartAtlasMigration } from './migrations/routes.js';
+import { handleAtlasWebhookReceive } from './migrations/webhook-receive.js';
+import {
+  handleSetAtlasRunApiKey,
+  handleSubscribeAtlasWebhook,
+  handleUnsubscribeAtlasWebhook,
+} from './migrations/webhook-subscriptions.js';
 import {
   handleCreatePat,
   handleCreateServiceAccount,
@@ -167,6 +177,22 @@ app.post('/api/auth/switch-workspace', requireUser, async (c) => {
 app.post('/api/files/presign', requireWorkspace, handlePresign);
 app.post('/api/files/get', requireWorkspace, handleGetSigned);
 app.get('/api/search', requireWorkspace, handleSearch);
+
+// Migration subsystem (Phase 0 — v0 Atlas slice). See docs/atlas-migration-rfc.md.
+app.post('/api/migrations/atlas/start', requireWorkspace, handleStartAtlasMigration);
+// Phase 4a webhook subsystem. The receive endpoint is INTENTIONALLY public —
+// auth happens via per-subscription HMAC signature verification inside the
+// handler. Must be registered before the /:runId catch-all so that path
+// param isn't matched first.
+app.post('/api/migrations/atlas/webhook/:subId', handleAtlasWebhookReceive);
+app.post('/api/migrations/atlas/webhooks/subscribe', requireWorkspace, handleSubscribeAtlasWebhook);
+app.post(
+  '/api/migrations/atlas/webhooks/unsubscribe',
+  requireWorkspace,
+  handleUnsubscribeAtlasWebhook,
+);
+app.post('/api/migrations/atlas/api-key', requireWorkspace, handleSetAtlasRunApiKey);
+app.get('/api/migrations/:runId', requireWorkspace, handleGetAtlasMigration);
 app.post('/api/customers/:customerID/events', requireWorkspace, handleCustomerEventIngest);
 
 // Phase 3a settings: email domains (BYO sending domain).
@@ -255,6 +281,9 @@ app.use(
       deliverMessageRecovery,
       bounceRateWatchdog,
       pruneIdempotencyRecords,
+      migrationAtlasStart,
+      migrationAtlasConversation,
+      migrationAtlasWebhookReceived,
     ],
     serveOrigin: process.env.INNGEST_SERVE_ORIGIN ?? 'http://host.docker.internal:3001',
   }) as MiddlewareHandler,

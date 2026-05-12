@@ -555,6 +555,69 @@ const customerChannelIdentity = table('customerChannelIdentity')
   })
   .primaryKey('id');
 
+// ---------- Migrations
+//
+// UI-safe mirrors only. The Drizzle source has secrets (`migration_run.params`
+// — apiKey; `migration_webhook_subscription.signing_secret`) that MUST NOT
+// reach the browser, so we don't declare them here. Zero replicates only
+// the columns named below.
+
+export type MigrationRunStatus =
+  | 'pending'
+  | 'discovering'
+  | 'backfilling'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
+
+const migrationRun = table('migrationRun')
+  .from('migration_run')
+  .columns({
+    id: string(),
+    workspaceID: string().from('workspace_id'),
+    source: string(),
+    status: enumeration<MigrationRunStatus>(),
+    counters: json<Record<string, number>>(),
+    hasApiKey: boolean().from('has_api_key'),
+    error: string().optional(),
+    startedAt: number().from('started_at'),
+    completedAt: number().from('completed_at').optional(),
+    updatedAt: number().from('updated_at'),
+  })
+  .primaryKey('id');
+
+const migrationWebhookSubscription = table('migrationWebhookSubscription')
+  .from('migration_webhook_subscription')
+  .columns({
+    id: string(),
+    workspaceID: string().from('workspace_id'),
+    runID: string().from('run_id').optional(),
+    source: string(),
+    event: string(),
+    remoteID: string().from('remote_id'),
+    endpoint: string(),
+    status: string(),
+    createdAt: number().from('created_at'),
+    updatedAt: number().from('updated_at'),
+  })
+  .primaryKey('id');
+
+// External-id map projection. Only the columns the UI needs to render the
+// "imported / read-only mirror" banner on a ticket; the importer's full
+// per-source payload metadata stays server-side. Replicated so the timeline
+// can derive `isImportedTicket` without a server round-trip.
+const migrationExternalIdMap = table('migrationExternalIdMap')
+  .from('migration_external_id_map')
+  .columns({
+    workspaceID: string().from('workspace_id'),
+    source: string(),
+    entityType: string().from('entity_type'),
+    sourceID: string().from('source_id'),
+    targetID: string().from('target_id'),
+  })
+  // Composite PK matches the table's uniqueIndex (`migration_eim_pk`).
+  .primaryKey('workspaceID', 'source', 'entityType', 'sourceID');
+
 // ---------- Relationships
 
 const userRelationships = relationships(user, ({ many }) => ({
@@ -1212,6 +1275,25 @@ const invitationRelationships = relationships(invitation, ({ one }) => ({
   }),
 }));
 
+const migrationRunRelationships = relationships(migrationRun, ({ many }) => ({
+  webhookSubscriptions: many({
+    sourceField: ['id'],
+    destField: ['runID'],
+    destSchema: migrationWebhookSubscription,
+  }),
+}));
+
+const migrationWebhookSubscriptionRelationships = relationships(
+  migrationWebhookSubscription,
+  ({ one }) => ({
+    run: one({
+      sourceField: ['runID'],
+      destField: ['id'],
+      destSchema: migrationRun,
+    }),
+  }),
+);
+
 const apiKeyRelationships = relationships(apiKey, ({ one }) => ({
   // For service_account keys, principalId is the synthetic member's id; the
   // member's user mirror carries the human-readable name. For PAT keys,
@@ -1260,6 +1342,9 @@ export const schema = createSchema({
     view,
     viewMember,
     builtinViewMember,
+    migrationRun,
+    migrationWebhookSubscription,
+    migrationExternalIdMap,
   ],
   relationships: [
     userRelationships,
@@ -1293,6 +1378,8 @@ export const schema = createSchema({
     viewRelationships,
     viewMemberRelationships,
     builtinViewMemberRelationships,
+    migrationRunRelationships,
+    migrationWebhookSubscriptionRelationships,
   ],
   enableLegacyMutators: false,
   enableLegacyQueries: false,
@@ -1332,6 +1419,9 @@ export type CustomerChannelIdentity = Row<typeof schema.tables.customerChannelId
 export type View = Row<typeof schema.tables.view>;
 export type ViewMember = Row<typeof schema.tables.viewMember>;
 export type BuiltinViewMember = Row<typeof schema.tables.builtinViewMember>;
+export type MigrationRun = Row<typeof schema.tables.migrationRun>;
+export type MigrationWebhookSubscription = Row<typeof schema.tables.migrationWebhookSubscription>;
+export type MigrationExternalIdMap = Row<typeof schema.tables.migrationExternalIdMap>;
 
 export type AuthData = {
   sub: string;

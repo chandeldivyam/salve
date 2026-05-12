@@ -54,6 +54,21 @@ export function createServerMutators(postCommitTasks: PostCommitTask[] = []) {
         if (!authData?.workspaceID) return;
         if (args.isInternal) return;
 
+        // Read-only mirror gate (RFC §17): if this ticket was imported from a
+        // migration source (Atlas today), skip outbound delivery. The agent's
+        // message still lands in Salve so internal coordination works, but
+        // we never email the customer from Salve while the originating system
+        // is the system of record. This is a server-only enforcement; the UI
+        // additionally hides the public-reply affordance to avoid confusion.
+        const importedRows = await getWrappedTx(tx)<{ source: string }[]>`
+          SELECT source FROM migration_external_id_map
+          WHERE workspace_id = ${authData.workspaceID}
+            AND entity_type = 'ticket'
+            AND target_id = ${args.ticketID}
+          LIMIT 1
+        `;
+        if (importedRows.length > 0) return;
+
         // Re-read the ticket to find its customer (the client mutator already
         // verified workspace ownership; a second read here is fine — same
         // transaction).

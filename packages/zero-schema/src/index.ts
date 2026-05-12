@@ -10,7 +10,8 @@ export const ZERO_SCHEMA_NAME = 'salve' as const;
 // Phase 40: view, view_member, builtin_view_member tables and relationships.
 // Phase A: apikey table (with principal_kind/principal_id), member.createdAt.
 // Phase E0: sending_domain.provision_status.
-export const ZERO_SCHEMA_VERSION = 11 as const;
+// Phase 4a: migration_run, migration_webhook_subscription (UI-safe mirrors).
+export const ZERO_SCHEMA_VERSION = 12 as const;
 
 export {
   ALL_TICKET_MESSAGE_LIMIT,
@@ -63,6 +64,8 @@ export type ProviderEventName = (typeof PROVIDER_EVENT)[keyof typeof PROVIDER_EV
 
 export {
   type ApiTokenRow,
+  type AtlasMigrationRunRow,
+  type AtlasWebhookSubscriptionRow,
   applyTicketRead,
   applyWorkspaceScope,
   type CustomFieldDefinitionRow,

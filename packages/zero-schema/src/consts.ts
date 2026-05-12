@@ -77,3 +77,6 @@ export const DEFAULT_RELATED_TICKET_LIMIT = 5 as const;
 export const DEFAULT_CUSTOMER_LIST_LIMIT = PAGE;
 /** Server default for `customerTicketSummaries` when args.limit is omitted. */
 export const DEFAULT_CUSTOMER_TICKET_SUMMARY_LIMIT = 10 as const;
+
+/** Display ceiling for atlas migration runs in the settings index. */
+export const MIGRATION_RUN_LIMIT = 25 as const;

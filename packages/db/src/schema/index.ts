@@ -9,6 +9,7 @@ export * from './auth.js';
 export * from './custom-field.js';
 export * from './domain.js';
 export * from './email.js';
+export * from './migration.js';
 export * from './tag.js';
 export * from './view.js';
 export * from './workspace.js';

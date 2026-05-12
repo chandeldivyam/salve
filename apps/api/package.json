@@ -20,6 +20,7 @@
     "@salve/action-executor": "workspace:*",
     "@salve/core": "workspace:*",
     "@salve/db": "workspace:*",
+    "@salve/migration-atlas": "workspace:*",
     "@salve/mutators": "workspace:*",
     "@salve/zero-schema": "workspace:*",
     "@rocicorp/zero": "1.3.0",
