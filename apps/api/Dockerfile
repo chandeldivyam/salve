@@ -28,6 +28,7 @@ COPY packages/action-executor/package.json packages/action-executor/
 COPY packages/api-client/package.json packages/api-client/
 COPY packages/core/package.json packages/core/
 COPY packages/db/package.json packages/db/
+COPY packages/migration-atlas/package.json packages/migration-atlas/
 COPY packages/mutators/package.json packages/mutators/
 COPY packages/ui/package.json packages/ui/
 COPY packages/zero-schema/package.json packages/zero-schema/
