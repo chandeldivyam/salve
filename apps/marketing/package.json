@@ -15,8 +15,8 @@
     "@paper-design/shaders-react": "0.0.76",
     "@salve/ui": "workspace:*",
     "next": "15.5.18",
-    "react": "19.2.6",
-    "react-dom": "19.2.6"
+    "react": "19.2.5",
+    "react-dom": "19.2.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.3.0",
