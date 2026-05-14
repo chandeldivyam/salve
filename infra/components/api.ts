@@ -134,10 +134,13 @@ export const api = new sst.aws.Service('Api', {
     INNGEST_EVENT_KEY: inngestEventKey.value,
     INNGEST_SIGNING_KEY: inngestSigningKey.value,
     INNGEST_SERVE_ORIGIN: 'https://api.usesalve.com',
-    // Email — Mailgun is the active provider while AWS SES production-access
-    // is pending. The SES code paths are untouched: flip back to 'ses' here
-    // (no other code change) once SES is approved.
-    MAILER_BACKEND: 'mailgun',
+    // Email — SES is the active provider. Production access was granted
+    // (50k/day, 14/sec) on 2026-05; ProductionAccessEnabled=true verified
+    // via `aws sesv2 get-account`. Mailgun code paths + secrets are kept
+    // wired as a one-flag fallback in case SES reputation/quota issues
+    // ever force a quick switch — flip this back to 'mailgun' here, no
+    // other code change needed.
+    MAILER_BACKEND: 'ses',
     REPLY_DOMAIN: 'reply.usesalve.com',
     INBOUND_EMAIL_DOMAIN: 'in.usesalve.com',
     MAIL_FROM_SUBDOMAIN: 'mail',
