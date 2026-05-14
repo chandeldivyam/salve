@@ -14,6 +14,8 @@
       "!**/build",
       "!**/.turbo",
       "!**/.vite",
+      "!**/.next",
+      "!**/next-env.d.ts",
       "!**/coverage",
       "!**/.tsbuildinfo",
       "!**/routeTree.gen.ts",
