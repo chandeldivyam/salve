@@ -1,0 +1,1362 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Salve hero — inbox (beats 1–3)</title>
+    <style>
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; }
+      body {
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+        background: oklch(0.985 0.002 320);
+        color: oklch(0.2 0.01 320);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .stage {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        background: oklch(0.985 0.002 320);
+        overflow: hidden;
+      }
+
+      .camera {
+        position: absolute;
+        inset: 0;
+        transform-origin: 50% 50%;
+        will-change: transform;
+      }
+
+      /* ───── browser chrome ───── */
+
+      .chrome {
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 56px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 0 24px;
+        background: oklch(0.97 0.003 320);
+        border-bottom: 1px solid oklch(0.95 0.004 320);
+      }
+      .chrome .dot { width: 12px; height: 12px; border-radius: 50%; }
+      .chrome .dot.red    { background: #ff5f57; }
+      .chrome .dot.yellow { background: #febc2e; }
+      .chrome .dot.green  { background: #28c840; }
+      .chrome .urlbar {
+        margin-left: 28px;
+        height: 30px;
+        min-width: 360px;
+        padding: 0 14px;
+        display: flex;
+        align-items: center;
+        background: oklch(0.985 0.002 320);
+        border: 1px solid oklch(0.9 0.006 320);
+        border-radius: 7px;
+        color: oklch(0.5 0.012 320);
+        font-size: 13px;
+      }
+
+      /* ───── app shell ───── */
+
+      .app {
+        position: absolute;
+        top: 56px; left: 0; right: 0; bottom: 0;
+        display: flex;
+      }
+
+      /* ───── left rail (matches WorkbenchLeftRail) ───── */
+
+      .rail {
+        width: 320px;
+        height: 100%;
+        background: oklch(0.97 0.003 320);
+        border-right: 1px solid oklch(0.9 0.006 320);
+        display: flex;
+        flex-direction: column;
+      }
+      .rail-top {
+        height: 56px;
+        padding: 0 16px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .salve-glyph { width: 22px; height: 22px; color: oklch(0.54 0.115 270); }
+      .brand-name {
+        font-size: 17px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        color: oklch(0.2 0.01 320);
+      }
+
+      .ws-row {
+        padding: 4px 12px 8px;
+      }
+      .ws {
+        height: 38px;
+        padding: 0 10px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .ws-mark {
+        width: 26px; height: 26px;
+        border-radius: 6px;
+        background: oklch(0.54 0.115 270);
+        color: #fff;
+        font-size: 11.5px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        letter-spacing: 0.02em;
+      }
+      .ws-name {
+        font-size: 14.5px;
+        color: oklch(0.2 0.01 320);
+        font-weight: 500;
+      }
+      .ws-caret {
+        margin-left: auto;
+        color: oklch(0.62 0.012 320);
+        font-size: 13px;
+        line-height: 1;
+      }
+
+      .rail-nav {
+        padding: 4px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .rail-item {
+        height: 36px;
+        padding: 0 10px;
+        border-radius: 7px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 14.5px;
+        color: oklch(0.32 0.012 320);
+        position: relative;
+      }
+      .rail-item.active {
+        background: oklch(0.945 0.004 320);
+        color: oklch(0.2 0.01 320);
+        font-weight: 500;
+      }
+      .rail-icon {
+        width: 18px; height: 18px;
+        flex-shrink: 0;
+        color: currentColor;
+      }
+      .rail-pip {
+        position: absolute;
+        right: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 7px; height: 7px;
+        border-radius: 50%;
+        background: oklch(0.54 0.115 270);
+      }
+
+      .setup-card {
+        margin: 16px 12px 0;
+        padding: 12px 14px 14px;
+        border-radius: 9px;
+        background: oklch(0.945 0.004 320);
+        position: relative;
+        overflow: hidden;
+      }
+      .setup-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13.5px;
+        font-weight: 500;
+        color: oklch(0.2 0.01 320);
+      }
+      .setup-row .check-icon { width: 15px; height: 15px; color: oklch(0.32 0.012 320); }
+      .setup-row .badge {
+        margin-left: auto;
+        font-size: 12px;
+        color: oklch(0.5 0.012 320);
+        font-variant-numeric: tabular-nums;
+      }
+      .setup-sub {
+        margin-top: 4px;
+        font-size: 12px;
+        color: oklch(0.5 0.012 320);
+      }
+      .setup-bar {
+        position: absolute;
+        left: 0; right: 0; bottom: 0;
+        height: 2px;
+        background: oklch(0.92 0.006 320);
+      }
+      .setup-bar > span {
+        display: block;
+        height: 100%;
+        width: 14.28%; /* 1/7 */
+        background: oklch(0.54 0.115 270);
+      }
+
+      .rail-bottom {
+        margin-top: auto;
+        padding: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .theme-switcher {
+        height: 28px;
+        padding: 0 4px;
+        border-radius: 7px;
+        background: transparent;
+        display: flex;
+        align-items: center;
+        gap: 2px;
+      }
+      .theme-icon {
+        width: 22px; height: 22px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 5px;
+        color: oklch(0.5 0.012 320);
+      }
+      .theme-icon.active { background: oklch(0.985 0.002 320); color: oklch(0.2 0.01 320); }
+      .me {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 4px 6px;
+      }
+      .avatar-sm {
+        width: 22px; height: 22px;
+        border-radius: 50%;
+        font-size: 10.5px;
+        font-weight: 600;
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+      .avatar-sm.amber { background: oklch(0.78 0.14 80); color: oklch(0.2 0.01 320); }
+      .me-email {
+        font-size: 12.5px;
+        color: oklch(0.5 0.012 320);
+        max-width: 140px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      /* ───── inbox column (fills rest) ───── */
+
+      .inbox-col {
+        flex: 1;
+        height: 100%;
+        background: oklch(0.985 0.002 320);
+        display: flex;
+        flex-direction: column;
+      }
+      .inbox-header {
+        padding: 12px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        border-bottom: 1px solid oklch(0.95 0.004 320);
+      }
+
+      .search {
+        height: 38px;
+        padding: 0 14px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: oklch(0.97 0.003 320);
+        border: 1px solid oklch(0.9 0.006 320);
+        border-radius: 8px;
+        font-size: 14px;
+        color: oklch(0.62 0.012 320);
+      }
+      .search-icon { width: 15px; height: 15px; color: oklch(0.5 0.012 320); }
+
+      .view-strip {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .view-chip {
+        height: 30px;
+        padding: 0 12px;
+        border-radius: 7px;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 13px;
+        font-weight: 500;
+        color: oklch(0.32 0.012 320);
+        cursor: default;
+      }
+      .view-chip.active {
+        background: oklch(0.945 0.004 320);
+        color: oklch(0.2 0.01 320);
+      }
+      .view-chip .icon { width: 14px; height: 14px; color: currentColor; opacity: 0.85; }
+      .view-chip .dot {
+        width: 8px; height: 8px;
+        border-radius: 50%;
+        background: oklch(0.54 0.115 270);
+      }
+      .view-chip .green-dot {
+        width: 8px; height: 8px;
+        border-radius: 50%;
+        background: oklch(0.62 0.14 150);
+      }
+      .view-strip .plus {
+        width: 28px; height: 28px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: oklch(0.5 0.012 320);
+        font-size: 16px;
+      }
+
+      .filter-bar {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding-left: 2px;
+        font-size: 12.5px;
+        color: oklch(0.5 0.012 320);
+      }
+      .filter-bar .status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 24px;
+        padding: 0 9px;
+        border-radius: 6px;
+        background: oklch(0.97 0.003 320);
+        border: 1px solid oklch(0.9 0.006 320);
+        color: oklch(0.32 0.012 320);
+        font-weight: 500;
+        font-size: 12px;
+      }
+      .filter-bar .add-filter {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        height: 24px;
+        padding: 0 8px;
+        color: oklch(0.5 0.012 320);
+        font-size: 12px;
+      }
+
+      /* ───── rows ───── */
+
+      .rows {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        flex: 1;
+      }
+      .row {
+        position: relative;
+        height: 52px;
+        padding: 0 24px 0 40px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        border-bottom: 1px solid oklch(0.95 0.004 320);
+        background: transparent;
+      }
+      .row.unread { background: oklch(0.97 0.014 270); }
+
+      .status-dot {
+        position: absolute;
+        left: 16px; top: 50%;
+        transform: translateY(-50%);
+        width: 9px; height: 9px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+      .status-dot.open { background: oklch(0.54 0.115 270); }
+      .status-dot.resolved { background: oklch(0.62 0.14 150); }
+      .status-dot.in_progress { background: oklch(0.78 0.14 80); }
+
+      .row-subject {
+        font-size: 15.5px;
+        font-weight: 500;
+        color: oklch(0.2 0.01 320);
+        letter-spacing: -0.005em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 60%;
+      }
+      .row-sep {
+        font-size: 13px;
+        color: oklch(0.62 0.012 320);
+      }
+      .row-customer {
+        font-size: 13.5px;
+        color: oklch(0.5 0.012 320);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 200px;
+      }
+
+      .row-tail {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+      .row-assignee-circle {
+        width: 22px; height: 22px;
+        border-radius: 50%;
+        font-size: 10.5px;
+        font-weight: 600;
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .row-assignee-circle.amber { background: oklch(0.78 0.14 80); color: oklch(0.2 0.01 320); }
+      .row-assignee-circle.gray  { background: oklch(0.7 0.01 320); }
+      .row-assignee-circle.purple { background: oklch(0.54 0.115 270); }
+
+      /* Agent assignee — distinct rounded-square shape per design.md */
+      .row-assignee-agent {
+        width: 22px; height: 22px;
+        border-radius: 6px;
+        background: oklch(0.54 0.115 270);
+        color: #fff;
+        font-size: 10.5px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        letter-spacing: 0.02em;
+      }
+
+      .row-time {
+        font-size: 12.5px;
+        color: oklch(0.5 0.012 320);
+        font-variant-numeric: tabular-nums;
+        min-width: 60px;
+        text-align: right;
+      }
+
+      /* ───── cursor ───── */
+      .cursor {
+        position: absolute;
+        top: 0; left: 0;
+        width: 22px; height: 26px;
+        z-index: 50;
+        pointer-events: none;
+        filter: drop-shadow(0 2px 3px rgba(0,0,0,0.18));
+      }
+      .click-pulse {
+        position: absolute;
+        width: 36px; height: 36px;
+        border-radius: 50%;
+        border: 2px solid oklch(0.54 0.115 270);
+        transform: translate(-50%, -50%) scale(0);
+        opacity: 0;
+        pointer-events: none;
+        z-index: 49;
+      }
+
+      /* ───── ticket detail view (overlays inbox column) ───── */
+      .ticket-view {
+        position: absolute;
+        top: 0; left: 320px; right: 0; bottom: 0;
+        background: oklch(0.985 0.002 320);
+        display: flex;
+        flex-direction: column;
+        opacity: 0;
+        z-index: 30;
+      }
+      .tv-header {
+        padding: 14px 28px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        border-bottom: 1px solid oklch(0.95 0.004 320);
+      }
+      .tv-back {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: oklch(0.5 0.012 320);
+        font-size: 13px;
+        font-weight: 500;
+      }
+      .tv-back svg { width: 14px; height: 14px; }
+      .tv-title {
+        font-size: 17px;
+        font-weight: 600;
+        color: oklch(0.2 0.01 320);
+        letter-spacing: -0.01em;
+      }
+      .tv-shortid {
+        font-size: 12.5px;
+        color: oklch(0.62 0.012 320);
+        font-variant-numeric: tabular-nums;
+      }
+      .tv-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        height: 22px;
+        padding: 0 9px;
+        border-radius: 999px;
+        font-size: 11.5px;
+        font-weight: 500;
+      }
+      .tv-badge.open {
+        background: oklch(0.97 0.014 270);
+        color: oklch(0.36 0.07 270);
+        border: 1px solid oklch(0.86 0.05 270);
+      }
+      .tv-badge.resolved {
+        background: oklch(0.95 0.04 150);
+        color: oklch(0.36 0.09 150);
+        border: 1px solid oklch(0.78 0.07 150);
+        position: absolute;
+        top: 0; left: 0;
+      }
+      .tv-badge-slot {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        height: 22px;
+      }
+      .tv-badge .pip {
+        width: 6px; height: 6px;
+        border-radius: 50%;
+        background: oklch(0.54 0.115 270);
+      }
+      .tv-badge.resolved .pip {
+        background: oklch(0.62 0.14 150);
+      }
+      .tv-customer {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .tv-customer-meta {
+        text-align: right;
+        display: flex;
+        flex-direction: column;
+      }
+      .tv-customer-name {
+        font-size: 13.5px;
+        font-weight: 500;
+        color: oklch(0.2 0.01 320);
+      }
+      .tv-customer-email {
+        font-size: 12px;
+        color: oklch(0.5 0.012 320);
+      }
+
+      .tv-body {
+        flex: 1;
+        padding: 28px 36px;
+        overflow: hidden;
+      }
+      .tv-day {
+        text-align: center;
+        font-size: 11.5px;
+        color: oklch(0.62 0.012 320);
+        margin-bottom: 18px;
+      }
+      .msg {
+        display: flex;
+        gap: 12px;
+        max-width: 760px;
+      }
+      .msg-avatar {
+        width: 32px; height: 32px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        color: #fff;
+        font-size: 12.5px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .msg-avatar.brand { background: oklch(0.54 0.115 270); }
+      .msg-bubble {
+        flex: 1;
+        background: oklch(0.97 0.003 320);
+        border: 1px solid oklch(0.9 0.006 320);
+        border-radius: 10px;
+        padding: 12px 16px;
+      }
+      .msg-bubble.agent {
+        background: oklch(0.97 0.014 270);
+        border-color: oklch(0.86 0.05 270);
+      }
+      .msg-avatar.agent {
+        border-radius: 8px;
+        background: oklch(0.54 0.115 270);
+        font-weight: 700;
+      }
+      .msg-bubble .signed {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        margin-top: 8px;
+        font-size: 11.5px;
+        color: oklch(0.36 0.07 270);
+        font-weight: 500;
+      }
+      .msg-bubble .signed .chip-tiny {
+        width: 14px; height: 14px;
+        border-radius: 4px;
+        background: oklch(0.54 0.115 270);
+        color: #fff;
+        font-size: 9px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .msg-head {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        margin-bottom: 6px;
+      }
+      .msg-name { font-size: 13.5px; font-weight: 600; color: oklch(0.2 0.01 320); }
+      .msg-meta { font-size: 12px; color: oklch(0.5 0.012 320); }
+      .msg-body {
+        font-size: 14px;
+        line-height: 1.55;
+        color: oklch(0.32 0.012 320);
+      }
+
+      .tv-composer {
+        margin: 0 36px 28px;
+        background: #ffffff;
+        border: 1px solid oklch(0.9 0.006 320);
+        border-radius: 10px;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 8px 24px -16px rgba(0,0,0,0.12);
+        padding: 14px 16px 12px;
+      }
+      .tv-composer-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+      .agent-pill-inline {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: 24px;
+        padding: 0 10px 0 4px;
+        border-radius: 999px;
+        background: oklch(0.97 0.014 270);
+        border: 1px solid oklch(0.86 0.05 270);
+        font-size: 12px;
+        font-weight: 500;
+        color: oklch(0.36 0.07 270);
+      }
+      .agent-pill-inline .chip-sm {
+        width: 18px; height: 18px;
+        border-radius: 5px;
+        background: oklch(0.54 0.115 270);
+        color: #fff;
+        font-size: 10px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .agent-pill-inline .dots {
+        display: inline-flex;
+        gap: 3px;
+        margin-left: 2px;
+      }
+      .agent-pill-inline .dots i {
+        width: 4px; height: 4px;
+        background: oklch(0.36 0.07 270);
+        border-radius: 50%;
+        opacity: 0.4;
+      }
+      .composer-lines { position: relative; }
+      .composer-line {
+        height: 14px;
+        background: oklch(0.97 0.003 320);
+        border-radius: 4px;
+      }
+      .composer-line.l1 { width: 84%; }
+      .composer-line.l2 { width: 62%; margin-top: 8px; }
+      .composer-draft {
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        font-size: 14px;
+        line-height: 1.55;
+        color: oklch(0.32 0.012 320);
+        opacity: 0;
+      }
+      .composer-footer {
+        margin-top: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .composer-actions {
+        display: flex;
+        gap: 6px;
+        color: oklch(0.5 0.012 320);
+        font-size: 12px;
+      }
+      .send-btn {
+        height: 30px;
+        padding: 0 14px;
+        border-radius: 7px;
+        background: oklch(0.54 0.115 270);
+        color: #fff;
+        font-size: 13px;
+        font-weight: 500;
+        display: inline-flex;
+        align-items: center;
+      }
+
+    </style>
+  </head>
+  <body>
+    <div
+      class="stage clip"
+      data-composition-id="hero-video"
+      data-start="0"
+      data-duration="7.5"
+      data-track-index="0"
+      data-width="1920"
+      data-height="1080"
+    >
+      <div class="camera" id="camera">
+        <!-- ───── browser chrome ───── -->
+        <div class="chrome">
+          <div class="dot red"></div>
+          <div class="dot yellow"></div>
+          <div class="dot green"></div>
+          <div class="urlbar">app.usesalve.com / inbox</div>
+        </div>
+
+        <div class="app">
+          <!-- ───── LEFT RAIL ───── -->
+          <aside class="rail">
+            <div class="rail-top">
+              <svg class="salve-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M20 4c0 8-5 14-13 14h-3c0-8 5-14 13-14h3z" fill="currentColor" opacity="0.18" />
+                <path d="M20 4c0 8-5 14-13 14h-3c0-8 5-14 13-14h3z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M4 18c4-2 8-6 11-12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+              </svg>
+              <span class="brand-name">Salve</span>
+            </div>
+
+            <div class="ws-row">
+              <div class="ws">
+                <span class="ws-mark">NS</span>
+                <span class="ws-name">Northwind Support</span>
+                <span class="ws-caret">⌄</span>
+              </div>
+            </div>
+
+            <nav class="rail-nav">
+              <div class="rail-item active">
+                <svg class="rail-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M22 12h-6l-2 3h-4l-2-3H2" /><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+                </svg>
+                <span>Inbox</span>
+                <span class="rail-pip" id="rail-pip"></span>
+              </div>
+              <div class="rail-item">
+                <svg class="rail-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="8.5" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                </svg>
+                <span>Customers</span>
+              </div>
+              <div class="rail-item">
+                <svg class="rail-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+                <span>Settings</span>
+              </div>
+              <div class="rail-item">
+                <svg class="rail-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                <span>New workspace</span>
+              </div>
+            </nav>
+
+            <div class="setup-card">
+              <div class="setup-row">
+                <svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                </svg>
+                <span>Setup</span>
+                <span class="badge">1/7</span>
+              </div>
+              <div class="setup-sub">Finish workspace setup</div>
+              <div class="setup-bar"><span></span></div>
+            </div>
+
+            <div class="rail-bottom">
+              <div class="theme-switcher">
+                <span class="theme-icon">☀</span>
+                <span class="theme-icon active">◐</span>
+                <span class="theme-icon">☾</span>
+              </div>
+              <div class="me">
+                <div class="avatar-sm amber">SP</div>
+                <span class="me-email">sam@northwind.com</span>
+              </div>
+            </div>
+          </aside>
+
+          <!-- ───── INBOX COLUMN ───── -->
+          <section class="inbox-col">
+            <header class="inbox-header">
+              <div class="search">
+                <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <span>Search title or customer…</span>
+              </div>
+
+              <div class="view-strip">
+                <div class="view-chip active">
+                  <span class="dot"></span>
+                  <span>All open</span>
+                </div>
+                <div class="view-chip">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="7" r="4" /><path d="M5.5 21a6.5 6.5 0 0 1 13 0" />
+                  </svg>
+                  <span>Unassigned</span>
+                </div>
+                <div class="view-chip">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="8" r="4" /><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1" />
+                  </svg>
+                  <span>Mine</span>
+                </div>
+                <div class="view-chip">
+                  <span class="green-dot"></span>
+                  <span>Resolved</span>
+                </div>
+                <div class="view-chip">
+                  <span>custom new</span>
+                </div>
+                <div class="plus">+</div>
+              </div>
+
+              <div class="filter-bar">
+                <span class="status-pill">
+                  <span style="color: oklch(0.5 0.012 320);">Status:</span>
+                  <span>3 selected</span>
+                </span>
+                <span class="add-filter">+ Filter</span>
+              </div>
+            </header>
+
+            <ul class="rows" data-layout-allow-overflow>
+              <!-- NEW ROW — Maya Chen (animated in at beat 2) -->
+              <li class="row unread" id="row-new" data-layout-allow-overflow>
+                <span class="status-dot open"></span>
+                <span class="row-subject">Refund — duplicate charge on #2847</span>
+                <span class="row-sep">·</span>
+                <span class="row-customer">Maya Chen</span>
+                <div class="row-tail">
+                  <div class="row-assignee-agent" id="assignee-aria" aria-label="Assigned to Aria (agent)">A</div>
+                  <span class="row-time">now</span>
+                </div>
+              </li>
+
+              <li class="row">
+                <span class="status-dot open"></span>
+                <span class="row-subject">Refund request — promotional credit not applied</span>
+                <span class="row-sep">·</span>
+                <span class="row-customer">Marcel Onovo</span>
+                <div class="row-tail">
+                  <div class="row-assignee-circle gray">MO</div>
+                  <span class="row-time">2h</span>
+                </div>
+              </li>
+
+              <li class="row">
+                <span class="status-dot open"></span>
+                <span class="row-subject">Question about Growth plan annual pricing</span>
+                <span class="row-sep">·</span>
+                <span class="row-customer">Mesut Şafak Doğan</span>
+                <div class="row-tail">
+                  <div class="row-assignee-circle gray">MD</div>
+                  <span class="row-time">3h</span>
+                </div>
+              </li>
+
+              <li class="row">
+                <span class="status-dot open"></span>
+                <span class="row-subject">Cancel my subscription</span>
+                <span class="row-sep">·</span>
+                <span class="row-customer">John Yendes</span>
+                <div class="row-tail">
+                  <div class="row-assignee-circle amber">JY</div>
+                  <span class="row-time">4h</span>
+                </div>
+              </li>
+
+              <li class="row">
+                <span class="status-dot resolved"></span>
+                <span class="row-subject">Credit balance not showing after plan upgrade</span>
+                <span class="row-sep">·</span>
+                <span class="row-customer">Magnus Ose</span>
+                <div class="row-tail">
+                  <div class="row-assignee-agent" aria-label="Resolved by Aria (agent)">A</div>
+                  <span class="row-time">5h</span>
+                </div>
+              </li>
+
+              <li class="row">
+                <span class="status-dot open"></span>
+                <span class="row-subject">GitHub integration won't authenticate</span>
+                <span class="row-sep">·</span>
+                <span class="row-customer">Chris Adams</span>
+                <div class="row-tail">
+                  <div class="row-assignee-circle gray">CA</div>
+                  <span class="row-time">6h</span>
+                </div>
+              </li>
+
+              <li class="row">
+                <span class="status-dot in_progress"></span>
+                <span class="row-subject">Re: Desktop app fails to connect on Windows</span>
+                <span class="row-sep">·</span>
+                <span class="row-customer">Ankur Kanojia</span>
+                <div class="row-tail">
+                  <div class="row-assignee-circle amber">AK</div>
+                  <span class="row-time">8h</span>
+                </div>
+              </li>
+
+              <li class="row">
+                <span class="status-dot open"></span>
+                <span class="row-subject">Intermittent 5xx errors on /v1/events</span>
+                <span class="row-sep">·</span>
+                <span class="row-customer">Sachin Rao</span>
+                <div class="row-tail">
+                  <div class="row-assignee-circle gray">SR</div>
+                  <span class="row-time">10h</span>
+                </div>
+              </li>
+
+              <li class="row">
+                <span class="status-dot open"></span>
+                <span class="row-subject">Following up on ticket #2812</span>
+                <span class="row-sep">·</span>
+                <span class="row-customer">Adam Tala</span>
+                <div class="row-tail">
+                  <div class="row-assignee-circle gray">AT</div>
+                  <span class="row-time">1d</span>
+                </div>
+              </li>
+
+              <li class="row">
+                <span class="status-dot open"></span>
+                <span class="row-subject">App stuck on loading screen after sign-in</span>
+                <span class="row-sep">·</span>
+                <span class="row-customer">Martin Joseph</span>
+                <div class="row-tail">
+                  <div class="row-assignee-circle gray">MJ</div>
+                  <span class="row-time">1d</span>
+                </div>
+              </li>
+
+              <li class="row">
+                <span class="status-dot resolved"></span>
+                <span class="row-subject">Request to delete account and export data</span>
+                <span class="row-sep">·</span>
+                <span class="row-customer">Danilo Masso</span>
+                <div class="row-tail">
+                  <div class="row-assignee-agent" aria-label="Resolved by Aria (agent)">A</div>
+                  <span class="row-time">1d</span>
+                </div>
+              </li>
+
+              <li class="row">
+                <span class="status-dot open"></span>
+                <span class="row-subject">Re: Transferring credits between workspaces</span>
+                <span class="row-sep">·</span>
+                <span class="row-customer">Girish Lakshman</span>
+                <div class="row-tail">
+                  <div class="row-assignee-circle gray">GL</div>
+                  <span class="row-time">2d</span>
+                </div>
+              </li>
+
+              <li class="row">
+                <span class="status-dot open"></span>
+                <span class="row-subject">Re: Webhook deliveries failing intermittently</span>
+                <span class="row-sep">·</span>
+                <span class="row-customer">Marvin Hayes</span>
+                <div class="row-tail">
+                  <div class="row-assignee-circle amber">MH</div>
+                  <span class="row-time">2d</span>
+                </div>
+              </li>
+
+              <li class="row">
+                <span class="status-dot open"></span>
+                <span class="row-subject">Trouble completing sign-up flow</span>
+                <span class="row-sep">·</span>
+                <span class="row-customer">Ibada Al-Adani</span>
+                <div class="row-tail">
+                  <div class="row-assignee-circle gray">IA</div>
+                  <span class="row-time">2d</span>
+                </div>
+              </li>
+
+              <li class="row">
+                <span class="status-dot resolved"></span>
+                <span class="row-subject">Re: Receipt for invoice #2652-4336</span>
+                <span class="row-sep">·</span>
+                <span class="row-customer">Shadi Youssef</span>
+                <div class="row-tail">
+                  <div class="row-assignee-agent" aria-label="Resolved by Aria (agent)">A</div>
+                  <span class="row-time">3d</span>
+                </div>
+              </li>
+            </ul>
+          </section>
+
+          <!-- ───── TICKET DETAIL VIEW (overlays inbox column) ───── -->
+          <section class="ticket-view" id="ticket-view">
+            <header class="tv-header">
+              <span class="tv-back">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" />
+                </svg>
+                Inbox
+              </span>
+              <span class="tv-shortid">#2847</span>
+              <span class="tv-title">Refund — duplicate charge on #2847</span>
+              <span class="tv-badge-slot">
+                <span class="tv-badge open" id="tv-badge-open"><span class="pip"></span>Open</span>
+                <span class="tv-badge resolved" id="tv-badge-resolved"><span class="pip"></span>Resolved</span>
+              </span>
+              <div class="tv-customer">
+                <div class="tv-customer-meta">
+                  <span class="tv-customer-name">Maya Chen</span>
+                  <span class="tv-customer-email">maya@gmail.com</span>
+                </div>
+                <div class="avatar-sm" style="background: oklch(0.7 0.01 320);">MC</div>
+              </div>
+            </header>
+
+            <div class="tv-body">
+              <div class="tv-day">Today · just now</div>
+              <div class="msg" id="tv-msg">
+                <div class="msg-avatar" style="background: oklch(0.7 0.01 320);">MC</div>
+                <div class="msg-bubble">
+                  <div class="msg-head">
+                    <span class="msg-name">Maya Chen</span>
+                    <span class="msg-meta">maya@gmail.com · just now</span>
+                  </div>
+                  <div class="msg-body">
+                    Hey — I just noticed I was charged twice today on order #2847. Same card, same amount, two separate line items on my statement. Could you take a look and refund the duplicate? Thanks.
+                  </div>
+                </div>
+              </div>
+
+              <!-- Aria reply, hidden until beat 5 -->
+              <div class="msg" id="tv-aria-msg" style="margin-top: 16px;">
+                <div class="msg-avatar agent">A</div>
+                <div class="msg-bubble agent">
+                  <div class="msg-head">
+                    <span class="msg-name">Aria</span>
+                    <span class="msg-meta">agent · just now</span>
+                  </div>
+                  <div class="msg-body">
+                    Hi Maya — I confirmed both charges from this morning. I've refunded the duplicate ($48.00) to the card ending 4242. It'll post within 3–5 business days. Sorry for the trouble.
+                  </div>
+                  <span class="signed"><span class="chip-tiny">A</span> Sent by Aria · refund.issue</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="tv-composer" id="tv-composer">
+              <div class="tv-composer-row">
+                <span class="agent-pill-inline">
+                  <span class="chip-sm">A</span>
+                  <span>Aria · drafting reply</span>
+                  <span class="dots"><i></i><i></i><i></i></span>
+                </span>
+              </div>
+              <div class="composer-lines" style="min-height: 36px;">
+                <div class="composer-line l1" id="cl1"></div>
+                <div class="composer-line l2" id="cl2"></div>
+                <div class="composer-draft" id="composer-draft">Hi Maya — I confirmed both charges. Refunding the duplicate ($48.00) to card •••• 4242. Posts in 3–5 business days.</div>
+              </div>
+              <div class="composer-footer">
+                <div class="composer-actions"><span>Reply</span><span>·</span><span>Internal note</span></div>
+                <div class="send-btn" id="send-btn">Send</div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ───── CURSOR ───── -->
+          <svg class="cursor" id="cursor" viewBox="0 0 22 26" aria-hidden="true">
+            <path d="M2 2 L2 22 L7.5 17.5 L11 25 L13.5 24 L10 16.5 L17 16.5 Z"
+                  fill="#fff" stroke="#1a1a1a" stroke-width="1.4" stroke-linejoin="round" />
+          </svg>
+          <div class="click-pulse" id="click-pulse"></div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      window.__timelines = window.__timelines || {};
+
+      const tl = gsap.timeline({ paused: true });
+
+      // Initial states for elements that appear later.
+      tl.set("#rail-pip", { opacity: 0, scale: 0 }, 0);
+      tl.set("#assignee-aria", { opacity: 0, scale: 0.5 }, 0);
+      // Cursor parked offscreen at right edge; ticket view + composer hidden.
+      tl.set("#cursor", { x: 2050, y: 700, opacity: 0 }, 0);
+      tl.set("#click-pulse", { x: 0, y: 0, opacity: 0, scale: 0 }, 0);
+      tl.set("#ticket-view", { opacity: 0 }, 0);
+      tl.set("#tv-msg", { opacity: 0, y: 14 }, 0);
+      tl.set("#tv-composer", { opacity: 0, y: 18 }, 0);
+      // Beat 5/6 initial states.
+      tl.set("#tv-aria-msg", { opacity: 0, y: 16 }, 0);
+      tl.set("#tv-badge-resolved", { opacity: 0 }, 0);
+
+      // ─────────── BEAT 1 — establish (0 → 1.2s) ───────────
+      // Calm fade-in of the whole frame.
+      tl.from(".stage", { opacity: 0, duration: 0.4, ease: "power2.out" }, 0);
+
+      // ─────────── BEAT 2 — interrupt (1.2 → 2.2s) ───────────
+      // Camera: 1.0 → 1.02 push over the beat.
+      tl.fromTo(
+        "#camera",
+        { scale: 1.0 },
+        { scale: 1.02, duration: 1.0, ease: "power2.inOut" },
+        1.2
+      );
+
+      // New row arrives at top. Animate height + padding from zero so the
+      // rest of the list slides down rather than appearing pre-spaced.
+      tl.from(
+        "#row-new",
+        {
+          height: 0,
+          paddingTop: 0,
+          paddingBottom: 0,
+          borderBottomWidth: 0,
+          y: -8,
+          opacity: 0,
+          duration: 0.45,
+          ease: "power3.out",
+        },
+        1.2
+      );
+
+      // Unread tint relaxes to neutral by ~2.0s.
+      tl.to(
+        "#row-new",
+        { backgroundColor: "rgba(0,0,0,0)", duration: 0.55, ease: "power1.out" },
+        1.7
+      );
+
+      // Inbox-nav unread pip flashes in.
+      tl.to(
+        "#rail-pip",
+        { opacity: 1, scale: 1, duration: 0.25, ease: "power3.out" },
+        1.3
+      );
+
+      // ─────────── BEAT 3 — Aria picks up (2.2 → 3.3s) ───────────
+      // Aria agent chip fades + scales into the assignee slot of the new row.
+      tl.to(
+        "#assignee-aria",
+        { opacity: 1, scale: 1, duration: 0.32, ease: "power3.out" },
+        2.3
+      );
+
+      // Pip relaxes (Aria is on it).
+      tl.to(
+        "#rail-pip",
+        { opacity: 0.6, duration: 0.25, ease: "power2.in" },
+        2.55
+      );
+
+      // ─────────── BEAT 4 — click → ticket view (3.3 → 5.2s) ───────────
+
+      // Camera releases back to 1.0 as we enter the new context.
+      tl.to(
+        "#camera",
+        { scale: 1.0, duration: 0.5, ease: "power2.inOut" },
+        3.3
+      );
+
+      // Cursor fades in offscreen-right, then glides to Maya Chen's row.
+      // Target: roughly x≈700 (over the row subject) y≈252 (~52px row, ~200px header).
+      tl.to(
+        "#cursor",
+        { opacity: 1, duration: 0.15, ease: "power2.out" },
+        3.35
+      );
+      tl.to(
+        "#cursor",
+        { x: 700, y: 160, duration: 0.55, ease: "power3.inOut" },
+        3.4
+      );
+
+      // Click pulse at the cursor tip.
+      tl.set("#click-pulse", { x: 706, y: 168 }, 3.95);
+      tl.to(
+        "#click-pulse",
+        { opacity: 0.9, scale: 1, duration: 0.18, ease: "power2.out" },
+        3.95
+      );
+      tl.to(
+        "#click-pulse",
+        { opacity: 0, scale: 1.4, duration: 0.28, ease: "power2.in" },
+        4.13
+      );
+
+      // Tiny cursor "press" — quick depress + return.
+      tl.to(
+        "#cursor",
+        { scale: 0.9, duration: 0.08, ease: "power2.out" },
+        3.95
+      );
+      tl.to(
+        "#cursor",
+        { scale: 1, duration: 0.12, ease: "power2.in" },
+        4.03
+      );
+
+      // Cursor lifts off as the ticket view takes over.
+      tl.to(
+        "#cursor",
+        { opacity: 0, y: 150, duration: 0.25, ease: "power2.in" },
+        4.2
+      );
+
+      // Inbox column fades to white; ticket view fades in over it.
+      tl.to(
+        ".inbox-col",
+        { opacity: 0, duration: 0.35, ease: "power2.in" },
+        4.15
+      );
+      tl.to(
+        "#ticket-view",
+        { opacity: 1, duration: 0.4, ease: "power3.out" },
+        4.2
+      );
+
+      // Customer message bubble settles in.
+      tl.to(
+        "#tv-msg",
+        { opacity: 1, y: 0, duration: 0.45, ease: "power3.out" },
+        4.45
+      );
+
+      // Composer with Aria drafting indicator slides up.
+      tl.to(
+        "#tv-composer",
+        { opacity: 1, y: 0, duration: 0.4, ease: "power3.out" },
+        4.7
+      );
+
+      // Drafting dots pulse one cycle to reinforce "agent is working".
+      tl.to(
+        "#tv-composer .dots i",
+        {
+          opacity: 1,
+          duration: 0.18,
+          ease: "power1.inOut",
+          stagger: 0.1,
+          yoyo: true,
+          repeat: 1,
+        },
+        4.9
+      );
+
+      // ─────────── BEAT 5 — Aria fills the draft + sends (5.2 → 6.6s) ───────────
+
+      // Placeholder lines fade out; Aria's draft text fades in.
+      tl.to("#cl1, #cl2", { opacity: 0, duration: 0.35, ease: "power2.in" }, 5.3);
+      tl.to("#composer-draft", { opacity: 1, duration: 0.4, ease: "power3.out" }, 5.45);
+
+      // Drafting dots stop pulsing — pill text quietly fades.
+      tl.to("#tv-composer .agent-pill-inline", { opacity: 0.55, duration: 0.3, ease: "power2.in" }, 5.55);
+
+      // Send button gives a quick press — scale pulse + a subtle lighter tint.
+      tl.to(
+        "#send-btn",
+        { scale: 1.06, duration: 0.12, ease: "power2.out" },
+        6.05
+      );
+      tl.to(
+        "#send-btn",
+        { scale: 1.0, duration: 0.18, ease: "power2.in" },
+        6.17
+      );
+
+      // Composer collapses (fades + slides down) — it's done its job.
+      tl.to(
+        "#tv-composer",
+        { opacity: 0, y: 30, duration: 0.4, ease: "power2.in" },
+        6.3
+      );
+
+      // Aria reply bubble rises into the conversation.
+      tl.to(
+        "#tv-aria-msg",
+        { opacity: 1, y: 0, duration: 0.55, ease: "power3.out" },
+        6.4
+      );
+
+      // ─────────── BEAT 6 — resolved (6.9 → 7.5s) ───────────
+
+      // Status flips Open → Resolved (crossfade in the same slot).
+      tl.to("#tv-badge-open", { opacity: 0, duration: 0.25, ease: "power2.in" }, 6.95);
+      tl.to("#tv-badge-resolved", { opacity: 1, duration: 0.3, ease: "power3.out" }, 7.0);
+
+      // Subtle scale settle on the new badge to mark the resolution.
+      tl.fromTo(
+        "#tv-badge-resolved",
+        { scale: 0.92 },
+        { scale: 1, duration: 0.32, ease: "power3.out" },
+        7.0
+      );
+
+      window.__timelines["hero-video"] = tl;
+    </script>
+  </body>
+</html>

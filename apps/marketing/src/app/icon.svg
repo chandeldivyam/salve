@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img" aria-label="Salve">
+  <title>Salve</title>
+  <style>
+    /* Use the same brand purples as the in-app Logo so the tab icon
+       matches the chrome. The light-mode value mirrors --brand-600 in
+       apps/web/src/styles.css; the dark-mode value mirrors --brand-500
+       under the .dark theme. */
+    :root { --salve-favicon-color: #5b51a3; }
+    @media (prefers-color-scheme: dark) {
+      :root { --salve-favicon-color: #8d83cf; }
+    }
+    .leaf-fill   { fill: var(--salve-favicon-color); fill-opacity: 0.18; }
+    .leaf-stroke { stroke: var(--salve-favicon-color); fill: none;
+                   stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  </style>
+  <path class="leaf-fill" d="M20 4c0 8-5 14-13 14h-3c0-8 5-14 13-14h3z" />
+  <path class="leaf-stroke" d="M20 4c0 8-5 14-13 14h-3c0-8 5-14 13-14h3z" />
+  <path class="leaf-stroke" d="M4 18c4-2 8-6 11-12" />
+</svg>

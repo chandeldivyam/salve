@@ -17,7 +17,8 @@ infra/
 │   ├── secrets.ts                # PR 8 — sst.Secret declarations
 │   ├── api.ts                    # PR 4 — Hono Service on Fargate + ALB
 │   ├── zero-cache.ts             # PR 6 — Zero Service on Fargate + sticky cookie
-│   ├── web.ts                    # PR 5 — Vite SPA via StaticSite
+│   ├── web.ts                    # PR 5 — Vite SPA via StaticSite (app.usesalve.com)
+│   ├── marketing.ts              # Next.js marketing site via sst.aws.Nextjs (apex usesalve.com)
 │   ├── ses.ts                    # PR 9–10 — outbound + inbound + receipt rules + SNS + SQS + Lambda
 │   ├── migrate.ts                # PR 7 — one-off ECS task for drizzle-kit migrate
 │   └── monitoring.ts             # PR 14 — CloudWatch alarms + SNS ops topic

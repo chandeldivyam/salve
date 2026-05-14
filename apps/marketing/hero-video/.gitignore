@@ -1,0 +1,4 @@
+# Local hyperframes render output — published files live in apps/marketing/public/.
+renders/
+*.mp4
+*.webm

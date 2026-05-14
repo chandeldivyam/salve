@@ -24,7 +24,3 @@ export const web = new sst.aws.StaticSite('Web', {
     VITE_REPLY_EMAIL_DOMAIN: 'reply.usesalve.com',
   },
 });
-
-// TODO(launch): apex usesalve.com → 301 → app.usesalve.com. Lightweight
-// CloudFront function attached to a placeholder StaticSite. Deferred until the
-// API/web/zero-cache pipeline is stable.

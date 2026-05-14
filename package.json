@@ -8,7 +8,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "turbo run dev --parallel --filter=@salve/api --filter=@salve/web --filter=@salve/zero-cache",
+    "dev": "turbo run dev --parallel --filter=@salve/api --filter=@salve/web --filter=@salve/zero-cache --filter=@salve/marketing",
     "dev:docker:up": "docker compose -f docker/docker-compose.yml up -d",
     "dev:docker:down": "docker compose -f docker/docker-compose.yml down",
     "dev:docker:logs": "docker compose -f docker/docker-compose.yml logs -f",

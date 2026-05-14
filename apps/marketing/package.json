@@ -1,0 +1,28 @@
+{
+  "name": "@salve/marketing",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Salve marketing site. Runs on port 3100 as part of root `pnpm dev`.",
+  "scripts": {
+    "dev": "next dev --turbo --port 3100",
+    "build": "next build",
+    "start": "next start --port 3100",
+    "type-check": "tsc --noEmit",
+    "check": "biome check ."
+  },
+  "dependencies": {
+    "@paper-design/shaders-react": "0.0.76",
+    "@salve/ui": "workspace:*",
+    "next": "15.5.18",
+    "react": "19.2.6",
+    "react-dom": "19.2.6"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.3.0",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "tailwindcss": "4.3.0",
+    "typescript": "6.0.3"
+  }
+}
